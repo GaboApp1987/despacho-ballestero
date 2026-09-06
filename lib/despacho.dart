@@ -1,0 +1,31 @@
+class Despacho {
+  final int id;
+  final String nombre;
+  final String? cedulaJuridica;
+  final bool tieneUsuario;
+  final String? logoUrl;
+  final int? suscripcionId;
+  final String? suscripcionEstado;
+
+  Despacho({
+    required this.id,
+    required this.nombre,
+    this.cedulaJuridica,
+    required this.tieneUsuario,
+    this.logoUrl,
+    this.suscripcionId,
+    this.suscripcionEstado,
+  });
+
+  factory Despacho.fromJson(Map<String, dynamic> json) {
+    return Despacho(
+      id: json['id'],
+      nombre: json['nombre'] ?? '',
+      cedulaJuridica: json['cedula_juridica'],
+      tieneUsuario: json['tiene_usuario'] ?? false,
+      logoUrl: json['logo'],
+      suscripcionId: json['suscripcion_id'],
+      suscripcionEstado: json['suscripcion_estado'],
+    );
+  }
+}

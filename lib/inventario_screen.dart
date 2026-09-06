@@ -1,0 +1,622 @@
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'theme/app_theme.dart';
+
+import 'api_service.dart';
+import 'crear_producto.dart';
+import 'movimientos_producto.dart';
+import 'negocio.dart';
+import 'producto.dart';
+import 'formato.dart';
+import 'actualizar_precios_screen.dart' show PantallaActualizarPrecios;
+
+class InventarioScreen extends StatefulWidget {
+  final Negocio negocio;
+  const InventarioScreen({super.key, required this.negocio});
+
+  @override
+  State<InventarioScreen> createState() => _InventarioScreenState();
+}
+
+class _InventarioScreenState extends State<InventarioScreen> {
+  bool _cargando = true;
+  String? _error;
+  List<Producto> _productos = [];
+  List<Categoria> _categorias = [];
+
+  // Controlador para el buscador
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _filtro = "";
+
+  @override
+  void initState() {
+    super.initState();
+    // Escuchar cambios en el buscador para filtrar en tiempo real
+    _searchCtrl.addListener(() {
+      setState(() {
+        _filtro = _searchCtrl.text.toLowerCase().trim();
+      });
+    });
+    _cargarDatos();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _cargarDatos() async {
+    if (!mounted) return;
+    setState(() {
+      _cargando = true;
+      _error = null;
+    });
+
+    try {
+      final resProd = await ApiService.get('/productos/?negocio=${widget.negocio.id}');
+      final resCat = await ApiService.get('/categorias/?negocio=${widget.negocio.id}');
+
+      if (resProd.statusCode == 200 && resCat.statusCode == 200) {
+        final List productosData = json.decode(utf8.decode(resProd.bodyBytes));
+        final List categoriasData = json.decode(utf8.decode(resCat.bodyBytes));
+
+        if (!mounted) return;
+        setState(() {
+          _productos = productosData.map((j) => Producto.fromJson(j)).toList();
+          _categorias = categoriasData.map((j) => Categoria.fromJson(j)).toList();
+          _cargando = false;
+        });
+      } else {
+        throw Exception('Error del servidor (Prod: ${resProd.statusCode}, Cat: ${resCat.statusCode})');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _cargando = false;
+      });
+    }
+  }
+
+  void _abrirActualizarPrecios() {
+    Future.microtask(() async {
+      if (!mounted || _productos.isEmpty) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => PantallaActualizarPrecios(productos: _productos),
+        ),
+      );
+      if (mounted) _cargarDatos();
+    });
+  }
+
+  void _abrirCrearProducto() {
+    Future.microtask(() async {
+      if (!mounted) return;
+      final bool? refresh = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => CrearProductoScreen(negocio: widget.negocio),
+        ),
+      );
+
+      if (mounted && refresh == true) {
+        _cargarDatos();
+      }
+    });
+  }
+
+  void _abrirEditarProducto(Producto producto) {
+    Future.microtask(() async {
+      if (!mounted) return;
+      final bool? refresh = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => CrearProductoScreen(negocio: widget.negocio, productoAEditar: producto),
+        ),
+      );
+
+      if (mounted && refresh == true) {
+        _cargarDatos();
+      }
+    });
+  }
+
+  void _mostrarDialogoEditarStock(Producto producto) {
+    Future.microtask(() async {
+      if (!mounted) return;
+      final controller = TextEditingController(text: producto.stock.toString());
+
+      final bool? actualizado = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: Text("Editar stock: ${producto.nombre}"),
+            content: TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: "Unidades disponibles",
+                border: OutlineInputBorder(),
+                suffixIcon: Icon(Icons.numbers),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text("Cancelar"),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                onPressed: () async {
+                  final nuevoStock = int.tryParse(controller.text);
+                  if (nuevoStock == null) return;
+
+                  Map<String, dynamic> datosActualizados = {
+                    'id': producto.id,
+                    'nombre': producto.nombre,
+                    'codigo_cabys': producto.codigoCabys,
+                    'precio_unitario': producto.precioUnitario,
+                    'stock': nuevoStock,
+                    'negocio': widget.negocio.id,
+                    if (producto.categoriaId != null) 'categoria': producto.categoriaId,
+                    if (producto.impuesto != null) 'impuesto': producto.impuesto!.id,
+                  };
+
+                  final response = await ApiService.put(
+                    '/productos/${producto.id}/',
+                    datosActualizados,
+                  );
+
+                  if (response.statusCode == 200 || response.statusCode == 204) {
+                    if (dialogContext.mounted) {
+                      Navigator.pop(dialogContext, true);
+                    }
+                  } else {
+                    if (dialogContext.mounted) {
+                      ScaffoldMessenger.of(dialogContext).showSnackBar(
+                        SnackBar(content: Text("Error al actualizar: ${response.statusCode}")),
+                      );
+                    }
+                  }
+                },
+                child: const Text("Guardar", style: TextStyle(color: Colors.black)),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (mounted && actualizado == true) {
+        _cargarDatos();
+      }
+    });
+  }
+
+  void _eliminarProducto(Producto producto) {
+    Future.microtask(() async {
+      if (!mounted) return;
+      final bool? confirmar = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text("Eliminar producto"),
+          content: Text("¿Seguro que querés eliminar \"${producto.nombre}\"? Esta acción no se puede deshacer."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text("Cancelar"),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text("Eliminar", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmar != true || !mounted) return;
+
+      try {
+        final response = await ApiService.delete('/productos/${producto.id}/');
+        if (response.statusCode == 204 || response.statusCode == 200) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text("\"${producto.nombre}\" eliminado"), backgroundColor: Colors.green),
+            );
+            _cargarDatos();
+          }
+        } else {
+          String mensaje = "No se pudo eliminar el producto.";
+          try {
+            final data = json.decode(utf8.decode(response.bodyBytes));
+            if (data is Map && data['detail'] != null) mensaje = data['detail'];
+          } catch (_) {}
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(mensaje), backgroundColor: Colors.red),
+            );
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Error al eliminar: $e"), backgroundColor: Colors.red),
+          );
+        }
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text("Gestión de Inventario"),
+          backgroundColor: AppColors.surface,
+          foregroundColor: AppColors.textStrong,
+          bottom: TabBar(
+            indicatorColor: AppColors.primary,
+            labelColor: AppColors.textStrong,
+            unselectedLabelColor: AppColors.textMuted,
+            tabs: const [
+              Tab(icon: Icon(Icons.inventory_2), text: "Productos"),
+              Tab(icon: Icon(Icons.category), text: "Categorías"),
+            ],
+          ),
+        ),
+        body: _cargando
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+            ? Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                const SizedBox(height: 10),
+                Text(
+                  "Error al cargar inventario:\n$_error",
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.red),
+                ),
+                const SizedBox(height: 15),
+                ElevatedButton(
+                  onPressed: _cargarDatos,
+                  child: const Text("Reintentar"),
+                )
+              ],
+            ),
+          ),
+        )
+            : TabBarView(
+          children: [
+            _buildVistaProductos(),
+            _buildListaCategorias(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVistaProductos() {
+    // 1. Filtrar productos por nombre
+    final List<Producto> filtrados = _productos.where((p) {
+      return p.nombre.toLowerCase().contains(_filtro);
+    }).toList();
+
+    // 2. Ordenar alfabéticamente
+    filtrados.sort((a, b) => a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()));
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
+            children: [
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  onPressed: _abrirCrearProducto,
+                  icon: const Icon(Icons.add_circle_outline, color: Colors.black),
+                  label: const Text(
+                    "Crear Nuevo Producto",
+                    style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: BorderSide(color: AppColors.primary),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  onPressed: _productos.isEmpty ? null : _abrirActualizarPrecios,
+                  icon: const Icon(Icons.price_change_outlined),
+                  label: const Text(
+                    "Actualizar Precios",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              // BARRA DE BÚSQUEDA
+              TextField(
+                controller: _searchCtrl,
+                decoration: InputDecoration(
+                  hintText: "Buscar producto por nombre...",
+                  prefixIcon: Icon(Icons.search, color: AppColors.primary),
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: filtrados.isEmpty
+              ? Center(
+                  child: Text(_filtro.isEmpty 
+                    ? "No hay productos registrados." 
+                    : "No se encontraron productos con '$_filtro'"))
+              : ListView.builder(
+            itemCount: filtrados.length,
+            padding: const EdgeInsets.only(bottom: 12),
+            itemBuilder: (context, i) {
+              final p = filtrados[i];
+              return Card(
+                margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: p.stock > 0 ? AppColors.primary : Colors.red.shade400,
+                    child: Text(
+                      "${p.stock}",
+                      style: TextStyle(color: p.stock > 0 ? Colors.black : Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                  ),
+                  title: Text(p.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text("Disponible: ${formatearNumero(p.stock, decimales: 0)} ${p.unidadMedida}\nPrecio: ${formatearColones(p.precioUnitario)}\nCat: ${p.nombreCategoria ?? 'Sin Categoría'}"),
+                  isThreeLine: true,
+                  onTap: () => _abrirEditarProducto(p),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: Icon(Icons.edit_note, color: AppColors.primary),
+                        tooltip: "Editar producto",
+                        onPressed: () => _abrirEditarProducto(p),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.numbers, color: Colors.teal),
+                        tooltip: "Editar solo stock",
+                        onPressed: () => _mostrarDialogoEditarStock(p),
+                      ),
+                      PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert, color: Colors.grey),
+                        onSelected: (valor) {
+                          if (valor == 'movimientos') {
+                            Future.microtask(() {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => MovimientosProductoScreen(producto: p),
+                                ),
+                              );
+                            });
+                          } else if (valor == 'eliminar') {
+                            _eliminarProducto(p);
+                          }
+                        },
+                        itemBuilder: (context) => const [
+                          PopupMenuItem(value: 'movimientos', child: Text("Movimientos")),
+                          PopupMenuItem(value: 'eliminar', child: Text("Eliminar")),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _mostrarFormularioCategoria({Categoria? categoria}) {
+    final nombreCtrl = TextEditingController(text: categoria?.nombre ?? '');
+    bool guardando = false;
+
+    Future.microtask(() async {
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, setStateDialog) => AlertDialog(
+            title: Text(categoria == null ? "Nueva Categoría" : "Editar Categoría"),
+            content: TextField(
+              controller: nombreCtrl,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: "Nombre *", border: OutlineInputBorder()),
+            ),
+            actions: [
+              TextButton(
+                onPressed: guardando ? null : () => Navigator.pop(dialogContext),
+                child: const Text("Cancelar"),
+              ),
+              ElevatedButton(
+                onPressed: guardando
+                    ? null
+                    : () async {
+                        final nombre = nombreCtrl.text.trim();
+                        if (nombre.isEmpty) {
+                          ScaffoldMessenger.of(dialogContext).showSnackBar(
+                            const SnackBar(content: Text("El nombre es obligatorio")),
+                          );
+                          return;
+                        }
+                        setStateDialog(() => guardando = true);
+                        try {
+                          final body = {'negocio': widget.negocio.id, 'nombre': nombre};
+                          final response = categoria == null
+                              ? await ApiService.post('/categorias/', body)
+                              : await ApiService.put('/categorias/${categoria.id}/', body);
+                          if (response.statusCode == 200 || response.statusCode == 201) {
+                            if (dialogContext.mounted) Navigator.pop(dialogContext);
+                            if (mounted) _cargarDatos();
+                          } else {
+                            throw Exception(utf8.decode(response.bodyBytes));
+                          }
+                        } catch (e) {
+                          setStateDialog(() => guardando = false);
+                          if (dialogContext.mounted) {
+                            ScaffoldMessenger.of(dialogContext).showSnackBar(
+                              SnackBar(content: Text("Error: $e")),
+                            );
+                          }
+                        }
+                      },
+                child: guardando
+                    ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text("Guardar"),
+              ),
+            ],
+          ),
+        ),
+      );
+    });
+  }
+
+  void _eliminarCategoria(Categoria categoria) {
+    Future.microtask(() async {
+      if (!mounted) return;
+      final bool? confirmar = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text("Eliminar categoría"),
+          content: Text(
+            "¿Seguro que querés eliminar \"${categoria.nombre}\"? "
+            "Los productos que la usan quedarán sin categoría.",
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text("Cancelar")),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text("Eliminar", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmar != true || !mounted) return;
+
+      try {
+        final response = await ApiService.delete('/categorias/${categoria.id}/');
+        if (response.statusCode == 204 || response.statusCode == 200) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text("\"${categoria.nombre}\" eliminada"), backgroundColor: Colors.green),
+            );
+            _cargarDatos();
+          }
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("No se pudo eliminar la categoría."), backgroundColor: Colors.red),
+            );
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Error al eliminar: $e"), backgroundColor: Colors.red),
+          );
+        }
+      }
+    });
+  }
+
+  Widget _buildListaCategorias() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () => _mostrarFormularioCategoria(),
+              icon: const Icon(Icons.add_circle_outline, color: Colors.black),
+              label: const Text(
+                "Crear Nueva Categoría",
+                style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: _categorias.isEmpty
+              ? const Center(child: Text("No hay categorías registradas."))
+              : ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  itemCount: _categorias.length,
+                  separatorBuilder: (_, __) => const Divider(),
+                  itemBuilder: (context, i) {
+                    final cat = _categorias[i];
+                    return ListTile(
+                      leading: const Icon(Icons.folder, color: Colors.orange),
+                      title: Text(cat.nombre),
+                      onTap: () => _mostrarFormularioCategoria(categoria: cat),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: Icon(Icons.edit_outlined, color: AppColors.primary),
+                            tooltip: "Editar",
+                            onPressed: () => _mostrarFormularioCategoria(categoria: cat),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.red),
+                            tooltip: "Eliminar",
+                            onPressed: () => _eliminarCategoria(cat),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+}
