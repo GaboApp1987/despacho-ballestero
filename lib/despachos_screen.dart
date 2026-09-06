@@ -8,6 +8,7 @@ import 'negocios_screen.dart';
 import 'planes_screen.dart';
 import 'login.dart';
 import 'widgets/bloqueo_salida_raiz.dart';
+import 'widgets/soporte_chat.dart';
 
 /// Pantalla de nivel plataforma: solo la ve un superusuario (el dueño del programa).
 /// Desde acá se dan de alta los despachos contables (cada uno con su propio dueño/login),
@@ -269,6 +270,11 @@ class _DespachosScreenState extends State<DespachosScreen> {
             ),
           ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _cargarDespachos),
+          IconButton(
+            icon: const Icon(Icons.support_agent),
+            tooltip: "Soporte",
+            onPressed: () => mostrarSoporteChat(context, contexto: 'usuario'),
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: "Cerrar sesión",

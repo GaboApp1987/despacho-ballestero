@@ -11,6 +11,7 @@ import 'resumen_fiscal_screen.dart';
 import 'socio.dart';
 import 'login.dart';
 import 'widgets/bloqueo_salida_raiz.dart';
+import 'widgets/soporte_chat.dart';
 
 class NegociosScreen extends StatefulWidget {
   /// true si el usuario puede dar de alta negocios nuevos (contadores, o admin).
@@ -532,6 +533,11 @@ class _NegociosScreenState extends State<NegociosScreen> {
           accionAppBar(icono: Icons.refresh_rounded, tooltip: "Recargar", onPressed: _recargarTodo),
           if (widget.puedeCrear)
             accionAppBar(icono: Icons.account_circle_rounded, tooltip: "Mi Perfil", onPressed: _abrirMiPerfil),
+          accionAppBar(
+            icono: Icons.support_agent,
+            tooltip: "Soporte",
+            onPressed: () => mostrarSoporteChat(context, contexto: 'usuario'),
+          ),
           if (!Navigator.canPop(context))
             accionAppBar(
               icono: Icons.logout,

@@ -29,6 +29,7 @@ import 'addons_screen.dart';
 import 'login.dart';
 import 'formato.dart';
 import 'widgets/bloqueo_salida_raiz.dart';
+import 'widgets/soporte_chat.dart';
 
 class DetalleNegocio extends StatefulWidget {
   final Negocio negocio;
@@ -508,6 +509,11 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
                 _recargarDatos();
               }
             },
+          ),
+          IconButton(
+            icon: const Icon(Icons.support_agent),
+            tooltip: "Soporte",
+            onPressed: () => mostrarSoporteChat(context, contexto: 'usuario', negocioId: widget.negocio.id),
           ),
           IconButton(
             icon: const Icon(Icons.logout),

@@ -11,6 +11,7 @@ import 'contadores_screen.dart';
 import 'despachos_screen.dart';
 import 'widgets/staggered_entrance.dart';
 import 'widgets/animated_logo.dart';
+import 'widgets/soporte_chat.dart';
 import 'recuperar_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -507,6 +508,14 @@ class _LoginScreenState extends State<LoginScreen> {
                               child: _isLoading
                                   ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
                                   : const Text("INGRESAR AL SISTEMA", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, letterSpacing: 0.5)),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Center(
+                            child: TextButton.icon(
+                              onPressed: () => mostrarSoporteChat(context, contexto: 'visitante'),
+                              icon: Icon(Icons.support_agent, size: 18, color: AppColors.textMuted),
+                              label: Text("¿Necesitás ayuda?", style: TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w600)),
                             ),
                           ),
                         ],

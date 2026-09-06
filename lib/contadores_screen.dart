@@ -13,6 +13,7 @@ import 'perfil_usuario_screen.dart';
 import 'dashboard_despacho_widgets.dart';
 import 'login.dart';
 import 'widgets/bloqueo_salida_raiz.dart';
+import 'widgets/soporte_chat.dart';
 
 class ContadoresScreen extends StatefulWidget {
   const ContadoresScreen({super.key});
@@ -327,6 +328,11 @@ class _ContadoresScreenState extends State<ContadoresScreen> {
             icono: Icons.account_circle_rounded,
             tooltip: "Mi Perfil",
             onPressed: _abrirMiPerfil,
+          ),
+          accionAppBar(
+            icono: Icons.support_agent,
+            tooltip: "Soporte",
+            onPressed: () => mostrarSoporteChat(context, contexto: 'usuario'),
           ),
           accionAppBar(
             icono: Icons.logout,
