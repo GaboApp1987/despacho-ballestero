@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'theme/app_theme.dart';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
@@ -225,6 +226,32 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
                         leading: const Icon(Icons.badge, color: Colors.grey),
                         title: const Text("Cédula"),
                         subtitle: Text(widget.negocio.cedula),
+                      ),
+                      ListTile(
+                        leading: Icon(Icons.mark_email_read_outlined, color: AppColors.primary),
+                        title: const Text("Correo para facturas de compra"),
+                        subtitle: Text("${widget.negocio.cedula}@facturas.equilibracr.com"),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.copy, size: 20),
+                          tooltip: "Copiar",
+                          onPressed: () {
+                            Clipboard.setData(ClipboardData(text: "${widget.negocio.cedula}@facturas.equilibracr.com"));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("Correo copiado")),
+                            );
+                          },
+                        ),
+                        subtitleTextStyle: const TextStyle(fontWeight: FontWeight.w600),
+                        // La ayuda de arriba explica para qué sirve, ya que no es un
+                        // dato editable como el resto de esta pantalla.
+                        isThreeLine: false,
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        child: Text(
+                          "Dale esta dirección a tus proveedores para que te manden la factura electrónica de tus compras directo por correo -- Equilibra la recibe sola y la deja lista para revisar en Compras.",
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        ),
                       ),
                       const Divider(),
                       Padding(

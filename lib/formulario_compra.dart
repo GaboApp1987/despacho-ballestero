@@ -13,7 +13,14 @@ import 'formato.dart';
 
 class FormularioCompra extends StatefulWidget {
   final Negocio negocio;
-  const FormularioCompra({super.key, required this.negocio});
+  // Si esta compra se abre a partir de un correo que llegó solo al buzón de
+  // facturas de compra del negocio (ver CorreoCompraRecibido), estos dos
+  // vienen con datos: los datos ya parseados del XML (misma forma que
+  // devuelve /compras/leer-xml/) y el id del correo, para poder descartarlo
+  // de la lista de pendientes una vez que la compra se guarda de verdad.
+  final Map<String, dynamic>? datosPrecarga;
+  final int? correoId;
+  const FormularioCompra({super.key, required this.negocio, this.datosPrecarga, this.correoId});
 
   @override
   State<FormularioCompra> createState() => _FormularioCompraState();
@@ -69,8 +76,24 @@ class _FormularioCompraState extends State<FormularioCompra> {
       if (response.statusCode != 200) {
         throw Exception(utf8.decode(response.bodyBytes));
       }
-      final datos = json.decode(utf8.decode(response.bodyBytes));
+      await _aplicarDatosParseados(json.decode(utf8.decode(response.bodyBytes)));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error al leer el XML: $e")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _procesandoXml = false);
+    }
+  }
 
+  /// Misma precarga que _leerXmlProveedor, pero a partir de datos YA
+  /// parseados -- usado tanto ahí como al abrir esta pantalla desde un
+  /// CorreoCompraRecibido (factura que llegó sola por correo al buzón del
+  /// negocio, ver widget.datosPrecarga).
+  Future<void> _aplicarDatosParseados(Map datos) async {
+    try {
       _facturaProveedorController.text = datos['numero_factura'] ?? datos['clave'] ?? '';
 
       // Proveedor: si ya existe (por cédula) se selecciona; si no, se crea
@@ -131,11 +154,9 @@ class _FormularioCompraState extends State<FormularioCompra> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error al leer el XML: $e")),
+          SnackBar(content: Text("Error al precargar los datos: $e")),
         );
       }
-    } finally {
-      if (mounted) setState(() => _procesandoXml = false);
     }
   }
 
@@ -296,6 +317,9 @@ class _FormularioCompraState extends State<FormularioCompra> {
             _listaImpuestos = impuestosData.map((j) => Impuesto.fromJson(j)).toList();
             _isLoading = false;
           });
+          if (widget.datosPrecarga != null) {
+            await _aplicarDatosParseados(widget.datosPrecarga!);
+          }
         }
       } else {
         if (mounted) setState(() => _isLoading = false);
@@ -452,6 +476,11 @@ class _FormularioCompraState extends State<FormularioCompra> {
         if (_bytesComprobante != null) {
           final compraId = json.decode(utf8.decode(res.bodyBytes))['id'];
           await ApiService.uploadBytes('/compras/$compraId/', 'comprobante', _bytesComprobante!, _nombreComprobante ?? 'comprobante');
+        }
+        if (widget.correoId != null) {
+          try {
+            await ApiService.delete('/correos-compra-recibidos/${widget.correoId}/');
+          } catch (_) {}
         }
         if (mounted) {
           Navigator.pop(context, true);

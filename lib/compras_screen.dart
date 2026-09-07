@@ -152,6 +152,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
   bool _cargando = true;
   List<Compra> _compras = [];
   List<Proveedor> _proveedores = [];
+  List<dynamic> _correosPendientes = [];
   bool _modoSeleccion = false;
   final Set<int> _comprasSeleccionadas = {};
 
@@ -168,14 +169,19 @@ class _ComprasScreenState extends State<ComprasScreen> {
       final respuestas = await Future.wait([
         ApiService.get('/compras/?negocio=${widget.negocio.id}'),
         ApiService.get('/proveedores/?negocio=${widget.negocio.id}'),
+        ApiService.get('/correos-compra-recibidos/?negocio=${widget.negocio.id}&pendientes=true'),
       ]);
       if (!mounted) return;
       if (respuestas[0].statusCode == 200 && respuestas[1].statusCode == 200) {
         final List comprasData = json.decode(utf8.decode(respuestas[0].bodyBytes));
         final List proveedoresData = json.decode(utf8.decode(respuestas[1].bodyBytes));
+        final List correosData = respuestas[2].statusCode == 200
+            ? json.decode(utf8.decode(respuestas[2].bodyBytes))
+            : [];
         setState(() {
           _compras = comprasData.map((j) => Compra.fromJson(j)).toList();
           _proveedores = proveedoresData.map((j) => Proveedor.fromJson(j)).toList();
+          _correosPendientes = correosData;
           _cargando = false;
         });
       } else {
@@ -194,6 +200,51 @@ class _ComprasScreenState extends State<ComprasScreen> {
       MaterialPageRoute(builder: (context) => FormularioCompra(negocio: widget.negocio)),
     );
     if (resultado == true) _cargarDatos();
+  }
+
+  /// Abre "Nueva Compra" precargada con lo que ya se leyó del XML que llegó
+  /// por correo a <cedula>@facturas.equilibracr.com. El correo solo se borra
+  /// de "pendientes" cuando el usuario efectivamente guarda la compra (ver
+  /// FormularioCompra._guardarCompra), nunca solo por abrirlo.
+  Future<void> _revisarCorreoPendiente(Map correo) async {
+    final resultado = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FormularioCompra(
+          negocio: widget.negocio,
+          datosPrecarga: correo['datos_parseados'] as Map<String, dynamic>?,
+          correoId: correo['id'] as int?,
+        ),
+      ),
+    );
+    if (resultado == true) _cargarDatos();
+  }
+
+  Future<void> _descartarCorreoPendiente(Map correo) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("¿Descartar correo?"),
+        content: Text("Se descartará el correo de \"${correo['remitente'] ?? 'remitente desconocido'}\". Esto no borra ninguna compra."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Descartar"),
+          ),
+        ],
+      ),
+    );
+    if (confirmar != true) return;
+    try {
+      await ApiService.delete('/correos-compra-recibidos/${correo['id']}/');
+      _cargarDatos();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al descartar: $e")));
+      }
+    }
   }
 
   /// Importación masiva: se eligen varios XML de facturas de proveedores de
@@ -547,16 +598,89 @@ class _ComprasScreenState extends State<ComprasScreen> {
     );
   }
 
+  Widget _buildCorreosPendientes() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.amber.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.amber.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.mark_email_unread_outlined, color: Colors.amber),
+              const SizedBox(width: 8),
+              Text(
+                "${_correosPendientes.length} factura${_correosPendientes.length == 1 ? '' : 's'} de proveedor por revisar",
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            "Llegaron al correo de facturas de compra. Revísalas y confirmá para registrarlas.",
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+          const SizedBox(height: 8),
+          ..._correosPendientes.map((correo) {
+            final tieneError = (correo['error'] ?? '').toString().isNotEmpty;
+            return Card(
+              margin: const EdgeInsets.only(bottom: 6),
+              child: ListTile(
+                dense: true,
+                leading: Icon(tieneError ? Icons.error_outline : Icons.description_outlined, color: tieneError ? Colors.red : AppColors.primary),
+                title: Text(correo['remitente']?.toString().isNotEmpty == true ? correo['remitente'].toString() : "Remitente desconocido"),
+                subtitle: Text(
+                  tieneError ? correo['error'].toString() : (correo['asunto']?.toString() ?? ''),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!tieneError)
+                      TextButton(
+                        onPressed: () => _revisarCorreoPendiente(correo),
+                        child: const Text("Revisar"),
+                      ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 18),
+                      tooltip: "Descartar",
+                      onPressed: () => _descartarCorreoPendiente(correo),
+                    ),
+                  ],
+                ),
+                onTap: tieneError ? null : () => _revisarCorreoPendiente(correo),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
   Widget _buildHistorial() {
-    if (_compras.isEmpty) {
+    if (_compras.isEmpty && _correosPendientes.isEmpty) {
       return const Center(
         child: Text("Todavía no hay compras registradas.", style: TextStyle(color: Colors.grey)),
       );
     }
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: _compras.length,
+      itemCount: _compras.length + (_correosPendientes.isEmpty ? 0 : 1),
       itemBuilder: (context, index) {
+        if (_correosPendientes.isNotEmpty) {
+          if (index == 0) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildCorreosPendientes(),
+            );
+          }
+          index -= 1;
+        }
         final c = _compras[index];
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
