@@ -12,6 +12,132 @@ import 'formulario_compra.dart';
 import 'negocio.dart';
 import 'formato.dart';
 
+/// Registra una Nota de Débito que el proveedor emitió sobre `compra` (le
+/// cobró de más) -- compartido entre la lista de Compras y la pantalla de
+/// Notas de Crédito/Débito, ya que ambas necesitan poder crear una. Llama a
+/// `onCreada` (recargar la lista del que invoca) recién cuando se guarda con
+/// éxito.
+Future<void> mostrarDialogoNotaDebito(BuildContext context, Compra compra, {VoidCallback? onCreada}) async {
+  final numeroCtrl = TextEditingController();
+  final motivoCtrl = TextEditingController();
+  final montoCtrl = TextEditingController();
+  Uint8List? bytesXml;
+  String? nombreXml;
+  bool guardando = false;
+
+  await showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setStateDialog) => AlertDialog(
+        title: Text("Nota de Débito — ${compra.nombreProveedor ?? 'Proveedor'}"),
+        content: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: 400),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final resultado = await FilePicker.platform.pickFiles(
+                      type: FileType.custom,
+                      allowedExtensions: ['xml'],
+                      withData: true, // fuerza a traer los bytes: en Web no existe una ruta real.
+                    );
+                    if (resultado != null && resultado.files.single.bytes != null) {
+                      setStateDialog(() {
+                        bytesXml = resultado.files.single.bytes;
+                        nombreXml = resultado.files.single.name;
+                      });
+                    }
+                  },
+                  icon: const Icon(Icons.attach_file),
+                  label: Text(nombreXml ?? "Adjuntar XML de Hacienda (opcional)", overflow: TextOverflow.ellipsis),
+                  style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 45), alignment: Alignment.centerLeft),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  "Si adjuntas el XML, el número de documento y el monto se toman de ahí automáticamente.",
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: numeroCtrl,
+                  decoration: const InputDecoration(labelText: "Número de documento", border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: motivoCtrl,
+                  decoration: const InputDecoration(labelText: "Motivo", border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: montoCtrl,
+                  enabled: bytesXml == null,
+                  decoration: InputDecoration(
+                    labelText: "Monto (₡)",
+                    border: const OutlineInputBorder(),
+                    helperText: bytesXml != null ? "Se toma del XML adjunto" : null,
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: guardando ? null : () => Navigator.pop(ctx), child: const Text("Cancelar")),
+          ElevatedButton(
+            onPressed: guardando
+                ? null
+                : () async {
+                    if (bytesXml == null && montoCtrl.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                        const SnackBar(content: Text("Adjunte el XML o ingrese el monto manualmente.")),
+                      );
+                      return;
+                    }
+                    setStateDialog(() => guardando = true);
+                    try {
+                      final http.Response response;
+                      if (bytesXml != null) {
+                        response = await ApiService.postMultipartBytes(
+                          '/compras/${compra.id}/agregar-nota-debito/',
+                          {'numero_documento': numeroCtrl.text.trim(), 'motivo': motivoCtrl.text.trim()},
+                          'archivo',
+                          bytesXml!,
+                          nombreXml ?? 'nota_debito.xml',
+                        );
+                      } else {
+                        response = await ApiService.post('/compras/${compra.id}/agregar-nota-debito/', {
+                          'numero_documento': numeroCtrl.text.trim(),
+                          'motivo': motivoCtrl.text.trim(),
+                          'monto': redondear2(double.tryParse(montoCtrl.text.trim()) ?? 0),
+                        });
+                      }
+                      if (response.statusCode == 201) {
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        onCreada?.call();
+                      } else {
+                        throw Exception(utf8.decode(response.bodyBytes));
+                      }
+                    } catch (e) {
+                      setStateDialog(() => guardando = false);
+                      if (ctx.mounted) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Error: $e")));
+                      }
+                    }
+                  },
+            child: guardando
+                ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text("Guardar"),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 /// Pantalla principal del módulo de Compras: historial de compras
 /// (ingresos de mercadería) y gestión de proveedores.
 class ComprasScreen extends StatefulWidget {
@@ -462,7 +588,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
                         Icon(Icons.attach_file, color: AppColors.primary),
                       PopupMenuButton<String>(
                         onSelected: (opcion) {
-                          if (opcion == 'nota_debito') _mostrarDialogoNotaDebito(c);
+                          if (opcion == 'nota_debito') mostrarDialogoNotaDebito(context, c, onCreada: _cargarDatos);
                           if (opcion == 'borrar') _eliminarCompra(c);
                         },
                         itemBuilder: (context) => const [
@@ -662,126 +788,6 @@ class _ComprasScreenState extends State<ComprasScreen> {
     }
   }
 
-  Future<void> _mostrarDialogoNotaDebito(Compra compra) async {
-    final numeroCtrl = TextEditingController();
-    final motivoCtrl = TextEditingController();
-    final montoCtrl = TextEditingController();
-    Uint8List? bytesXml;
-    String? nombreXml;
-    bool guardando = false;
-
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setStateDialog) => AlertDialog(
-          title: Text("Nota de Débito — ${compra.nombreProveedor ?? 'Proveedor'}"),
-          content: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: 400),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      final resultado = await FilePicker.platform.pickFiles(
-                        type: FileType.custom,
-                        allowedExtensions: ['xml'],
-                        withData: true, // fuerza a traer los bytes: en Web no existe una ruta real.
-                      );
-                      if (resultado != null && resultado.files.single.bytes != null) {
-                        setStateDialog(() {
-                          bytesXml = resultado.files.single.bytes;
-                          nombreXml = resultado.files.single.name;
-                        });
-                      }
-                    },
-                    icon: const Icon(Icons.attach_file),
-                    label: Text(nombreXml ?? "Adjuntar XML de Hacienda (opcional)", overflow: TextOverflow.ellipsis),
-                    style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 45), alignment: Alignment.centerLeft),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    "Si adjuntas el XML, el número de documento y el monto se toman de ahí automáticamente.",
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: numeroCtrl,
-                    decoration: const InputDecoration(labelText: "Número de documento", border: OutlineInputBorder()),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: motivoCtrl,
-                    decoration: const InputDecoration(labelText: "Motivo", border: OutlineInputBorder()),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: montoCtrl,
-                    enabled: bytesXml == null,
-                    decoration: InputDecoration(
-                      labelText: "Monto (₡)",
-                      border: const OutlineInputBorder(),
-                      helperText: bytesXml != null ? "Se toma del XML adjunto" : null,
-                    ),
-                    keyboardType: TextInputType.number,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: guardando ? null : () => Navigator.pop(ctx), child: const Text("Cancelar")),
-            ElevatedButton(
-              onPressed: guardando
-                  ? null
-                  : () async {
-                      if (bytesXml == null && montoCtrl.text.trim().isEmpty) {
-                        ScaffoldMessenger.of(ctx).showSnackBar(
-                          const SnackBar(content: Text("Adjunte el XML o ingrese el monto manualmente.")),
-                        );
-                        return;
-                      }
-                      setStateDialog(() => guardando = true);
-                      try {
-                        final http.Response response;
-                        if (bytesXml != null) {
-                          response = await ApiService.postMultipartBytes(
-                            '/compras/${compra.id}/agregar-nota-debito/',
-                            {'numero_documento': numeroCtrl.text.trim(), 'motivo': motivoCtrl.text.trim()},
-                            'archivo',
-                            bytesXml!,
-                            nombreXml ?? 'nota_debito.xml',
-                          );
-                        } else {
-                          response = await ApiService.post('/compras/${compra.id}/agregar-nota-debito/', {
-                            'numero_documento': numeroCtrl.text.trim(),
-                            'motivo': motivoCtrl.text.trim(),
-                            'monto': redondear2(double.tryParse(montoCtrl.text.trim()) ?? 0),
-                          });
-                        }
-                        if (response.statusCode == 201) {
-                          if (ctx.mounted) Navigator.pop(ctx);
-                          _cargarDatos();
-                        } else {
-                          throw Exception(utf8.decode(response.bodyBytes));
-                        }
-                      } catch (e) {
-                        setStateDialog(() => guardando = false);
-                        if (ctx.mounted) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Error: $e")));
-                        }
-                      }
-                    },
-              child: guardando
-                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Text("Guardar"),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildProveedores() {
     if (_proveedores.isEmpty) {

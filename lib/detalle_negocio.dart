@@ -21,6 +21,7 @@ import 'negocio.dart';
 import 'cuentas_por_cobrar_screen.dart';
 import 'cuentas_por_pagar_screen.dart';
 import 'empleados_screen.dart';
+import 'notas_credito_debito_screen.dart';
 import 'export_service.dart';
 import 'impuestos_screen.dart';
 import 'reportes_screen.dart';
@@ -62,29 +63,40 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
   // Cada seccion de la app, compartida entre la barra de pildoras de
   // escritorio (_buildPillTabsBar) y la lista vertical del Drawer movil
   // (_itemsMenu) -- un solo lugar para agregar/quitar secciones.
+  // Orden agrupado por función y frecuencia de uso (antes era una lista sin
+  // criterio claro): Dashboard primero, luego todo el ciclo de Ventas
+  // (facturar -> cobrar), Inventario, el ciclo de Compras (comprar ->
+  // pagar), Contabilidad/Reportes, y por último Administración (lo que se
+  // toca con menos frecuencia).
   static const List<({int id, IconData icono, String titulo})> _menuItems = [
     (id: 1, icono: Icons.pie_chart_outline, titulo: "Dashboard"),
+    // -- Ventas --
     (id: 0, icono: Icons.receipt_long_outlined, titulo: "Facturas"),
+    (id: 4, icono: Icons.request_quote_outlined, titulo: "Cotizaciones"),
     (id: 2, icono: Icons.people_outline, titulo: "Clientes"),
     (id: 6, icono: Icons.monetization_on_outlined, titulo: "Cuentas por Cobrar"),
+    (id: 15, icono: Icons.assignment_return_outlined, titulo: "Notas de Crédito/Débito"),
+    (id: 11, icono: Icons.loyalty_outlined, titulo: "Tarjeta de Lealtad"),
+    // -- Inventario --
     (id: 3, icono: Icons.inventory_2_outlined, titulo: "Inventario"),
+    // -- Compras --
     (id: 8, icono: Icons.shopping_cart_outlined, titulo: "Compras"),
     (id: 13, icono: Icons.local_shipping_outlined, titulo: "Cuentas por Pagar"),
     (id: 9, icono: Icons.receipt_long_outlined, titulo: "Gastos"),
-    (id: 4, icono: Icons.request_quote_outlined, titulo: "Cotizaciones"),
-    (id: 7, icono: Icons.percent, titulo: "Impuestos"),
+    // -- Contabilidad --
     (id: 10, icono: Icons.bar_chart_outlined, titulo: "Reportes"),
-    (id: 11, icono: Icons.loyalty_outlined, titulo: "Tarjeta de Lealtad"),
+    (id: 7, icono: Icons.percent, titulo: "Impuestos"),
+    // -- Administración --
+    (id: 14, icono: Icons.badge_outlined, titulo: "Empleados"),
     (id: 12, icono: Icons.extension_outlined, titulo: "Add-ons"),
     (id: 5, icono: Icons.settings_outlined, titulo: "Ajustes"),
-    (id: 14, icono: Icons.badge_outlined, titulo: "Empleados"),
   ];
 
   // Secciones ocultas para un empleado con rol 'cajero' -- el backend ya
   // bloquea la escritura/lectura correspondiente de todas formas (ver
   // BloqueaCajeroMixin y los chequeos de es_cajero en views.py), esto es
   // solo para no mostrar botones que van a fallar. 'completo' ve todo esto.
-  static const Set<int> _idsOcultosParaCajero = {6, 8, 13, 9, 7, 10, 11, 12, 5};
+  static const Set<int> _idsOcultosParaCajero = {6, 8, 13, 9, 7, 10, 11, 12, 5, 15};
 
   List<({int id, IconData icono, String titulo})> get _menuItemsVisibles {
     // "Empleados" (id 14) es exclusivo del dueño real -- ni 'cajero' ni
@@ -317,6 +329,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         return "Cuentas por Pagar";
       case 14:
         return "Empleados";
+      case 15:
+        return "Notas de Crédito/Débito";
       case 10:
         return "Reportes";
       case 11:
@@ -429,6 +443,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         return CuentasPorPagarScreen(negocio: widget.negocio);
       case 14:
         return EmpleadosScreen(negocio: widget.negocio);
+      case 15:
+        return NotasCreditoDebitoScreen(negocio: widget.negocio);
       default:
         return const SizedBox();
     }
