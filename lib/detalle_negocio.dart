@@ -1083,7 +1083,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
                 return Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(color: Colors.green[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green[100]!)),
+                  decoration: BoxDecoration(color: Colors.green.withOpacity(0.12), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green.withOpacity(0.3))),
                   child: const Text("No hay clientes con facturas vencidas", style: TextStyle(color: Colors.green, fontWeight: FontWeight.w500)),
                 );
               }
@@ -1098,12 +1098,18 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
                     detalleVencimiento = "F-${f.consecutivo} · Venció el $vencStr · hace $diasVencida día${diasVencida == 1 ? '' : 's'}";
                   } catch (_) {}
                   return Card(
-                    color: Colors.red[50],
+                    // Antes: Colors.red[50] fijo -- un rojo clarito que no
+                    // cambia con el tema, combinado con texto sin color
+                    // explicito (heredaba el color de letra CLARA del tema
+                    // oscuro), quedaba ilegible en modo oscuro. Con opacidad
+                    // sobre el fondo real de la tarjeta se ve rojizo en los
+                    // dos temas, y el texto ahora tiene color explicito.
+                    color: Colors.red.withOpacity(0.12),
                     margin: const EdgeInsets.only(bottom: 8),
                     child: ListTile(
                       leading: const Icon(Icons.warning_amber_rounded, color: Colors.red),
-                      title: Text(f.receptorNombre, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text(detalleVencimiento),
+                      title: Text(f.receptorNombre, style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textStrong)),
+                      subtitle: Text(detalleVencimiento, style: TextStyle(color: AppColors.textMuted)),
                       trailing: Text(formatearColones(f.totalFactura), style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
                       onTap: () async {
                         final bool? cambio = await Navigator.push(
