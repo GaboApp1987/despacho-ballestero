@@ -47,6 +47,35 @@ class _ReportesScreenState extends State<ReportesScreen> {
   String get _periodoTexto =>
       "${_fechaInicio.day}/${_fechaInicio.month}/${_fechaInicio.year} - ${_fechaFin.day}/${_fechaFin.month}/${_fechaFin.year}";
 
+  static const List<String> _nombresMes = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+  ];
+
+  /// True si el rango actual es exactamente un mes calendario completo (el
+  /// caso normal: al abrir la pantalla, o tras navegar con las flechas o
+  /// tocar el nombre del mes) -- si no, es un rango personalizado elegido
+  /// con _elegirRangoFechas, y se muestra la fecha en vez del nombre del mes.
+  bool get _esMesCompleto {
+    final primerDia = DateTime(_fechaInicio.year, _fechaInicio.month, 1);
+    final ultimoDia = DateTime(_fechaInicio.year, _fechaInicio.month + 1, 0);
+    return _fechaInicio.isAtSameMomentAs(primerDia) && _fechaFin.isAtSameMomentAs(ultimoDia);
+  }
+
+  String get _mesAnioTexto => '${_nombresMes[_fechaInicio.month - 1]} ${_fechaInicio.year}';
+
+  /// Mueve el rango a un mes completo, relativo al mes de _fechaInicio
+  /// (deltaMeses=0 selecciona todos los días DE ESE MES -- lo mismo que
+  /// tocar el nombre del mes cuando el rango ya venía de uno personalizado).
+  void _irAMes(int deltaMeses) {
+    final base = DateTime(_fechaInicio.year, _fechaInicio.month + deltaMeses, 1);
+    setState(() {
+      _fechaInicio = DateTime(base.year, base.month, 1);
+      _fechaFin = DateTime(base.year, base.month + 1, 0);
+    });
+    _cargarDatos();
+  }
+
   String _fmtFecha(DateTime d) => "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
 
   Future<void> _cargarDatos() async {
@@ -218,10 +247,39 @@ class _ReportesScreenState extends State<ReportesScreen> {
                     style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textStrong),
                   ),
                 ),
-                OutlinedButton.icon(
-                  onPressed: _elegirRangoFechas,
-                  icon: const Icon(Icons.date_range, size: 18),
-                  label: Text(_periodoTexto),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.chevron_left),
+                      tooltip: "Mes anterior",
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => _irAMes(-1),
+                    ),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () => _irAMes(0),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        child: Text(
+                          _esMesCompleto ? _mesAnioTexto : _periodoTexto,
+                          style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.chevron_right),
+                      tooltip: "Mes siguiente",
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => _irAMes(1),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.date_range, size: 18),
+                      tooltip: "Elegir un rango de fechas personalizado",
+                      visualDensity: VisualDensity.compact,
+                      onPressed: _elegirRangoFechas,
+                    ),
+                  ],
                 ),
               ],
             ),
