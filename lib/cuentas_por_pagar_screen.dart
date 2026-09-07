@@ -58,6 +58,73 @@ class _CuentasPorPagarScreenState extends State<CuentasPorPagarScreen> {
     }
   }
 
+  /// Único lugar del negocio donde se podía crear un proveedor era metido
+  /// dentro del formulario de "Nueva Compra" (selector rápido) -- sin
+  /// necesidad de estar armando una compra, no había forma de darlo de alta
+  /// primero. Mismo patrón que ese diálogo rápido, pero accesible desde acá.
+  void _mostrarDialogoNuevoProveedor() {
+    final nombreCtrl = TextEditingController();
+    final cedulaCtrl = TextEditingController();
+    final correoCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Nuevo Proveedor"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nombreCtrl,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: "Nombre / Razón Social"),
+            ),
+            TextField(
+              controller: cedulaCtrl,
+              decoration: const InputDecoration(labelText: "Cédula Jurídica (Opcional)"),
+            ),
+            TextField(
+              controller: correoCtrl,
+              decoration: const InputDecoration(labelText: "Correo (Opcional)"),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
+          ElevatedButton(
+            onPressed: () async {
+              if (nombreCtrl.text.trim().isEmpty) return;
+              try {
+                final response = await ApiService.post('/proveedores/', {
+                  'negocio': widget.negocio.id,
+                  'nombre': nombreCtrl.text.trim(),
+                  'cedula_juridica': cedulaCtrl.text.trim(),
+                  'correo': correoCtrl.text.trim(),
+                });
+                if (!mounted) return;
+                if (response.statusCode == 201 || response.statusCode == 200) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Proveedor \"${nombreCtrl.text.trim()}\" guardado."), backgroundColor: Colors.green),
+                  );
+                } else {
+                  throw Exception(utf8.decode(response.bodyBytes));
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("No se pudo guardar: $e"), backgroundColor: Colors.red),
+                  );
+                }
+              }
+            },
+            child: const Text("Guardar"),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -83,7 +150,16 @@ class _CuentasPorPagarScreenState extends State<CuentasPorPagarScreen> {
                     ),
                   ],
                 ),
-                IconButton(icon: const Icon(Icons.refresh), onPressed: _cargarSaldos),
+                Row(
+                  children: [
+                    TextButton.icon(
+                      onPressed: _mostrarDialogoNuevoProveedor,
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text("Nuevo Proveedor"),
+                    ),
+                    IconButton(icon: const Icon(Icons.refresh), onPressed: _cargarSaldos),
+                  ],
+                ),
               ],
             ),
           ),
