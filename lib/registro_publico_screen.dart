@@ -27,6 +27,7 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
   final _emailCtrl = TextEditingController();
   final _usernameCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
+  final _telefonoCtrl = TextEditingController();
   final _cedulaCtrl = TextEditingController();
   final _correoHaciendaCtrl = TextEditingController();
   final _codigoActividadCtrl = TextEditingController();
@@ -51,6 +52,7 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
     _emailCtrl.dispose();
     _usernameCtrl.dispose();
     _passwordCtrl.dispose();
+    _telefonoCtrl.dispose();
     _cedulaCtrl.dispose();
     _correoHaciendaCtrl.dispose();
     _codigoActividadCtrl.dispose();
@@ -89,7 +91,10 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
       'email': _emailCtrl.text.trim(),
       'username': _usernameCtrl.text.trim(),
       'password': _passwordCtrl.text,
-      if (_requierePago) 'plan': _planSeleccionadoId,
+      if (_requierePago) ...{
+        'plan': _planSeleccionadoId,
+        'telefono': _telefonoCtrl.text.trim(),
+      },
       if (_tipo == 'negocio') ...{
         'cedula': _cedulaCtrl.text.trim(),
         'tipo_cedula': _tipoCedula,
@@ -190,6 +195,15 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                       decoration: const InputDecoration(labelText: "Contraseña", border: OutlineInputBorder()),
                       validator: (v) => (v == null || v.length < 6) ? "Mínimo 6 caracteres" : null,
                     ),
+                    if (_requierePago) ...[
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _telefonoCtrl,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(labelText: "Teléfono", border: OutlineInputBorder()),
+                        validator: (v) => (v == null || v.trim().isEmpty) ? "Requerido" : null,
+                      ),
+                    ],
                     if (_tipo == 'negocio') ...[
                       const SizedBox(height: 20),
                       const Text("Datos para facturar", style: TextStyle(fontWeight: FontWeight.bold)),
