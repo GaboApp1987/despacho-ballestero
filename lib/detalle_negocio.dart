@@ -402,9 +402,13 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
       },
       child: _pillAppBar(
         icono: Icons.receipt_long,
-        texto: "$disponibles/$limite",
-        tooltip: "Plan ${_negocioConCuota.planNombre}: $disponibles de $limite facturas electrónicas "
-            "disponibles este mes -- tocá para cambiar de plan",
+        // Solo el numero disponible -- "$disponibles/$limite" confundia
+        // cuando disponibles supera el limite del plan (ej. despues de
+        // comprar mas facturas antes de que se acabaran, algo valido y
+        // esperado, no un error).
+        texto: "$disponibles disp.",
+        tooltip: "Plan ${_negocioConCuota.planNombre} ($limite facturas/mes): $disponibles disponibles "
+            "ahora -- tocá para cambiar o sumar más",
         colorTexto: color,
       ),
     );

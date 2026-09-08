@@ -166,9 +166,13 @@ class _CambiarPlanScreenState extends State<CambiarPlanScreen> {
                       padding: const EdgeInsets.all(16),
                       children: [
                         Text(
-                          "Plan actual: ${widget.negocio.planNombre ?? 'Sin plan'} — "
-                          "${widget.negocio.facturasDisponibles ?? 0} de ${widget.negocio.limiteFacturasMensual ?? 0} "
-                          "facturas disponibles este mes",
+                          // No se usa "X de Y": si el negocio compro mas
+                          // facturas antes de quedarse sin ellas, disponibles
+                          // puede superar el limite normal del plan -- eso es
+                          // valido, no un error, "X de Y" lo hacia parecer uno.
+                          "Plan actual: ${widget.negocio.planNombre ?? 'Sin plan'} "
+                          "(${widget.negocio.limiteFacturasMensual ?? 0} facturas/mes) — "
+                          "${widget.negocio.facturasDisponibles ?? 0} disponibles ahora",
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                         const SizedBox(height: 16),
