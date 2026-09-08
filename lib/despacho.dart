@@ -6,6 +6,7 @@ class Despacho {
   final String? logoUrl;
   final int? suscripcionId;
   final String? suscripcionEstado;
+  final bool suscripcionCobroAutomatico;
 
   Despacho({
     required this.id,
@@ -15,6 +16,7 @@ class Despacho {
     this.logoUrl,
     this.suscripcionId,
     this.suscripcionEstado,
+    this.suscripcionCobroAutomatico = false,
   });
 
   factory Despacho.fromJson(Map<String, dynamic> json) {
@@ -26,6 +28,7 @@ class Despacho {
       logoUrl: json['logo'],
       suscripcionId: json['suscripcion_id'],
       suscripcionEstado: json['suscripcion_estado'],
+      suscripcionCobroAutomatico: json['suscripcion_cobro_automatico'] ?? false,
     );
   }
 }

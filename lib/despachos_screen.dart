@@ -5,6 +5,7 @@ import 'api_service.dart';
 import 'avatar_logo.dart';
 import 'despacho.dart';
 import 'negocios_screen.dart';
+import 'onvo_cobro_automatico_screen.dart';
 import 'planes_screen.dart';
 import 'login.dart';
 import 'widgets/bloqueo_salida_raiz.dart';
@@ -212,6 +213,28 @@ class _DespachosScreenState extends State<DespachosScreen> {
             ),
           ),
           actions: [
+            if (despacho.suscripcionId != null)
+              TextButton.icon(
+                icon: const Icon(Icons.credit_card, size: 18),
+                label: const Text("Cobro automático"),
+                onPressed: () async {
+                  final activado = await Navigator.push<bool>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => OnvoCobroAutomaticoScreen(
+                        tipo: 'despacho',
+                        suscripcionId: despacho.suscripcionId!,
+                        nombreTitular: despacho.nombre,
+                        yaTieneCobroAutomatico: despacho.suscripcionCobroAutomatico,
+                      ),
+                    ),
+                  );
+                  if (activado == true) {
+                    if (ctx.mounted) Navigator.pop(ctx, false);
+                    _cargarDespachos();
+                  }
+                },
+              ),
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
             ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Guardar")),
           ],

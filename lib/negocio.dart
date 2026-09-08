@@ -65,6 +65,7 @@ class Negocio {
   final int? facturasDisponibles;
   final int? suscripcionId;
   final String? suscripcionEstado;
+  final bool suscripcionCobroAutomatico;
 
   // 🔥 2. LOS AGREGAMOS AL CONSTRUCTOR (AQUÍ ERA DONDE FALLABA)
   Negocio({
@@ -89,6 +90,7 @@ class Negocio {
     this.facturasDisponibles,
     this.suscripcionId,
     this.suscripcionEstado,
+    this.suscripcionCobroAutomatico = false,
   });
 
   // 🔥 3. MAPEAMOS CORRECTAMENTE EL CONSTRUCTOR FROMJSON
@@ -117,6 +119,7 @@ class Negocio {
       facturasDisponibles: json['facturas_disponibles'],
       suscripcionId: json['suscripcion_id'],
       suscripcionEstado: json['suscripcion_estado'],
+      suscripcionCobroAutomatico: json['suscripcion_cobro_automatico'] ?? false,
     );
   }
 }
