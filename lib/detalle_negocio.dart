@@ -504,6 +504,18 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         title: Text(_tituloSeccionActiva()),
         bottom: esMovil ? null : PreferredSize(preferredSize: const Size.fromHeight(56), child: _buildPillTabsBar()),
         actions: [
+          // Con hasta 7 elementos (2 fijos + hasta 2 pastillas condicionales
+          // + 3 mas), en un telefono angosto esto se salia del ancho del
+          // AppBar -- un RenderFlex overflow que dejaba lo que sobraba (a
+          // veces la pastilla de cuota de facturas, recien vuelta tocable)
+          // fuera del area realmente tocable, aunque se alcanzara a ver
+          // parcialmente. Envuelto en scroll horizontal, nunca queda nada
+          // inalcanzable sin importar cuan angosta sea la pantalla.
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: "Actualizar",
@@ -556,6 +568,9 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
                 );
               }
             },
+          ),
+              ],
+            ),
           ),
         ],
       ),

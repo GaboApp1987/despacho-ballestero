@@ -89,10 +89,14 @@ class _CambiarPlanScreenState extends State<CambiarPlanScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text("Confirmar cambio de plan"),
-          content: Text(
-            "Vas a pasar al plan ${plan.nombre} (${plan.limiteFacturasMensual} facturas/mes) $precio. "
-            "Se te va a cobrar de inmediato con la tarjeta que ingreses, y las facturas nuevas quedan "
-            "disponibles apenas se confirme el pago.",
+          // SingleChildScrollView: en un telefono en horizontal (poco alto)
+          // el texto podia no entrar y desbordar el dialogo.
+          content: SingleChildScrollView(
+            child: Text(
+              "Vas a pasar al plan ${plan.nombre} (${plan.limiteFacturasMensual} facturas/mes) $precio. "
+              "Se te va a cobrar de inmediato con la tarjeta que ingreses, y las facturas nuevas quedan "
+              "disponibles apenas se confirme el pago.",
+            ),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
