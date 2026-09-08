@@ -165,7 +165,7 @@ class _DespachosScreenState extends State<DespachosScreen> {
     final cedulaCtrl = TextEditingController(text: d.cedulaJuridica ?? '');
     final usernameCtrl = TextEditingController();
     final passwordCtrl = TextEditingController();
-    final emailCtrl = TextEditingController();
+    final emailCtrl = TextEditingController(text: d.emailActual ?? '');
     bool guardando = false;
 
     showDialog(
@@ -473,7 +473,10 @@ class _DespachosScreenState extends State<DespachosScreen> {
                       child: ListTile(
                         leading: avatarConLogo(logoUrl: d.logoUrl, icono: Icons.account_balance, nombre: d.nombre),
                         title: Text(d.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text(d.cedulaJuridica?.isNotEmpty == true ? "Cédula: ${d.cedulaJuridica}" : "Sin cédula registrada"),
+                        subtitle: Text(
+                          "${d.cedulaJuridica?.isNotEmpty == true ? 'Cédula: ${d.cedulaJuridica}' : 'Sin cédula registrada'}"
+                          "${d.emailActual?.isNotEmpty == true ? ' · ${d.emailActual}' : ''}",
+                        ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
