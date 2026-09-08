@@ -13,6 +13,8 @@ import 'widgets/staggered_entrance.dart';
 import 'widgets/animated_logo.dart';
 import 'widgets/soporte_chat.dart';
 import 'recuperar_password_screen.dart';
+import 'registro_publico_screen.dart';
+import 'suscripcion_suspendida_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -130,9 +132,29 @@ class _LoginScreenState extends State<LoginScreen> {
         final data = json.decode(utf8.decode(perfilResponse.bodyBytes));
         rol = data['rol'] ?? 'ninguno';
         rolEmpleado = data['rol_empleado'];
-      } else if (perfilResponse.statusCode == 402 || perfilResponse.statusCode == 403) {
-        // Suscripción suspendida por falta de pago (402), o acceso de
-        // empleado desactivado por el dueño del negocio (403).
+      } else if (perfilResponse.statusCode == 402) {
+        // Suscripción suspendida por falta de pago: se mantiene la sesión
+        // (para poder llamar a iniciar/confirmar-cobro-automatico como
+        // dueño de la suscripción) y se ofrece reactivar pagando de nuevo,
+        // en vez de simplemente cerrar la sesión y avisar por un SnackBar.
+        final data = json.decode(utf8.decode(perfilResponse.bodyBytes));
+        if (mounted) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (_) => SuscripcionSuspendidaScreen(
+                tipo: data['rol'] ?? 'negocio',
+                suscripcionId: data['suscripcion_id'],
+                nombre: data['nombre'] ?? '',
+                motivo: data['motivo'] ?? "Esta cuenta está suspendida por falta de pago.",
+              ),
+            ),
+            (route) => false,
+          );
+        }
+        return;
+      } else if (perfilResponse.statusCode == 403) {
+        // Acceso de empleado desactivado por el dueño del negocio.
         final data = json.decode(utf8.decode(perfilResponse.bodyBytes));
         await ApiService.logout();
         if (mounted) {
@@ -510,7 +532,28 @@ class _LoginScreenState extends State<LoginScreen> {
                                   : const Text("INGRESAR AL SISTEMA", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, letterSpacing: 0.5)),
                             ),
                           ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 8),
+                          Center(
+                            child: TextButton(
+                              onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (context) => const RegistroPublicoScreen()),
+                              ),
+                              child: Text.rich(
+                                TextSpan(
+                                  text: "¿No tenés cuenta? ",
+                                  style: TextStyle(color: AppColors.textMuted),
+                                  children: [
+                                    TextSpan(
+                                      text: "Registrate",
+                                      style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
                           Center(
                             child: TextButton.icon(
                               onPressed: () => mostrarSoporteChat(context, contexto: 'visitante'),
