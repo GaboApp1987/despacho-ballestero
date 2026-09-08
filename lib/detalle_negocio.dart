@@ -5,6 +5,7 @@ import 'theme/app_theme.dart';
 import 'theme/theme_controller.dart';
 
 import 'api_service.dart';
+import 'cambiar_plan_screen.dart';
 import 'cliente.dart';
 import 'configuracion_screen.dart';
 import 'cotizacion.dart';
@@ -390,11 +391,22 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         color = Colors.amber.shade100;
       }
     }
-    return _pillAppBar(
-      icono: Icons.receipt_long,
-      texto: "$disponibles/$limite",
-      tooltip: "Plan ${_negocioConCuota.planNombre}: $disponibles de $limite facturas electrónicas disponibles este mes",
-      colorTexto: color,
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: () async {
+        final actualizo = await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(builder: (_) => CambiarPlanScreen(negocio: _negocioConCuota)),
+        );
+        if (actualizo == true) _recargarDatos();
+      },
+      child: _pillAppBar(
+        icono: Icons.receipt_long,
+        texto: "$disponibles/$limite",
+        tooltip: "Plan ${_negocioConCuota.planNombre}: $disponibles de $limite facturas electrónicas "
+            "disponibles este mes -- tocá para cambiar de plan",
+        colorTexto: color,
+      ),
     );
   }
 

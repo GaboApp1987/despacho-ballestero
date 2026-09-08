@@ -14,6 +14,11 @@ class OnvoCobroAutomaticoScreen extends StatefulWidget {
   final int suscripcionId;
   final String nombreTitular;
   final bool yaTieneCobroAutomatico;
+  /// Si viene, esta pantalla cobra el plan indicado en vez del monto actual
+  /// de la suscripción -- el negocio pasa a ese plan (y sus facturas
+  /// disponibles suben al toque) recién cuando ONVO confirma el cobro.
+  final int? planId;
+  final String? planNombre;
 
   const OnvoCobroAutomaticoScreen({
     super.key,
@@ -21,6 +26,8 @@ class OnvoCobroAutomaticoScreen extends StatefulWidget {
     required this.suscripcionId,
     required this.nombreTitular,
     this.yaTieneCobroAutomatico = false,
+    this.planId,
+    this.planNombre,
   });
 
   @override
@@ -44,7 +51,9 @@ class _OnvoCobroAutomaticoScreenState extends State<OnvoCobroAutomaticoScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.yaTieneCobroAutomatico) {
+    // El cambio de plan es una accion aparte, distinta de "reemplazar la
+    // tarjeta guardada" -- no hace falta advertir sobre reemplazar nada.
+    if (widget.yaTieneCobroAutomatico && widget.planId == null) {
       _confirmarReemplazo();
     } else {
       _iniciar();
@@ -80,7 +89,10 @@ class _OnvoCobroAutomaticoScreenState extends State<OnvoCobroAutomaticoScreen> {
       _error = null;
     });
     try {
-      final inicio = await ApiService.post('$_endpointBase/${widget.suscripcionId}/iniciar-cobro-automatico/', {});
+      final inicio = await ApiService.post(
+        '$_endpointBase/${widget.suscripcionId}/iniciar-cobro-automatico/',
+        widget.planId != null ? {'plan': widget.planId} : {},
+      );
       final datosInicio = json.decode(utf8.decode(inicio.bodyBytes));
       if (inicio.statusCode != 200) {
         throw Exception(datosInicio['detail'] ?? 'Error desconocido');
@@ -149,7 +161,11 @@ class _OnvoCobroAutomaticoScreenState extends State<OnvoCobroAutomaticoScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("Cobro automático — ${widget.nombreTitular}"),
+        title: Text(
+          widget.planId != null
+              ? "Cambiar a ${widget.planNombre ?? 'plan nuevo'}"
+              : "Cobro automático — ${widget.nombreTitular}",
+        ),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
       ),
