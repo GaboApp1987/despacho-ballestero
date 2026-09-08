@@ -68,49 +68,67 @@ class _CambiarPlanScreenState extends State<CambiarPlanScreen> {
     return plan.precioMensual! < actual!.precioMensual!;
   }
 
+  // Evita doble-tap mientras el dialogo/la navegacion todavia estan en
+  // camino -- sin esto, tocar "Cambiar" dos veces rapido (ej. mientras el
+  // primer tap parecia no responder) podia abrir el dialogo de confirmacion
+  // dos veces apiladas.
+  bool _procesando = false;
+
   Future<void> _elegirPlan(Plan plan) async {
+    if (_procesando) return;
     if (widget.negocio.suscripcionId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Este negocio todavía no tiene una suscripción para cobrar.")),
       );
       return;
     }
-    final precio = plan.precioMensual != null ? "₡${plan.precioMensual!.toStringAsFixed(0)}/mes" : "";
-    final confirmado = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Confirmar cambio de plan"),
-        content: Text(
-          "Vas a pasar al plan ${plan.nombre} (${plan.limiteFacturasMensual} facturas/mes) $precio. "
-          "Se te va a cobrar de inmediato con la tarjeta que ingreses, y las facturas nuevas quedan "
-          "disponibles apenas se confirme el pago.",
+    setState(() => _procesando = true);
+    try {
+      final precio = plan.precioMensual != null ? "₡${plan.precioMensual!.toStringAsFixed(0)}/mes" : "";
+      final confirmado = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("Confirmar cambio de plan"),
+          content: Text(
+            "Vas a pasar al plan ${plan.nombre} (${plan.limiteFacturasMensual} facturas/mes) $precio. "
+            "Se te va a cobrar de inmediato con la tarjeta que ingreses, y las facturas nuevas quedan "
+            "disponibles apenas se confirme el pago.",
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
+            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Continuar y pagar")),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Continuar y pagar")),
-        ],
-      ),
-    );
-    if (confirmado != true || !mounted) return;
-
-    final exito = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => OnvoCobroAutomaticoScreen(
-          tipo: 'negocio',
-          suscripcionId: widget.negocio.suscripcionId!,
-          nombreTitular: widget.negocio.nombreComercial,
-          yaTieneCobroAutomatico: widget.negocio.suscripcionCobroAutomatico,
-          planId: plan.id,
-          planNombre: plan.nombre,
-        ),
-      ),
-    );
-    if (exito == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("¡Listo! Ya estás en el plan ${plan.nombre}.")),
       );
-      Navigator.pop(context, true);
+      if (confirmado != true || !mounted) return;
+
+      final exito = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => OnvoCobroAutomaticoScreen(
+            tipo: 'negocio',
+            suscripcionId: widget.negocio.suscripcionId!,
+            nombreTitular: widget.negocio.nombreComercial,
+            yaTieneCobroAutomatico: widget.negocio.suscripcionCobroAutomatico,
+            planId: plan.id,
+            planNombre: plan.nombre,
+          ),
+        ),
+      );
+      if (exito == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("¡Listo! Ya estás en el plan ${plan.nombre}.")),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("No se pudo iniciar el cambio de plan: $e")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _procesando = false);
     }
   }
 
@@ -129,47 +147,80 @@ class _CambiarPlanScreenState extends State<CambiarPlanScreen> {
                   padding: const EdgeInsets.all(24),
                   child: Center(child: Text(_error!, textAlign: TextAlign.center)),
                 )
-              : ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    Text(
-                      "Plan actual: ${widget.negocio.planNombre ?? 'Sin plan'} — "
-                      "${widget.negocio.facturasDisponibles ?? 0} de ${widget.negocio.limiteFacturasMensual ?? 0} "
-                      "facturas disponibles este mes",
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 16),
-                    ..._planes.map((plan) {
-                      final esActual = plan.id == widget.negocio.planId;
-                      final esBaja = !esActual && _esBaja(plan);
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        child: ListTile(
-                          leading: Icon(
-                            esActual ? Icons.check_circle : Icons.upgrade,
-                            color: esActual ? Colors.green : (esBaja ? AppColors.textMuted : null),
-                          ),
-                          title: Text(plan.nombre),
-                          subtitle: Text(
-                            "${plan.limiteFacturasMensual} facturas/mes"
-                            "${plan.precioMensual != null ? ' — ₡${plan.precioMensual!.toStringAsFixed(0)}/mes' : ''}",
-                          ),
-                          trailing: esActual
-                              ? const Text("Plan actual", style: TextStyle(color: Colors.green))
-                              : esBaja
-                                  ? Tooltip(
-                                      message: "Para bajar de plan, pedile a tu contador o despacho.",
-                                      child: Text("No disponible", style: TextStyle(color: AppColors.textMuted)),
-                                    )
-                                  : ElevatedButton(
-                                      onPressed: () => _elegirPlan(plan),
-                                      child: const Text("Cambiar"),
-                                    ),
+              : Center(
+                  child: ConstrainedBox(
+                    // Sin este limite, en una pantalla ancha (web/escritorio)
+                    // cada plan se estiraba a lo largo de todo el ancho de la
+                    // ventana -- cartas larguísimas y poco legibles.
+                    constraints: const BoxConstraints(maxWidth: 480),
+                    child: ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        Text(
+                          "Plan actual: ${widget.negocio.planNombre ?? 'Sin plan'} — "
+                          "${widget.negocio.facturasDisponibles ?? 0} de ${widget.negocio.limiteFacturasMensual ?? 0} "
+                          "facturas disponibles este mes",
+                          style: Theme.of(context).textTheme.titleMedium,
                         ),
-                      );
-                    }),
-                  ],
+                        const SizedBox(height: 16),
+                        ..._planes.map((plan) => _tarjetaPlan(plan)),
+                      ],
+                    ),
+                  ),
                 ),
+    );
+  }
+
+  Widget _tarjetaPlan(Plan plan) {
+    final esActual = plan.id == widget.negocio.planId;
+    final esBaja = !esActual && _esBaja(plan);
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  esActual ? Icons.check_circle : Icons.upgrade,
+                  color: esActual ? Colors.green : (esBaja ? AppColors.textMuted : null),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(plan.nombre, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              "${plan.limiteFacturasMensual} facturas/mes"
+              "${plan.precioMensual != null ? ' — ₡${plan.precioMensual!.toStringAsFixed(0)}/mes' : ''}",
+              style: TextStyle(color: AppColors.textMuted),
+            ),
+            const SizedBox(height: 12),
+            if (esActual)
+              const Align(alignment: Alignment.centerRight, child: Text("Plan actual", style: TextStyle(color: Colors.green)))
+            else if (esBaja)
+              Tooltip(
+                message: "Para bajar de plan, pedile a tu contador o despacho.",
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Text("No disponible", style: TextStyle(color: AppColors.textMuted)),
+                ),
+              )
+            else
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _procesando ? null : () => _elegirPlan(plan),
+                  child: Text(_procesando ? "Procesando..." : "Cambiar a este plan"),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

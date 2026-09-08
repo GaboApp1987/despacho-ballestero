@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 
 import 'api_service.dart';
+import 'cambiar_plan_screen.dart';
 import 'cliente.dart';
 import 'negocio.dart';
 import 'producto.dart';
@@ -342,6 +343,33 @@ class _FormularioFacturaState extends State<FormularioFactura> {
       if (response.statusCode == 201 || response.statusCode == 200) {
         if (mounted) {
           Navigator.pop(context, true);
+        }
+      } else if (response.statusCode == 403) {
+        // Ademas de la suscripcion suspendida, este 403 tambien cubre el
+        // limite mensual de facturas del plan (ver
+        // FacturaViewSet.perform_create) -- si es ese caso, se ofrece ir
+        // directo a cambiar de plan en vez de solo mostrar el error.
+        final datos = json.decode(utf8.decode(response.bodyBytes));
+        final detalle = (datos['detail'] ?? 'No se pudo registrar la factura.').toString();
+        if (mounted) {
+          final esLimiteDePlan = detalle.toLowerCase().contains('límite') || detalle.toLowerCase().contains('limite');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(detalle),
+              duration: const Duration(seconds: 8),
+              action: esLimiteDePlan
+                  ? SnackBarAction(
+                      label: "Actualizar plan",
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => CambiarPlanScreen(negocio: widget.negocio)),
+                        );
+                      },
+                    )
+                  : null,
+            ),
+          );
         }
       } else {
         throw Exception(utf8.decode(response.bodyBytes));
