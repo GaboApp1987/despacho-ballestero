@@ -85,17 +85,22 @@ class _CambiarPlanScreenState extends State<CambiarPlanScreen> {
     setState(() => _procesando = true);
     try {
       final precio = plan.precioMensual != null ? "₡${plan.precioMensual!.toStringAsFixed(0)}/mes" : "";
+      final esMismoplan = plan.id == widget.negocio.planId;
       final confirmado = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text("Confirmar cambio de plan"),
+          title: Text(esMismoplan ? "Confirmar compra adicional" : "Confirmar cambio de plan"),
           // SingleChildScrollView: en un telefono en horizontal (poco alto)
           // el texto podia no entrar y desbordar el dialogo.
           content: SingleChildScrollView(
             child: Text(
-              "Vas a pasar al plan ${plan.nombre} (${plan.limiteFacturasMensual} facturas/mes) $precio. "
-              "Se te va a cobrar de inmediato con la tarjeta que ingreses, y las facturas nuevas quedan "
-              "disponibles apenas se confirme el pago.",
+              esMismoplan
+                  ? "Vas a comprar otro bloque del plan ${plan.nombre} (+${plan.limiteFacturasMensual} facturas/mes) "
+                      "$precio, que se suma a las facturas que ya tenés disponibles. Se te va a cobrar de inmediato "
+                      "con la tarjeta que ingreses."
+                  : "Vas a pasar al plan ${plan.nombre} (${plan.limiteFacturasMensual} facturas/mes) $precio. "
+                      "Se te va a cobrar de inmediato con la tarjeta que ingreses, y las facturas nuevas quedan "
+                      "disponibles apenas se confirme el pago.",
             ),
           ),
           actions: [
@@ -205,8 +210,9 @@ class _CambiarPlanScreenState extends State<CambiarPlanScreen> {
             ),
             const SizedBox(height: 12),
             if (esActual)
-              const Align(alignment: Alignment.centerRight, child: Text("Plan actual", style: TextStyle(color: Colors.green)))
-            else if (esBaja)
+              const Align(alignment: Alignment.centerRight, child: Text("Plan actual", style: TextStyle(color: Colors.green))),
+            if (esActual) const SizedBox(height: 8),
+            if (esBaja)
               Tooltip(
                 message: "Para bajar de plan, pedile a tu contador o despacho.",
                 child: Align(
@@ -215,11 +221,20 @@ class _CambiarPlanScreenState extends State<CambiarPlanScreen> {
                 ),
               )
             else
+              // Se puede comprar el plan actual de nuevo (o cualquier otro
+              // que no sea una baja) aunque todavia tenga facturas
+              // disponibles -- cada compra suma el cupo completo del plan
+              // a lo que ya tenga, no lo reemplaza (ver
+              // confirmar_cobro_automatico en el backend).
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: _procesando ? null : () => _elegirPlan(plan),
-                  child: Text(_procesando ? "Procesando..." : "Cambiar a este plan"),
+                  child: Text(
+                    _procesando
+                        ? "Procesando..."
+                        : (esActual ? "Comprar de nuevo (+${plan.limiteFacturasMensual})" : "Cambiar a este plan"),
+                  ),
                 ),
               ),
           ],
