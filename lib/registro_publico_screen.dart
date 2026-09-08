@@ -48,6 +48,10 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
   List<_PlanOption> _planes = [];
   int? _planSeleccionadoId;
   bool _enviando = false;
+  // Si esta marcado, se registra igual eligiendo un plan (para saber que
+  // va a pagar despues), pero se salta el pago inmediato -- ver
+  // RegistroPublicoView.DIAS_PRUEBA_GRATIS en el backend.
+  bool _pruebaGratis = false;
 
   // Los tres tipos pagan un plan propio (ver RegistroPublicoView) -- un
   // contador que se engancha a un despacho existente no pasa por acá, eso
@@ -153,6 +157,7 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
       if (_requierePago) ...{
         'plan': _planSeleccionadoId,
         'telefono': _telefonoCtrl.text.trim(),
+        'prueba_gratis': _pruebaGratis,
       },
       if (_tipo == 'negocio') ...{
         'cedula': _cedulaCtrl.text.trim(),
@@ -172,7 +177,7 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
       await ApiService.saveTokens(access: datos['access'], refresh: datos['refresh']);
 
       if (!mounted) return;
-      if (_requierePago) {
+      if (_requierePago && !_pruebaGratis) {
         await Navigator.push(
           context,
           MaterialPageRoute(
@@ -339,9 +344,27 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                                     );
                                   }).toList(),
                                 ),
+                      const SizedBox(height: 12),
+                      Card(
+                        margin: EdgeInsets.zero,
+                        color: _pruebaGratis ? AppColors.primary.withOpacity(0.08) : null,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          side: BorderSide(color: _pruebaGratis ? AppColors.primary : Colors.transparent, width: 2),
+                        ),
+                        child: CheckboxListTile(
+                          value: _pruebaGratis,
+                          onChanged: (v) => setState(() => _pruebaGratis = v ?? false),
+                          controlAffinity: ListTileControlAffinity.leading,
+                          title: const Text("Empezar con 8 días de prueba gratis", style: TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: const Text("Usás Equilibra ya mismo y pagás la tarjeta más adelante, antes de que se acaben los 8 días."),
+                        ),
+                      ),
                       const SizedBox(height: 4),
                       Text(
-                        "Vas a poder pagar con tarjeta justo después de crear la cuenta.",
+                        _pruebaGratis
+                            ? "No te vamos a cobrar nada todavía."
+                            : "Vas a poder pagar con tarjeta justo después de crear la cuenta.",
                         style: TextStyle(fontSize: 12, color: AppColors.textMuted),
                       ),
                     ],
@@ -354,7 +377,7 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                       ),
                       child: _enviando
                           ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : Text(_requierePago ? "Continuar al pago" : "Crear cuenta"),
+                          : Text(_requierePago && !_pruebaGratis ? "Continuar al pago" : "Crear cuenta"),
                     ),
                     const SizedBox(height: 12),
                   ],
