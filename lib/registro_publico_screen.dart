@@ -8,15 +8,26 @@ import 'plan.dart';
 import 'theme/app_theme.dart';
 
 /// Alta pública desde el login (sin sesión previa): despacho contable,
-/// contador independiente, o negocio directo. Despacho y negocio necesitan
-/// elegir un plan y pagarlo (vía OnvoCobroAutomaticoScreen) antes de poder
-/// usar el sistema -- ver RegistroPublicoView, que ya los crea con la
-/// suscripción en "suspendido" independientemente de esto.
+/// contador independiente, o negocio directo. Los tres necesitan elegir un
+/// plan y pagarlo (vía OnvoCobroAutomaticoScreen) antes de poder usar el
+/// sistema -- ver RegistroPublicoView, que ya los crea con la suscripción
+/// en "suspendido" independientemente de esto.
 class RegistroPublicoScreen extends StatefulWidget {
   const RegistroPublicoScreen({super.key});
 
   @override
   State<RegistroPublicoScreen> createState() => _RegistroPublicoScreenState();
+}
+
+/// Normaliza los 3 catalogos de plan distintos (Plan/PlanContador/
+/// PlanDespacho, cada uno con su propio campo de limite) a una sola forma
+/// que la UI puede mostrar sin importarle cual es.
+class _PlanOption {
+  final int id;
+  final String nombre;
+  final double? precioMensual;
+  final String textoLimite;
+  _PlanOption({required this.id, required this.nombre, required this.precioMensual, required this.textoLimite});
 }
 
 class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
@@ -34,16 +45,39 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
   String _tipoCedula = '02';
 
   bool _cargandoPlanes = true;
-  List<Plan> _planes = [];
+  List<_PlanOption> _planes = [];
   int? _planSeleccionadoId;
   bool _enviando = false;
 
-  bool get _requierePago => _tipo == 'despacho' || _tipo == 'negocio';
+  // Los tres tipos pagan un plan propio (ver RegistroPublicoView) -- un
+  // contador que se engancha a un despacho existente no pasa por acá, eso
+  // lo hace el despacho desde su panel, y no paga aparte.
+  bool get _requierePago => true;
+
+  String get _endpointPlanes {
+    switch (_tipo) {
+      case 'despacho':
+        return '/planes-despacho/';
+      case 'contador':
+        return '/planes-contador/';
+      default:
+        return '/planes/';
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _cargarPlanes();
+  }
+
+  Future<void> _cambiarTipo(String nuevoTipo) {
+    setState(() {
+      _tipo = nuevoTipo;
+      _planSeleccionadoId = null;
+      _cargandoPlanes = true;
+    });
+    return _cargarPlanes();
   }
 
   @override
@@ -61,11 +95,13 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
 
   Future<void> _cargarPlanes() async {
     try {
-      final response = await ApiService.get('/planes/');
+      final response = await ApiService.get(_endpointPlanes);
+      if (!mounted) return;
       if (response.statusCode == 200) {
         final List datos = json.decode(utf8.decode(response.bodyBytes));
+        final planes = datos.map((j) => _planOptionDesde(j)).toList();
         setState(() {
-          _planes = datos.map((j) => Plan.fromJson(j)).toList();
+          _planes = planes;
           _cargandoPlanes = false;
           if (_planes.isNotEmpty) _planSeleccionadoId ??= _planes.first.id;
         });
@@ -74,6 +110,29 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
       }
     } catch (_) {
       if (mounted) setState(() => _cargandoPlanes = false);
+    }
+  }
+
+  _PlanOption _planOptionDesde(Map<String, dynamic> json) {
+    switch (_tipo) {
+      case 'despacho':
+        final p = PlanDespacho.fromJson(json);
+        return _PlanOption(
+          id: p.id, nombre: p.nombre, precioMensual: p.precioMensual,
+          textoLimite: p.limiteContadores != null ? "${p.limiteContadores} contadores" : "Contadores ilimitados",
+        );
+      case 'contador':
+        final p = PlanContador.fromJson(json);
+        return _PlanOption(
+          id: p.id, nombre: p.nombre, precioMensual: p.precioMensual,
+          textoLimite: p.limiteNegocios != null ? "${p.limiteNegocios} negocios" : "Negocios ilimitados",
+        );
+      default:
+        final p = Plan.fromJson(json);
+        return _PlanOption(
+          id: p.id, nombre: p.nombre, precioMensual: p.precioMensual,
+          textoLimite: "${p.limiteFacturasMensual} facturas/mes",
+        );
     }
   }
 
@@ -164,7 +223,7 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                     const SizedBox(height: 8),
                     _SelectorTipo(
                       tipo: _tipo,
-                      onChanged: (v) => setState(() => _tipo = v),
+                      onChanged: _cambiarTipo,
                     ),
                     const SizedBox(height: 20),
                     TextFormField(
@@ -273,7 +332,7 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                                         onChanged: (v) => setState(() => _planSeleccionadoId = v),
                                         title: Text(p.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
                                         subtitle: Text(
-                                          "${p.limiteFacturasMensual} facturas/mes"
+                                          "${p.textoLimite}"
                                           "${p.precioMensual != null ? ' · ${formatearColones(p.precioMensual!)}/mes' : ''}",
                                         ),
                                       ),

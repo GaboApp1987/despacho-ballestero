@@ -10,7 +10,7 @@ import 'theme/app_theme.dart';
 /// el SDK propio de ONVO (webapp/pagos/tarjeta.html + sdk.js) -- esta app
 /// nunca ve ni maneja el número de tarjeta, solo el resultado final.
 class OnvoCobroAutomaticoScreen extends StatefulWidget {
-  final String tipo; // 'negocio' o 'despacho'
+  final String tipo; // 'negocio', 'despacho' o 'contador'
   final int suscripcionId;
   final String nombreTitular;
   final bool yaTieneCobroAutomatico;
@@ -40,7 +40,16 @@ class _OnvoCobroAutomaticoScreenState extends State<OnvoCobroAutomaticoScreen> {
   String? _error;
   Uri? _urlTarjeta;
 
-  String get _endpointBase => widget.tipo == 'negocio' ? '/suscripciones-negocio' : '/suscripciones-despacho';
+  String get _endpointBase {
+    switch (widget.tipo) {
+      case 'negocio':
+        return '/suscripciones-negocio';
+      case 'contador':
+        return '/suscripciones-socio';
+      default:
+        return '/suscripciones-despacho';
+    }
+  }
 
   /// El origen del backend (sin el /api final) -- ahí vive tarjeta.html.
   String get _origenBackend {
