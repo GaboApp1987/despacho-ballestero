@@ -62,6 +62,7 @@ class _DespachosScreenState extends State<DespachosScreen> {
     final cedulaCtrl = TextEditingController();
     final usernameCtrl = TextEditingController();
     final passwordCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
     bool guardando = false;
 
     showDialog(
@@ -100,6 +101,16 @@ class _DespachosScreenState extends State<DespachosScreen> {
                   obscureText: true,
                   decoration: const InputDecoration(labelText: "Contraseña *", border: OutlineInputBorder()),
                 ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: emailCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: "Correo del despacho",
+                    helperText: "Para mandarle el correo de bienvenida",
+                    border: OutlineInputBorder(),
+                  ),
+                ),
               ],
             ),
           ),
@@ -124,6 +135,7 @@ class _DespachosScreenState extends State<DespachosScreen> {
                           'cedula_juridica': cedulaCtrl.text.trim(),
                           'username': usernameCtrl.text.trim(),
                           'password': passwordCtrl.text,
+                          'email': emailCtrl.text.trim(),
                         });
                         if (response.statusCode == 201) {
                           if (ctx.mounted) Navigator.pop(ctx);
@@ -144,6 +156,138 @@ class _DespachosScreenState extends State<DespachosScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _mostrarFormularioEditar(Despacho d) {
+    final nombreCtrl = TextEditingController(text: d.nombre);
+    final cedulaCtrl = TextEditingController(text: d.cedulaJuridica ?? '');
+    final usernameCtrl = TextEditingController();
+    final passwordCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
+    bool guardando = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setStateDialog) => AlertDialog(
+          title: Text("Editar ${d.nombre}"),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nombreCtrl,
+                  autofocus: true,
+                  decoration: const InputDecoration(labelText: "Nombre del Despacho *", border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: cedulaCtrl,
+                  decoration: const InputDecoration(labelText: "Cédula Jurídica", border: OutlineInputBorder()),
+                ),
+                const Divider(height: 30),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text("Cambiar acceso (dejar en blanco para no tocarlo)", style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: usernameCtrl,
+                  decoration: const InputDecoration(labelText: "Nuevo usuario", border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: passwordCtrl,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: "Nueva contraseña", border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: emailCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(labelText: "Correo del despacho", border: OutlineInputBorder()),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: guardando ? null : () => Navigator.pop(ctx), child: const Text("Cancelar")),
+            ElevatedButton(
+              onPressed: guardando
+                  ? null
+                  : () async {
+                      if (nombreCtrl.text.trim().isEmpty) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          const SnackBar(content: Text("El nombre es obligatorio")),
+                        );
+                        return;
+                      }
+                      setStateDialog(() => guardando = true);
+                      try {
+                        final response = await ApiService.patch('/despachos/${d.id}/', {
+                          'nombre': nombreCtrl.text.trim(),
+                          'cedula_juridica': cedulaCtrl.text.trim(),
+                          if (usernameCtrl.text.trim().isNotEmpty) 'username': usernameCtrl.text.trim(),
+                          if (passwordCtrl.text.isNotEmpty) 'password': passwordCtrl.text,
+                          if (emailCtrl.text.trim().isNotEmpty) 'email': emailCtrl.text.trim(),
+                        });
+                        if (response.statusCode == 200) {
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          _cargarDespachos();
+                        } else {
+                          throw Exception(utf8.decode(response.bodyBytes));
+                        }
+                      } catch (e) {
+                        setStateDialog(() => guardando = false);
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Error: $e")));
+                        }
+                      }
+                    },
+              child: guardando
+                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text("Guardar"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmarEliminar(Despacho d) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("¿Eliminar despacho?"),
+        content: Text(
+          "Se va a borrar \"${d.nombre}\" junto con todos sus contadores, negocios y facturas. "
+          "Esta acción no se puede deshacer.",
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                final response = await ApiService.delete('/despachos/${d.id}/');
+                if (response.statusCode == 204) {
+                  _cargarDespachos();
+                } else {
+                  throw Exception(utf8.decode(response.bodyBytes));
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al eliminar: $e")));
+                }
+              }
+            },
+            child: const Text("Eliminar", style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }
@@ -330,10 +474,26 @@ class _DespachosScreenState extends State<DespachosScreen> {
                         leading: avatarConLogo(logoUrl: d.logoUrl, icono: Icons.account_balance, nombre: d.nombre),
                         title: Text(d.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
                         subtitle: Text(d.cedulaJuridica?.isNotEmpty == true ? "Cédula: ${d.cedulaJuridica}" : "Sin cédula registrada"),
-                        trailing: IconButton(
-                          icon: Icon(Icons.payments_outlined, color: _colorEstadoSuscripcion(d.suscripcionEstado)),
-                          tooltip: "Cuota del despacho: ${_estadosSuscripcion[d.suscripcionEstado] ?? 'Sin registrar'}",
-                          onPressed: () => _gestionarSuscripcion(d),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: Icon(Icons.payments_outlined, color: _colorEstadoSuscripcion(d.suscripcionEstado)),
+                              tooltip: "Cuota del despacho: ${_estadosSuscripcion[d.suscripcionEstado] ?? 'Sin registrar'}",
+                              onPressed: () => _gestionarSuscripcion(d),
+                            ),
+                            PopupMenuButton<String>(
+                              tooltip: "Más opciones",
+                              onSelected: (accion) {
+                                if (accion == 'editar') _mostrarFormularioEditar(d);
+                                if (accion == 'eliminar') _confirmarEliminar(d);
+                              },
+                              itemBuilder: (context) => const [
+                                PopupMenuItem(value: 'editar', child: Text("Editar")),
+                                PopupMenuItem(value: 'eliminar', child: Text("Eliminar")),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
                     );
