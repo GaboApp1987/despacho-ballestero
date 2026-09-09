@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'api_service.dart';
 import 'formato.dart';
 import 'login.dart';
@@ -52,6 +53,7 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
   // va a pagar despues), pero se salta el pago inmediato -- ver
   // RegistroPublicoView.DIAS_PRUEBA_GRATIS en el backend.
   bool _pruebaGratis = false;
+  bool _aceptaTerminos = false;
 
   // Los tres tipos pagan un plan propio (ver RegistroPublicoView) -- un
   // contador que se engancha a un despacho existente no pasa por acá, eso
@@ -144,6 +146,12 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
     if (!_formKey.currentState!.validate()) return;
     if (_requierePago && _planSeleccionadoId == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Elegí un plan.")));
+      return;
+    }
+    if (!_aceptaTerminos) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Tenés que aceptar los Términos y la Política de Privacidad para continuar.")),
+      );
       return;
     }
 
@@ -368,7 +376,28 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                         style: TextStyle(fontSize: 12, color: AppColors.textMuted),
                       ),
                     ],
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Checkbox(
+                          value: _aceptaTerminos,
+                          onChanged: (v) => setState(() => _aceptaTerminos = v ?? false),
+                        ),
+                        Expanded(
+                          child: Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              const Text("Acepto los "),
+                              _EnlaceLegal(texto: "Términos y Condiciones", url: "https://equilibracr.com/terminos.html"),
+                              const Text(" y la "),
+                              _EnlaceLegal(texto: "Política de Privacidad", url: "https://equilibracr.com/privacidad.html"),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
                     ElevatedButton(
                       onPressed: _enviando ? null : _registrarse,
                       style: ElevatedButton.styleFrom(
@@ -386,6 +415,26 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Link clickeable a Términos/Privacidad dentro del texto de aceptación del
+/// registro -- abre en el navegador (o la app de navegador del celular),
+/// nunca dentro de la propia app.
+class _EnlaceLegal extends StatelessWidget {
+  final String texto;
+  final String url;
+  const _EnlaceLegal({required this.texto, required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+      child: Text(
+        texto,
+        style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, decoration: TextDecoration.underline),
       ),
     );
   }
