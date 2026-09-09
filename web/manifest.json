@@ -2,6 +2,7 @@
     "name": "Equilibra",
     "short_name": "Equilibra",
     "start_url": ".",
+    "scope": "/",
     "display": "standalone",
     "background_color": "#0B1120",
     "theme_color": "#22D3EE",
