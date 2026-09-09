@@ -23,11 +23,64 @@ class _ChatMensaje {
   final String role; // 'user' | 'assistant'
   final String content;
   final _PropuestaFactura? propuesta;
-  // 'pendiente' | 'creada' | 'error' -- solo aplica cuando hay `propuesta`.
+  final _PropuestaProducto? propuestaProducto;
+  // 'pendiente' | 'creando' | 'creada' -- aplica a `propuesta` (factura).
   String estadoPropuesta = 'pendiente';
-  _ChatMensaje(this.role, this.content, {this.propuesta});
+  // 'pendiente' | 'creando' | 'creada' -- aplica a `propuestaProducto`.
+  String estadoPropuestaProducto = 'pendiente';
+  _ChatMensaje(this.role, this.content, {this.propuesta, this.propuestaProducto});
 
   Map<String, String> toJson() => {'role': role, 'content': content};
+}
+
+/// Borrador de producto que arma el chat (herramienta preparar_producto del
+/// backend) con un código CABYS real ya buscado -- igual que
+/// _PropuestaFactura, nunca se crea sola, el usuario la confirma con un
+/// botón (ver _confirmarProducto).
+class _PropuestaProducto {
+  final String nombre;
+  final String codigoCabys;
+  final String codigoCabysDescripcion;
+  final String unidadMedida;
+  final double precioUnitario;
+  final double costo;
+  final double margenGanancia;
+  final int stock;
+  final int? categoriaId;
+  final String? categoriaNombre;
+  final int impuestoId;
+  final String impuestoNombre;
+  _PropuestaProducto({
+    required this.nombre,
+    required this.codigoCabys,
+    required this.codigoCabysDescripcion,
+    required this.unidadMedida,
+    required this.precioUnitario,
+    required this.costo,
+    required this.margenGanancia,
+    required this.stock,
+    required this.categoriaId,
+    required this.categoriaNombre,
+    required this.impuestoId,
+    required this.impuestoNombre,
+  });
+
+  factory _PropuestaProducto.fromJson(Map<String, dynamic> json) {
+    return _PropuestaProducto(
+      nombre: json['nombre'] ?? '',
+      codigoCabys: json['codigo_cabys'] ?? '',
+      codigoCabysDescripcion: json['codigo_cabys_descripcion'] ?? '',
+      unidadMedida: json['unidad_medida'] ?? 'Unid',
+      precioUnitario: (json['precio_unitario'] as num).toDouble(),
+      costo: (json['costo'] as num? ?? 0).toDouble(),
+      margenGanancia: (json['margen_ganancia'] as num? ?? 30).toDouble(),
+      stock: (json['stock'] as num? ?? 0).toInt(),
+      categoriaId: json['categoria_id'],
+      categoriaNombre: json['categoria_nombre'],
+      impuestoId: json['impuesto_id'],
+      impuestoNombre: json['impuesto_nombre'] ?? '',
+    );
+  }
 }
 
 /// Borrador de factura que arma el chat (herramienta preparar_factura del
@@ -113,10 +166,12 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> {
         throw Exception(data['detail'] ?? 'Error desconocido');
       }
       final propuestaJson = data['propuesta_factura'];
+      final propuestaProductoJson = data['propuesta_producto'];
       setState(() => _mensajes.add(_ChatMensaje(
             'assistant',
             data['respuesta'] ?? '',
             propuesta: propuestaJson != null ? _PropuestaFactura.fromJson(propuestaJson) : null,
+            propuestaProducto: propuestaProductoJson != null ? _PropuestaProducto.fromJson(propuestaProductoJson) : null,
           )));
     } catch (e) {
       setState(() => _mensajes.add(_ChatMensaje(
@@ -172,6 +227,44 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('No se pudo crear la factura: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
+        );
+      }
+    } finally {
+      _scrollAlFinal();
+    }
+  }
+
+  /// Crea de verdad el producto que el chat propuso, solo cuando el usuario
+  /// toca "Confirmar" en la tarjeta de la propuesta -- reusa el mismo
+  /// endpoint que el formulario normal de producto (ver crear_producto.dart).
+  Future<void> _confirmarProducto(_ChatMensaje mensaje) async {
+    final propuesta = mensaje.propuestaProducto!;
+    setState(() => mensaje.estadoPropuestaProducto = 'creando');
+    try {
+      final response = await ApiService.post('/productos/', {
+        'negocio': widget.negocioId,
+        'nombre': propuesta.nombre,
+        'codigo_cabys': propuesta.codigoCabys,
+        'unidad_medida': propuesta.unidadMedida,
+        'precio_unitario': propuesta.precioUnitario,
+        'costo': propuesta.costo,
+        'margen_ganancia': propuesta.margenGanancia,
+        'stock': propuesta.stock,
+        'categoria': propuesta.categoriaId,
+        'impuesto': propuesta.impuestoId,
+      });
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        setState(() => mensaje.estadoPropuestaProducto = 'creada');
+        _mensajes.add(_ChatMensaje('assistant', '¡Listo! Producto "${propuesta.nombre}" agregado al catálogo.'));
+        setState(() {});
+      } else {
+        throw Exception(utf8.decode(response.bodyBytes));
+      }
+    } catch (e) {
+      setState(() => mensaje.estadoPropuestaProducto = 'pendiente');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo crear el producto: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
         );
       }
     } finally {
@@ -319,6 +412,72 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> {
     );
   }
 
+  Widget _buildTarjetaPropuestaProducto(_ChatMensaje mensaje) {
+    final propuesta = mensaje.propuestaProducto!;
+    return Container(
+      constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.85),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primary.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.inventory_2_outlined, size: 16, color: AppColors.primary),
+              const SizedBox(width: 6),
+              const Text('Borrador de producto', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(propuesta.nombre, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          Text(
+            'CABYS ${propuesta.codigoCabys} · ${propuesta.codigoCabysDescripcion}',
+            style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '${propuesta.categoriaNombre ?? 'Sin categoría'} · ${propuesta.impuestoNombre} · ${propuesta.unidadMedida} · Stock inicial ${propuesta.stock}',
+            style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+          ),
+          const Divider(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Precio de venta', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              Text(formatearColones(propuesta.precioUnitario), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (mensaje.estadoPropuestaProducto == 'creada')
+            Row(
+              children: const [
+                Icon(Icons.check_circle, color: Colors.green, size: 18),
+                SizedBox(width: 6),
+                Text('Producto creado', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 13)),
+              ],
+            )
+          else
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: mensaje.estadoPropuestaProducto == 'creando' ? null : () => _confirmarProducto(mensaje),
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.black),
+                child: mensaje.estadoPropuestaProducto == 'creando'
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('Confirmar y crear producto', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final alto = MediaQuery.of(context).size.height * 0.82;
@@ -374,6 +533,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> {
                         ),
                       ),
                       if (m.propuesta != null) _buildTarjetaPropuesta(m),
+                      if (m.propuestaProducto != null) _buildTarjetaPropuestaProducto(m),
                     ],
                   );
                 },
