@@ -20,6 +20,7 @@ import 'historial_precios_cliente_screen.dart';
 import 'inventario_screen.dart';
 import 'negocio.dart';
 import 'cuentas_por_cobrar_screen.dart';
+import 'recibos_pago_screen.dart';
 import 'cuentas_por_pagar_screen.dart';
 import 'empleados_screen.dart';
 import 'notas_credito_debito_screen.dart';
@@ -76,6 +77,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     (id: 4, icono: Icons.request_quote_outlined, titulo: "Cotizaciones"),
     (id: 2, icono: Icons.people_outline, titulo: "Clientes"),
     (id: 6, icono: Icons.monetization_on_outlined, titulo: "Cuentas por Cobrar"),
+    (id: 16, icono: Icons.receipt_outlined, titulo: "Recibos de Pago"),
     (id: 15, icono: Icons.assignment_return_outlined, titulo: "Notas de Crédito/Débito"),
     (id: 11, icono: Icons.loyalty_outlined, titulo: "Tarjeta de Lealtad"),
     // -- Inventario --
@@ -97,7 +99,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
   // bloquea la escritura/lectura correspondiente de todas formas (ver
   // BloqueaCajeroMixin y los chequeos de es_cajero en views.py), esto es
   // solo para no mostrar botones que van a fallar. 'completo' ve todo esto.
-  static const Set<int> _idsOcultosParaCajero = {6, 8, 13, 9, 7, 10, 11, 12, 5, 15};
+  static const Set<int> _idsOcultosParaCajero = {6, 8, 13, 9, 7, 10, 11, 12, 5, 15, 16};
 
   List<({int id, IconData icono, String titulo})> get _menuItemsVisibles {
     // "Empleados" (id 14) es exclusivo del dueño real -- ni 'cajero' ni
@@ -318,6 +320,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         return "Clientes";
       case 6:
         return "Cuentas por Cobrar";
+      case 16:
+        return "Recibos de Pago";
       case 3:
         return "Inventario";
       case 4:
@@ -443,6 +447,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         return ConfiguracionScreen(negocio: _negocioConCuota, onGuardado: _cargarNegocioActualizado);
       case 6:
         return CuentasPorCobrarScreen(negocio: widget.negocio);
+      case 16:
+        return RecibosPagoScreen(negocio: widget.negocio);
       case 7:
         return const ImpuestosScreen();
       case 8:
