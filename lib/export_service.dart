@@ -321,7 +321,12 @@ class ExportService {
               pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  pw.Text('FACTURA ELECTRÓNICA', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+                  pw.Text(
+                    factura.esInterno
+                        ? 'TIQUETE INTERNO (NO FISCAL)'
+                        : (factura.esTiquete ? 'TIQUETE ELECTRÓNICO' : 'FACTURA ELECTRÓNICA'),
+                    style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
+                  ),
                   pw.Text('Factura Número: F-${factura.consecutivo}'),
                   pw.Text('Fecha: ${factura.fechaEmision.split('T')[0]}'),
                   pw.Text('Condición: ${factura.condicionVenta == "02" ? 'Crédito' : 'Contado'}'),
@@ -943,6 +948,7 @@ class ExportService {
     '3': 'Aceptado',
     '4': 'Rechazado',
     '5': 'Error Técnico',
+    '6': 'Interno (No Fiscal)',
   };
 
 

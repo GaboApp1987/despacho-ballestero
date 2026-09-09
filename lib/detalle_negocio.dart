@@ -909,7 +909,17 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
                           title: Row(
                             children: [
                               Flexible(child: Text(f.receptorNombre, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textStrong))),
-                              if (f.esTiquete) ...[
+                              if (f.esInterno) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.withOpacity(0.20),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text("INTERNO", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.amber)),
+                                ),
+                              ] else if (f.esTiquete) ...[
                                 const SizedBox(width: 8),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -935,7 +945,10 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
                           ),
                           subtitle: Row(
                             children: [
-                              Flexible(child: Text("${f.esTiquete ? 'T' : 'F'}-${f.consecutivo} • ${f.condicionVenta == "02" ? 'Crédito' : 'Contado'}", overflow: TextOverflow.ellipsis)),
+                              Flexible(child: Text(
+                                "${f.esInterno ? '' : (f.esTiquete ? 'T-' : 'F-')}${f.consecutivo} • ${f.condicionVenta == "02" ? 'Crédito' : 'Contado'}",
+                                overflow: TextOverflow.ellipsis,
+                              )),
                               const SizedBox(width: 8),
                               _chipEstadoHacienda(f.estadoHacienda),
                             ],
@@ -975,6 +988,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
       case '5': return Colors.red;
       case '1':
       case '2': return Colors.orange;
+      case '6': return Colors.amber;
       default: return Colors.grey;
     }
   }
@@ -986,6 +1000,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
       case '2': return "Procesando";
       case '1': return "Sin enviar";
       case '5': return "Error técnico";
+      case '6': return "Interno";
       default: return "Desconocido";
     }
   }

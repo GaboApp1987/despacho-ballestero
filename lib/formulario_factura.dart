@@ -63,6 +63,11 @@ class _FormularioFacturaState extends State<FormularioFactura> {
   String _tipoDocumento = '01';
   bool get _esTiquete => _tipoDocumento == '04';
 
+  // Tiquete Interno (solo tiene sentido dentro de Tiquete): no es fiscal, no
+  // se envía a Hacienda y no lleva impuestos -- ver Factura.es_interno en el
+  // backend. Pensado para muestras, consumo propio, ajustes, etc.
+  bool _esInterno = false;
+
   // Ultimo precio que se le cobro a CADA producto al cliente seleccionado
   // (producto.id -> ese registro), para sugerirlo al agregar/editar una
   // linea en vez de partir siempre del precio de catalogo -- ver
@@ -143,7 +148,9 @@ class _FormularioFacturaState extends State<FormularioFactura> {
 
   // Totales generales de la factura
   double get _totalSubtotal => _carrito.fold(0, (sum, item) => sum + item.subtotal);
-  double get _totalIva => _carrito.fold(0, (sum, item) => sum + item.montoIva);
+  // Un Tiquete Interno nunca lleva impuestos (ver Factura.es_interno en el
+  // backend, que además rechaza cualquier IVA distinto de 0 en sus líneas).
+  double get _totalIva => _esInterno ? 0 : _carrito.fold(0, (sum, item) => sum + item.montoIva);
   double get _totalFactura => _totalSubtotal + _totalIva;
 
   Map<int, String> get _categoriasDisponibles {
@@ -333,6 +340,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
       final body = {
         'negocio': widget.negocio.id,
         'tipo_documento': _tipoDocumento,
+        'es_interno': _esInterno,
         if (_clienteSeleccionado != null) 'cliente': _clienteSeleccionado!.id,
         'consecutivo': _consecutivoController.text.trim(),
         'receptor_nombre': _clienteSeleccionado?.nombre ?? '',
@@ -345,7 +353,9 @@ class _FormularioFacturaState extends State<FormularioFactura> {
           'producto': item.producto.id,
           'cantidad': item.cantidad,
           'precio_unitario': redondear2(item.precioUnitario),
-          'monto_iva': redondear2(item.montoIva),
+          // Tiquete Interno nunca lleva IVA -- el backend también lo exige
+          // (ver FacturaSerializer.validate).
+          'monto_iva': _esInterno ? 0 : redondear2(item.montoIva),
           'subtotal': redondear2(item.subtotal)
         }).toList(),
       };
@@ -402,7 +412,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(_esTiquete ? "Nuevo Tiquete" : "Nueva Factura"),
+        title: Text(_esInterno ? "Nuevo Tiquete Interno" : (_esTiquete ? "Nuevo Tiquete" : "Nueva Factura")),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
       ),
@@ -654,8 +664,26 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                   ButtonSegment(value: '04', label: Text("Tiquete"), icon: Icon(Icons.confirmation_number_outlined)),
                 ],
                 selected: {_tipoDocumento},
-                onSelectionChanged: (seleccion) => setState(() => _tipoDocumento = seleccion.first),
+                onSelectionChanged: (seleccion) => setState(() {
+                  _tipoDocumento = seleccion.first;
+                  if (!_esTiquete) _esInterno = false;
+                }),
               ),
+              if (_esTiquete) ...[
+                const SizedBox(height: 8),
+                CheckboxListTile(
+                  value: _esInterno,
+                  onChanged: (v) => setState(() => _esInterno = v ?? false),
+                  title: const Text("Tiquete interno", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  subtitle: Text(
+                    "Sin impuestos y no se envía a Hacienda (uso interno, muestras, ajustes).",
+                    style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                  ),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+              ],
               const SizedBox(height: 12),
               DropdownButtonFormField<Cliente>(
                 value: _clienteSeleccionado,
@@ -758,7 +786,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                   ),
                   child: _isSaving
                       ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
-                      : Text(_esTiquete ? "EMITIR TIQUETE" : "EMITIR FACTURA",
+                      : Text(_esInterno ? "EMITIR TIQUETE INTERNO" : (_esTiquete ? "EMITIR TIQUETE" : "EMITIR FACTURA"),
                           style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
                 ),
               ),
@@ -781,7 +809,9 @@ class _FormularioFacturaState extends State<FormularioFactura> {
               Text(item.producto.nombre, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
               const SizedBox(height: 2),
               Text(
-                "${formatearColones(item.precioUnitario)} c/u · ${item.impuesto?.nombre ?? 'Sin impuesto'} (${formatearNumero(item.porcentajeIva)}%)",
+                _esInterno
+                    ? "${formatearColones(item.precioUnitario)} c/u · Sin impuesto (interno)"
+                    : "${formatearColones(item.precioUnitario)} c/u · ${item.impuesto?.nombre ?? 'Sin impuesto'} (${formatearNumero(item.porcentajeIva)}%)",
                 style: TextStyle(fontSize: 11, color: Colors.grey[500]),
               ),
               Builder(builder: (context) {
@@ -826,7 +856,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text(formatearColones(item.total), style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text(formatearColones(_esInterno ? item.subtotal : item.total), style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             InkWell(
               onTap: () => _quitar(i),

@@ -293,6 +293,10 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
           colorEstado = Colors.orange;
           textoEstado = "PROCESANDO / PENDIENTE";
           break;
+        case '6':
+          colorEstado = Colors.amber;
+          textoEstado = "TIQUETE INTERNO (NO SE ENVÍA A HACIENDA)";
+          break;
         default:
           colorEstado = Colors.grey;
           textoEstado = "DESCONOCIDO";
@@ -365,11 +369,18 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
                         const Divider(),
                         Text("DETALLES DE TIMBRADO", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary)),
                         const SizedBox(height: 5),
-                        Text("Clave Numérica (50 dígitos):", style: TextStyle(fontSize: 11, color: Colors.grey[600])),
-                        SelectableText(
-                          factura.clave ?? "No generada",
-                          style: TextStyle(fontFamily: 'monospace', fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textStrong),
-                        ),
+                        if (factura.esInterno)
+                          Text(
+                            "Tiquete interno: no fiscal, no tiene clave numérica de Hacienda.",
+                            style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                          )
+                        else ...[
+                          Text("Clave Numérica (50 dígitos):", style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                          SelectableText(
+                            factura.clave ?? "No generada",
+                            style: TextStyle(fontFamily: 'monospace', fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textStrong),
+                          ),
+                        ],
                         const SizedBox(height: 25),
                         const Divider(),
                         Text("PRODUCTOS", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary)),

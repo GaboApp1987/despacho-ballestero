@@ -45,6 +45,7 @@ class Factura {
   final int id;
   final int negocio;
   final String tipoDocumento; // "01" Factura Electrónica, "04" Tiquete Electrónico
+  final bool esInterno; // Tiquete Interno: no fiscal, no va a Hacienda, sin impuestos
   final String consecutivo;
   final String? clave;
   final String fechaEmision;
@@ -69,6 +70,7 @@ class Factura {
     required this.id,
     required this.negocio,
     this.tipoDocumento = '01',
+    this.esInterno = false,
     required this.consecutivo,
     this.clave,
     required this.fechaEmision,
@@ -93,6 +95,7 @@ class Factura {
       id: json['id'],
       negocio: json['negocio'],
       tipoDocumento: json['tipo_documento'] ?? '01',
+      esInterno: json['es_interno'] ?? false,
       consecutivo: json['consecutivo'] ?? '',
       clave: json['clave'],
       fechaEmision: json['fecha_emision'] ?? '',
