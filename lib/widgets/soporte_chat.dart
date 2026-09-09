@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../theme/app_theme.dart';
 import '../api_service.dart';
 import '../formato.dart';
@@ -122,7 +123,7 @@ class _SoporteChatSheet extends StatefulWidget {
   State<_SoporteChatSheet> createState() => _SoporteChatSheetState();
 }
 
-class _SoporteChatSheetState extends State<_SoporteChatSheet> {
+class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerProviderStateMixin {
   final List<_ChatMensaje> _mensajes = [
     _ChatMensaje('assistant', '¡Hola! Soy el asistente de soporte de Equilibra. ¿En qué te ayudo?'),
   ];
@@ -130,11 +131,94 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> {
   final ScrollController _scrollCtrl = ScrollController();
   bool _enviando = false;
 
+  // Entrada por voz (mic -> texto -> se manda solo, como un comando de
+  // asistente de voz) -- ver _alternarEscucha. `_speech` se inicializa
+  // recien al primer toque del microfono (no pedimos permiso antes de que
+  // el usuario lo pida). `_pulseCtrl` anima el circulo rojo del boton
+  // mientras esta escuchando.
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  bool _vozLista = false;
+  bool _escuchando = false;
+  String? _localeVoz;
+  late final AnimationController _pulseCtrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
+
   @override
   void dispose() {
     _inputCtrl.dispose();
     _scrollCtrl.dispose();
+    _pulseCtrl.dispose();
+    if (_escuchando) _speech.stop();
     super.dispose();
+  }
+
+  /// Activa/desactiva el microfono. Al primer toque pide permiso e
+  /// inicializa el reconocimiento de voz (lazy, para no pedir permiso sin
+  /// que el usuario lo haya pedido); si el navegador/dispositivo no lo
+  /// soporta o el usuario lo negó, avisa con un SnackBar y no rompe nada --
+  /// el chat sigue funcionando por texto normal.
+  Future<void> _alternarEscucha() async {
+    if (_escuchando) {
+      await _speech.stop();
+      if (mounted) setState(() => _escuchando = false);
+      return;
+    }
+
+    if (!_vozLista) {
+      final disponible = await _speech.initialize(
+        onStatus: (status) {
+          if ((status == 'done' || status == 'notListening') && mounted) {
+            setState(() => _escuchando = false);
+          }
+        },
+        onError: (error) {
+          if (mounted) setState(() => _escuchando = false);
+        },
+      );
+      _vozLista = disponible;
+      if (!disponible) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No se pudo activar el micrófono -- revisá los permisos del navegador o del dispositivo.')),
+          );
+        }
+        return;
+      }
+      final locales = await _speech.locales();
+      _localeVoz = locales
+          .firstWhere(
+            (l) => l.localeId.toLowerCase().startsWith('es'),
+            orElse: () => locales.isNotEmpty ? locales.first : stt.LocaleName('es_CR', 'Español'),
+          )
+          .localeId;
+    }
+
+    if (!mounted) return;
+    setState(() => _escuchando = true);
+    await _speech.listen(
+      onResult: (resultado) {
+        if (!mounted) return;
+        setState(() => _inputCtrl.text = resultado.recognizedWords);
+        if (resultado.finalResult) _enviarMensajeDeVoz();
+      },
+      listenOptions: stt.SpeechListenOptions(
+        listenMode: stt.ListenMode.confirmation,
+        partialResults: true,
+        localeId: _localeVoz,
+        listenFor: const Duration(seconds: 30),
+        pauseFor: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  /// Al terminar de hablar (silencio detectado), manda solo lo transcrito --
+  /// igual que decirle un comando a un asistente de voz, sin tener que
+  /// tocar además el botón de enviar.
+  void _enviarMensajeDeVoz() {
+    setState(() => _escuchando = false);
+    if (_inputCtrl.text.trim().isNotEmpty) _enviarMensaje();
   }
 
   void _scrollAlFinal() {
@@ -478,6 +562,31 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> {
     );
   }
 
+  /// Botón de micrófono con un aro rojo que pulsa mientras escucha -- misma
+  /// idea visual que Siri/Alexa para que quede claro que el chat está
+  /// esperando que hablés. Fuera de eso es un IconButton normal.
+  Widget _buildBotonMicrofono() {
+    return AnimatedBuilder(
+      animation: _pulseCtrl,
+      builder: (context, child) {
+        return Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: _escuchando ? Colors.red.withOpacity(0.12 + 0.18 * _pulseCtrl.value) : Colors.transparent,
+          ),
+          child: child,
+        );
+      },
+      child: IconButton(
+        onPressed: _enviando ? null : _alternarEscucha,
+        icon: Icon(_escuchando ? Icons.mic : Icons.mic_none_rounded, color: _escuchando ? Colors.red : AppColors.primary),
+        tooltip: _escuchando ? 'Escuchando... tocá para detener' : 'Hablarle al chat',
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final alto = MediaQuery.of(context).size.height * 0.82;
@@ -559,15 +668,18 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Row(
                 children: [
+                  _buildBotonMicrofono(),
+                  const SizedBox(width: 4),
                   Expanded(
                     child: TextField(
                       controller: _inputCtrl,
+                      readOnly: _escuchando,
                       textInputAction: TextInputAction.send,
                       onSubmitted: (_) => _enviarMensaje(),
                       decoration: InputDecoration(
-                        hintText: 'Escribí tu pregunta...',
+                        hintText: _escuchando ? 'Escuchando...' : 'Escribí tu pregunta o tocá el micrófono...',
                         filled: true,
-                        fillColor: AppColors.surfaceSubtle,
+                        fillColor: _escuchando ? Colors.red.withOpacity(0.06) : AppColors.surfaceSubtle,
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                       ),
@@ -575,7 +687,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> {
                   ),
                   const SizedBox(width: 8),
                   IconButton.filled(
-                    onPressed: _enviando ? null : _enviarMensaje,
+                    onPressed: (_enviando || _escuchando) ? null : _enviarMensaje,
                     icon: const Icon(Icons.send),
                     style: IconButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.black),
                   ),
