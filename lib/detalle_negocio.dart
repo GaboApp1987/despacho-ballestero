@@ -909,6 +909,17 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
                           title: Row(
                             children: [
                               Flexible(child: Text(f.receptorNombre, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textStrong))),
+                              if (f.esTiquete) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text("TIQUETE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                                ),
+                              ],
                               if (f.anulada) ...[
                                 const SizedBox(width: 8),
                                 Container(
@@ -924,7 +935,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
                           ),
                           subtitle: Row(
                             children: [
-                              Flexible(child: Text("F-${f.consecutivo} • ${f.condicionVenta == "02" ? 'Crédito' : 'Contado'}", overflow: TextOverflow.ellipsis)),
+                              Flexible(child: Text("${f.esTiquete ? 'T' : 'F'}-${f.consecutivo} • ${f.condicionVenta == "02" ? 'Crédito' : 'Contado'}", overflow: TextOverflow.ellipsis)),
                               const SizedBox(width: 8),
                               _chipEstadoHacienda(f.estadoHacienda),
                             ],

@@ -57,6 +57,12 @@ class _FormularioFacturaState extends State<FormularioFactura> {
   bool _isLoading = true;
   bool _isSaving = false;
 
+  // "01" Factura Electrónica (exige cliente identificado) o "04" Tiquete
+  // Electrónico (venta a consumidor final, cliente opcional) -- ver
+  // Factura.tipo_documento en el backend.
+  String _tipoDocumento = '01';
+  bool get _esTiquete => _tipoDocumento == '04';
+
   // Ultimo precio que se le cobro a CADA producto al cliente seleccionado
   // (producto.id -> ese registro), para sugerirlo al agregar/editar una
   // linea en vez de partir siempre del precio de catalogo -- ver
@@ -297,9 +303,14 @@ class _FormularioFacturaState extends State<FormularioFactura> {
   }
 
   Future<void> _guardarFactura() async {
-    if (_clienteSeleccionado == null || _carrito.isEmpty) {
+    // En Tiquete Electrónico el cliente es opcional (venta a consumidor
+    // final sin identificar) -- en Factura Electrónica sigue siendo
+    // obligatorio, igual que antes.
+    if ((!_esTiquete && _clienteSeleccionado == null) || _carrito.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Por favor seleccione un cliente y al menos un producto.")),
+        SnackBar(content: Text(_esTiquete
+            ? "Agregue al menos un producto."
+            : "Por favor seleccione un cliente y al menos un producto.")),
       );
       return;
     }
@@ -321,10 +332,11 @@ class _FormularioFacturaState extends State<FormularioFactura> {
     try {
       final body = {
         'negocio': widget.negocio.id,
-        'cliente': _clienteSeleccionado!.id,
+        'tipo_documento': _tipoDocumento,
+        if (_clienteSeleccionado != null) 'cliente': _clienteSeleccionado!.id,
         'consecutivo': _consecutivoController.text.trim(),
-        'receptor_nombre': _clienteSeleccionado!.nombre,
-        'receptor_cedula': _clienteSeleccionado!.cedula,
+        'receptor_nombre': _clienteSeleccionado?.nombre ?? '',
+        'receptor_cedula': _clienteSeleccionado?.cedula,
         'total_iva': redondear2(_totalIva),
         'total_factura': redondear2(_totalFactura),
         'condicion_venta': _condicionVenta,
@@ -390,7 +402,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text("Nueva Factura"),
+        title: Text(_esTiquete ? "Nuevo Tiquete" : "Nueva Factura"),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
       ),
@@ -636,10 +648,19 @@ class _FormularioFacturaState extends State<FormularioFactura> {
             children: [
               const Text("Tu Factura", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: '01', label: Text("Factura"), icon: Icon(Icons.receipt_long_outlined)),
+                  ButtonSegment(value: '04', label: Text("Tiquete"), icon: Icon(Icons.confirmation_number_outlined)),
+                ],
+                selected: {_tipoDocumento},
+                onSelectionChanged: (seleccion) => setState(() => _tipoDocumento = seleccion.first),
+              ),
+              const SizedBox(height: 12),
               DropdownButtonFormField<Cliente>(
                 value: _clienteSeleccionado,
                 decoration: InputDecoration(
-                  labelText: "Cliente *",
+                  labelText: _esTiquete ? "Cliente (opcional)" : "Cliente *",
                   isDense: true,
                   prefixIcon: const Icon(Icons.person_outline, size: 20),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
@@ -653,6 +674,13 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                   if (v != null) _cargarUltimosPreciosDe(v);
                 },
               ),
+              if (_esTiquete) ...[
+                const SizedBox(height: 4),
+                Text(
+                  "Sin cliente se factura a Consumidor Final.",
+                  style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                ),
+              ],
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -721,14 +749,17 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: (_carrito.isEmpty || _clienteSeleccionado == null || _isSaving) ? null : _guardarFactura,
+                  onPressed: (_carrito.isEmpty || (!_esTiquete && _clienteSeleccionado == null) || _isSaving)
+                      ? null
+                      : _guardarFactura,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   child: _isSaving
                       ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
-                      : const Text("EMITIR FACTURA", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                      : Text(_esTiquete ? "EMITIR TIQUETE" : "EMITIR FACTURA",
+                          style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
                 ),
               ),
             ],

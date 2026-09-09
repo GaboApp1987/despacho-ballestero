@@ -44,6 +44,7 @@ class DetalleFacturaItem {
 class Factura {
   final int id;
   final int negocio;
+  final String tipoDocumento; // "01" Factura Electrónica, "04" Tiquete Electrónico
   final String consecutivo;
   final String? clave;
   final String fechaEmision;
@@ -62,9 +63,12 @@ class Factura {
   final String? logoNegocioUrl;
   final NegocioInfo? negocioInfo;
 
+  bool get esTiquete => tipoDocumento == '04';
+
   Factura({
     required this.id,
     required this.negocio,
+    this.tipoDocumento = '01',
     required this.consecutivo,
     this.clave,
     required this.fechaEmision,
@@ -88,10 +92,13 @@ class Factura {
     return Factura(
       id: json['id'],
       negocio: json['negocio'],
+      tipoDocumento: json['tipo_documento'] ?? '01',
       consecutivo: json['consecutivo'] ?? '',
       clave: json['clave'],
       fechaEmision: json['fecha_emision'] ?? '',
-      receptorNombre: json['receptor_nombre'] ?? 'Sin nombre',
+      receptorNombre: (json['receptor_nombre'] as String?)?.trim().isNotEmpty == true
+          ? json['receptor_nombre']
+          : 'Consumidor Final',
       receptorCedula: json['receptor_cedula'],
       receptorCorreo: json['receptor_correo'],
       totalIva: double.tryParse(json['total_iva'].toString()) ?? 0.0,
