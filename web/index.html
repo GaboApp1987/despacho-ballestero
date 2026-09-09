@@ -46,6 +46,43 @@
       });
     }
   </script>
+  <script>
+    // Sugerencia de instalar la app (PWA) en Windows/Android -- ver
+    // lib/widgets/instalar_app_banner.dart. No depende de un service
+    // worker (para no reintroducir el problema de caché de arriba):
+    // solo usa el prompt nativo de instalación que expone Chrome/Edge.
+    window.equilibraPuedeInstalar = false;
+    window.equilibraPlataformaSugerida = null;
+    let _equilibraDeferredPrompt = null;
+
+    function _equilibraDetectarPlataforma() {
+      const ua = navigator.userAgent || '';
+      if (/Android/i.test(ua)) return 'android';
+      if (/Windows/i.test(ua)) return 'windows';
+      return null;
+    }
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      _equilibraDeferredPrompt = e;
+      window.equilibraPlataformaSugerida = _equilibraDetectarPlataforma();
+      window.equilibraPuedeInstalar = true;
+    });
+
+    window.addEventListener('appinstalled', () => {
+      _equilibraDeferredPrompt = null;
+      window.equilibraPuedeInstalar = false;
+    });
+
+    window.equilibraInstalarApp = function () {
+      if (!_equilibraDeferredPrompt) return;
+      _equilibraDeferredPrompt.prompt();
+      _equilibraDeferredPrompt.userChoice.finally(() => {
+        _equilibraDeferredPrompt = null;
+        window.equilibraPuedeInstalar = false;
+      });
+    };
+  </script>
 </head>
 <body>
   <!--

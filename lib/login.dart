@@ -12,6 +12,7 @@ import 'despachos_screen.dart';
 import 'widgets/staggered_entrance.dart';
 import 'widgets/animated_logo.dart';
 import 'widgets/soporte_chat.dart';
+import 'widgets/instalar_app_banner.dart';
 import 'recuperar_password_screen.dart';
 import 'registro_publico_screen.dart';
 import 'suscripcion_suspendida_screen.dart';
@@ -455,6 +456,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             style: TextStyle(color: AppColors.textMuted, fontSize: 14),
                           ),
                           const SizedBox(height: 32),
+
+                          const InstalarAppBanner(),
 
                           Text("Usuario", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: AppColors.textMuted)),
                           const SizedBox(height: 8),
