@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../theme/app_theme.dart';
 import '../api_service.dart';
@@ -145,12 +147,73 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
     duration: const Duration(milliseconds: 900),
   )..repeat(reverse: true);
 
+  // Salida por voz (la respuesta se lee en voz alta) + modo manos libres:
+  // si el mensaje se mandó hablando, apenas la IA responde se lee la
+  // respuesta y, al terminar, el micrófono se reactiva solo para que
+  // sigas hablando sin tocar nada -- como un asistente tipo Alexa. Tocar
+  // el micrófono mientras está hablando la interrumpe (barge-in) y salir
+  // del modo se hace con el botón de "colgar" que aparece al lado.
+  final FlutterTts _tts = FlutterTts();
+  bool _ttsListo = false;
+  bool _hablando = false;
+  bool _modoConversacion = false;
+
+  Future<void> _prepararTts() async {
+    if (_ttsListo) return;
+    await _tts.setLanguage('es-CR');
+    await _tts.setSpeechRate(0.5);
+    try {
+      // Si "es-CR" no está instalado en el motor de voz del sistema, cae a
+      // cualquier variante de español disponible antes que quedarse mudo.
+      final voces = await _tts.getLanguages;
+      final idiomas = (voces as List).cast<String>();
+      if (!idiomas.any((l) => l.toLowerCase() == 'es-cr')) {
+        final esAlternativo = idiomas.firstWhere((l) => l.toLowerCase().startsWith('es'), orElse: () => '');
+        if (esAlternativo.isNotEmpty) await _tts.setLanguage(esAlternativo);
+      }
+    } catch (_) {
+      // Sin lista de idiomas disponible -- seguimos con 'es-CR' igual.
+    }
+    _tts.setStartHandler(() {
+      if (mounted) setState(() => _hablando = true);
+    });
+    _tts.setCompletionHandler(() {
+      if (!mounted) return;
+      setState(() => _hablando = false);
+      if (_modoConversacion) _alternarEscucha();
+    });
+    _tts.setCancelHandler(() {
+      if (mounted) setState(() => _hablando = false);
+    });
+    _tts.setErrorHandler((msg) {
+      if (mounted) setState(() => _hablando = false);
+    });
+    _ttsListo = true;
+  }
+
+  Future<void> _hablar(String texto) async {
+    if (texto.trim().isEmpty) return;
+    await _prepararTts();
+    await _tts.stop();
+    await _tts.speak(texto);
+  }
+
+  /// Sale del modo manos libres: corta la voz si está hablando y deja de
+  /// reactivar el micrófono solo. El chat sigue funcionando normal.
+  Future<void> _salirModoConversacion() async {
+    setState(() => _modoConversacion = false);
+    if (_hablando) await _tts.stop();
+    if (_escuchando) await _speech.stop();
+    if (mounted) setState(() => _escuchando = false);
+  }
+
   @override
   void dispose() {
     _inputCtrl.dispose();
     _scrollCtrl.dispose();
     _pulseCtrl.dispose();
     if (_escuchando) _speech.stop();
+    if (_ttsListo) _tts.stop();
     super.dispose();
   }
 
@@ -166,58 +229,84 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
       return;
     }
 
-    if (!_vozLista) {
-      final disponible = await _speech.initialize(
-        onStatus: (status) {
-          if ((status == 'done' || status == 'notListening') && mounted) {
-            setState(() => _escuchando = false);
-          }
-        },
-        onError: (error) {
-          if (mounted) setState(() => _escuchando = false);
-        },
-      );
-      _vozLista = disponible;
-      if (!disponible) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No se pudo activar el micrófono -- revisá los permisos del navegador o del dispositivo.')),
-          );
-        }
-        return;
-      }
-      final locales = await _speech.locales();
-      _localeVoz = locales
-          .firstWhere(
-            (l) => l.localeId.toLowerCase().startsWith('es'),
-            orElse: () => locales.isNotEmpty ? locales.first : stt.LocaleName('es_CR', 'Español'),
-          )
-          .localeId;
-    }
+    // Tocar el micrófono mientras la IA está hablando la interrumpe
+    // (barge-in), para no quedar escuchando su propia voz.
+    if (_hablando) await _tts.stop();
 
-    if (!mounted) return;
-    setState(() => _escuchando = true);
-    await _speech.listen(
-      onResult: (resultado) {
-        if (!mounted) return;
-        setState(() => _inputCtrl.text = resultado.recognizedWords);
-        if (resultado.finalResult) _enviarMensajeDeVoz();
-      },
-      listenOptions: stt.SpeechListenOptions(
-        listenMode: stt.ListenMode.confirmation,
-        partialResults: true,
-        localeId: _localeVoz,
-        listenFor: const Duration(seconds: 30),
-        pauseFor: const Duration(seconds: 3),
-      ),
-    );
+    try {
+      if (!_vozLista) {
+        final disponible = await _speech
+            .initialize(
+              onStatus: (status) {
+                if ((status == 'done' || status == 'notListening') && mounted) {
+                  setState(() => _escuchando = false);
+                }
+              },
+              onError: (error) {
+                if (mounted) setState(() => _escuchando = false);
+                debugPrint('speech_to_text onError: ${error.errorMsg} (permanent: ${error.permanent})');
+              },
+            )
+            .timeout(const Duration(seconds: 10), onTimeout: () => false);
+        _vozLista = disponible;
+        if (!disponible) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                    'No se pudo activar el micrófono. En Windows: Configuración > Privacidad y seguridad > Micrófono, activá "Acceso al micrófono" y "Permitir que las aplicaciones de escritorio accedan al micrófono". En el navegador: revisá el permiso de micrófono del sitio (no funciona en Safari/iOS).'),
+                duration: Duration(seconds: 8),
+              ),
+            );
+          }
+          return;
+        }
+        final locales = await _speech.locales();
+        _localeVoz = locales
+            .firstWhere(
+              (l) => l.localeId.toLowerCase().startsWith('es'),
+              orElse: () => locales.isNotEmpty ? locales.first : stt.LocaleName('es_CR', 'Español'),
+            )
+            .localeId;
+      }
+
+      if (!mounted) return;
+      setState(() => _escuchando = true);
+      await _speech.listen(
+        onResult: (resultado) {
+          if (!mounted) return;
+          setState(() => _inputCtrl.text = resultado.recognizedWords);
+          if (resultado.finalResult) _enviarMensajeDeVoz();
+        },
+        listenOptions: stt.SpeechListenOptions(
+          listenMode: stt.ListenMode.confirmation,
+          partialResults: true,
+          localeId: _localeVoz,
+          listenFor: const Duration(seconds: 30),
+          pauseFor: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error activando el micrófono: $e');
+      if (mounted) {
+        setState(() => _escuchando = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo activar el micrófono ($e).'), duration: const Duration(seconds: 6)),
+        );
+      }
+    }
   }
 
   /// Al terminar de hablar (silencio detectado), manda solo lo transcrito --
   /// igual que decirle un comando a un asistente de voz, sin tener que
-  /// tocar además el botón de enviar.
+  /// tocar además el botón de enviar. Como vino por voz, activa el modo
+  /// conversación: cuando la IA responda, se lee en voz alta y el
+  /// micrófono se reactiva solo para seguir hablando.
   void _enviarMensajeDeVoz() {
-    setState(() => _escuchando = false);
+    setState(() {
+      _escuchando = false;
+      _modoConversacion = true;
+    });
     if (_inputCtrl.text.trim().isNotEmpty) _enviarMensaje();
   }
 
@@ -251,17 +340,20 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
       }
       final propuestaJson = data['propuesta_factura'];
       final propuestaProductoJson = data['propuesta_producto'];
+      final respuesta = data['respuesta'] ?? '';
       setState(() => _mensajes.add(_ChatMensaje(
             'assistant',
-            data['respuesta'] ?? '',
+            respuesta,
             propuesta: propuestaJson != null ? _PropuestaFactura.fromJson(propuestaJson) : null,
             propuestaProducto: propuestaProductoJson != null ? _PropuestaProducto.fromJson(propuestaProductoJson) : null,
           )));
+      // Si la pregunta vino por voz, la respuesta se lee en voz alta y al
+      // terminar el micrófono se reactiva solo (ver setCompletionHandler).
+      if (_modoConversacion) _hablar(respuesta);
     } catch (e) {
-      setState(() => _mensajes.add(_ChatMensaje(
-            'assistant',
-            'No pude responder ahora mismo ($e). Podés dejar tu mensaje con el botón de abajo y te contactamos.',
-          )));
+      const mensajeError = 'No pude responder ahora mismo. Podés dejar tu mensaje con el botón de abajo y te contactamos.';
+      setState(() => _mensajes.add(_ChatMensaje('assistant', '$mensajeError ($e)')));
+      if (_modoConversacion) _hablar(mensajeError);
     } finally {
       if (mounted) setState(() => _enviando = false);
       _scrollAlFinal();
@@ -562,10 +654,12 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
     );
   }
 
-  /// Botón de micrófono con un aro rojo que pulsa mientras escucha -- misma
-  /// idea visual que Siri/Alexa para que quede claro que el chat está
-  /// esperando que hablés. Fuera de eso es un IconButton normal.
+  /// Botón de micrófono con un aro que pulsa -- rojo mientras escucha, azul
+  /// mientras la IA habla (mismo botón: tocarlo ahí la interrumpe y pasa a
+  /// escuchar, "barge-in" como Alexa/Siri). Fuera de eso es un IconButton
+  /// normal.
   Widget _buildBotonMicrofono() {
+    final colorAro = _escuchando ? Colors.red : (_hablando ? AppColors.primary : null);
     return AnimatedBuilder(
       animation: _pulseCtrl,
       builder: (context, child) {
@@ -574,16 +668,31 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
           height: 42,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: _escuchando ? Colors.red.withOpacity(0.12 + 0.18 * _pulseCtrl.value) : Colors.transparent,
+            color: colorAro != null ? colorAro.withOpacity(0.12 + 0.18 * _pulseCtrl.value) : Colors.transparent,
           ),
           child: child,
         );
       },
       child: IconButton(
         onPressed: _enviando ? null : _alternarEscucha,
-        icon: Icon(_escuchando ? Icons.mic : Icons.mic_none_rounded, color: _escuchando ? Colors.red : AppColors.primary),
-        tooltip: _escuchando ? 'Escuchando... tocá para detener' : 'Hablarle al chat',
+        icon: Icon(
+          _escuchando ? Icons.mic : (_hablando ? Icons.volume_up : Icons.mic_none_rounded),
+          color: _escuchando ? Colors.red : (_hablando ? AppColors.primary : AppColors.primary),
+        ),
+        tooltip: _escuchando ? 'Escuchando... tocá para detener' : (_hablando ? 'Hablando... tocá para interrumpir' : 'Hablarle al chat'),
       ),
+    );
+  }
+
+  /// Aparece solo en modo conversación (manos libres, activado al hablarle
+  /// al chat) -- deja volver al chat normal por texto sin que se reactive
+  /// el micrófono solo después de cada respuesta.
+  Widget _buildBotonSalirConversacion() {
+    if (!_modoConversacion) return const SizedBox.shrink();
+    return IconButton(
+      onPressed: _salirModoConversacion,
+      icon: const Icon(Icons.call_end, color: Colors.red),
+      tooltip: 'Salir del modo conversación por voz',
     );
   }
 
@@ -668,6 +777,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Row(
                 children: [
+                  _buildBotonSalirConversacion(),
                   _buildBotonMicrofono(),
                   const SizedBox(width: 4),
                   Expanded(
@@ -677,9 +787,11 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
                       textInputAction: TextInputAction.send,
                       onSubmitted: (_) => _enviarMensaje(),
                       decoration: InputDecoration(
-                        hintText: _escuchando ? 'Escuchando...' : 'Escribí tu pregunta o tocá el micrófono...',
+                        hintText: _escuchando ? 'Escuchando...' : (_hablando ? 'Hablando...' : 'Escribí tu pregunta o tocá el micrófono...'),
                         filled: true,
-                        fillColor: _escuchando ? Colors.red.withOpacity(0.06) : AppColors.surfaceSubtle,
+                        fillColor: _escuchando
+                            ? Colors.red.withOpacity(0.06)
+                            : (_hablando ? AppColors.primary.withOpacity(0.06) : AppColors.surfaceSubtle),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                       ),
