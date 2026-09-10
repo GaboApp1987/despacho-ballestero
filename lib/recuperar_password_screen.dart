@@ -87,9 +87,9 @@ class _RecuperarPasswordScreenState extends State<RecuperarPasswordScreen> {
       );
       return;
     }
-    if (nueva.length < 6) {
+    if (nueva.length < 8) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("La nueva contraseña debe tener al menos 6 caracteres")),
+        const SnackBar(content: Text("La nueva contraseña debe tener al menos 8 caracteres")),
       );
       return;
     }

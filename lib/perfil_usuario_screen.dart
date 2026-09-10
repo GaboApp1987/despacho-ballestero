@@ -87,9 +87,9 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
       );
       return;
     }
-    if (_nuevaCtrl.text.length < 6) {
+    if (_nuevaCtrl.text.length < 8) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("La nueva contraseña debe tener al menos 6 caracteres")),
+        const SnackBar(content: Text("La nueva contraseña debe tener al menos 8 caracteres")),
       );
       return;
     }

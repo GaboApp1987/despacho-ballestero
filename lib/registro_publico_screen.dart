@@ -310,7 +310,7 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                       controller: _passwordCtrl,
                       obscureText: true,
                       decoration: const InputDecoration(labelText: "Contraseña", border: OutlineInputBorder()),
-                      validator: (v) => (v == null || v.length < 6) ? "Mínimo 6 caracteres" : null,
+                      validator: (v) => (v == null || v.length < 8) ? "Mínimo 8 caracteres" : null,
                     ),
                     if (_requierePago) ...[
                       const SizedBox(height: 12),
