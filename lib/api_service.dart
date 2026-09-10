@@ -61,6 +61,14 @@ class ApiService {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         await prefs.setString('token', data['access']);
+        // Con ROTATE_REFRESH_TOKENS=True el backend invalida el refresh
+        // token usado y manda uno nuevo en la misma respuesta -- si no lo
+        // guardamos aca, la proxima renovacion (unas horas despues) falla
+        // con el refresh token ya invalidado y la sesion se cierra sola,
+        // justo lo contrario de lo que se buscaba con la rotacion.
+        if (data['refresh'] != null) {
+          await prefs.setString('refresh_token', data['refresh']);
+        }
         return true;
       }
     } catch (_) {
