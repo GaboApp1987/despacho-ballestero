@@ -579,71 +579,87 @@ class _NegociosScreenState extends State<NegociosScreen> {
           const SizedBox(width: 6),
         ],
       ),
-      body: Column(
-        children: [
-          if (widget.puedeCrear && _miSocio != null)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF4F46E5), Color(0xFF312E81)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              child: Row(
-                children: [
-                  avatarConLogo(
-                    logoUrl: _miSocio!.logoUrl,
-                    icono: Icons.badge_outlined,
-                    radius: 26,
-                    color: Colors.white,
-                    fondo: Colors.white24,
-                    nombre: _miSocio!.nombre,
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _miSocio!.nombre,
-                          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          "Contador · ${_miSocio!.email}",
-                          style: const TextStyle(color: Colors.white70, fontSize: 13),
-                        ),
-                      ],
+      body: Container(
+        color: AppColors.surfaceSubtle,
+        child: CustomScrollView(
+          slivers: [
+            // Antes el dashboard (tarjeta del contador + buildDashboardHeader)
+            // vivía en un Column fijo por fuera del Expanded con la lista de
+            // negocios, así que si crecía más que la pantalla (como pasó al
+            // agregar las 5 secciones nuevas de alertas) no había forma de
+            // hacer scroll para verlo completo -- quedaba "estático". Ahora
+            // todo vive en un mismo CustomScrollView, dashboard y lista de
+            // clientes incluidos, así que la pantalla entera se desplaza junta.
+            if (widget.puedeCrear && _miSocio != null)
+              SliverToBoxAdapter(
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(20),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFF4F46E5), Color(0xFF312E81)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
                   ),
-                ],
+                  child: Row(
+                    children: [
+                      avatarConLogo(
+                        logoUrl: _miSocio!.logoUrl,
+                        icono: Icons.badge_outlined,
+                        radius: 26,
+                        color: Colors.white,
+                        fondo: Colors.white24,
+                        nombre: _miSocio!.nombre,
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _miSocio!.nombre,
+                              style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              "Contador · ${_miSocio!.email}",
+                              style: const TextStyle(color: Colors.white70, fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          if (widget.puedeCrear)
-            FutureBuilder<Map<String, dynamic>>(
-              future: _dashboardFuture,
-              builder: (context, snapshot) {
-                final d = snapshot.data ?? {};
-                if (snapshot.connectionState == ConnectionState.waiting || d.isEmpty) {
-                  return const SizedBox.shrink();
-                }
-                return buildDashboardHeader(d, onAbrirNegocio: _abrirNegocioPorId, mostrarContadores: false);
-              },
-            ),
-          Expanded(
-            child: Container(
-              width: double.infinity,
-              color: AppColors.surfaceSubtle,
-              child: Column(
-                children: [
-                  if (_negocios.isNotEmpty) ...[
+            if (widget.puedeCrear)
+              SliverToBoxAdapter(
+                child: FutureBuilder<Map<String, dynamic>>(
+                  future: _dashboardFuture,
+                  builder: (context, snapshot) {
+                    final d = snapshot.data ?? {};
+                    if (snapshot.connectionState == ConnectionState.waiting || d.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+                    return buildDashboardHeader(d, onAbrirNegocio: _abrirNegocioPorId, mostrarContadores: false);
+                  },
+                ),
+              ),
+            if (_negocios.isNotEmpty)
+              SliverToBoxAdapter(
+                child: Column(
+                  children: [
                     Padding(
                       padding: EdgeInsets.fromLTRB(16, widget.puedeCrear ? 16 : 12, 16, 4),
-                      child: Text(
-                        "Mis Clientes (${_negocios.length})",
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textStrong),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              "Mis Clientes (${_negocios.length})",
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textStrong),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     Padding(
@@ -675,87 +691,95 @@ class _NegociosScreenState extends State<NegociosScreen> {
                       ),
                     ),
                   ],
-                  Expanded(
-                    child: _isLoading
-                        ? const Center(child: CircularProgressIndicator())
-                        : _negocios.isEmpty
-                            ? Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Icon(Icons.business_center_outlined, size: 64, color: Colors.grey),
-                                    const SizedBox(height: 16),
-                                    const Text("Todavía no hay negocios registrados.", style: TextStyle(color: Colors.grey)),
-                                    if (widget.puedeCrear) ...[
-                                      const SizedBox(height: 16),
-                                      ElevatedButton.icon(
-                                        onPressed: _mostrarFormularioCrear,
-                                        icon: const Icon(Icons.add),
-                                        label: const Text("Crear el primer negocio"),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              )
-                            : _negociosFiltrados.isEmpty
-                                ? Center(
-                                    child: Text(
-                                      "Ningún negocio coincide con \"${_busquedaCtrl.text}\"",
-                                      style: const TextStyle(color: Colors.grey),
-                                    ),
-                                  )
-                                : ListView.builder(
-                                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                                    itemCount: _negociosFiltrados.length,
-                                    itemBuilder: (context, index) {
-                                      final n = _negociosFiltrados[index];
-                                      return Card(
-                                        margin: const EdgeInsets.only(bottom: 12),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                        child: ListTile(
-                                          leading: avatarConLogo(logoUrl: n.logoUrl, icono: Icons.business_center, nombre: n.nombreComercial),
-                                          title: Text(n.nombreComercial, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                          subtitle: Text(
-                                            [
-                                              "Cédula: ${n.cedula}",
-                                              if (n.nombreSocio != null && n.nombreSocio!.isNotEmpty) "Contador: ${n.nombreSocio}",
-                                              n.planNombre != null && n.planNombre!.isNotEmpty
-                                                  ? "Plan: ${n.planNombre} (${n.facturasDisponibles ?? 0}/${n.limiteFacturasMensual ?? 0} facturas disp.)"
-                                                  : "Sin plan asignado",
-                                            ].join(" · "),
-                                          ),
-                                          trailing: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              if (widget.puedeGestionarPlanes)
-                                                IconButton(
-                                                  icon: const Icon(Icons.workspace_premium_outlined),
-                                                  tooltip: "Cambiar plan",
-                                                  onPressed: () => _cambiarPlan(n),
-                                                ),
-                                              if (widget.esSuperusuario)
-                                                IconButton(
-                                                  icon: Icon(Icons.payments_outlined, color: _colorEstadoSuscripcion(n.suscripcionEstado)),
-                                                  tooltip: "Renta de la plataforma: ${_estadosSuscripcion[n.suscripcionEstado] ?? 'Sin registrar'}",
-                                                  onPressed: () => _gestionarSuscripcion(n),
-                                                ),
-                                              const Icon(Icons.chevron_right),
-                                            ],
-                                          ),
-                                          onTap: () => Navigator.push(
-                                            context,
-                                            MaterialPageRoute(builder: (context) => ResumenFiscalNegocioScreen(negocio: n)),
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
-        ],
+            if (_isLoading)
+              const SliverFillRemaining(hasScrollBody: false, child: Center(child: CircularProgressIndicator()))
+            else if (_negocios.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.business_center_outlined, size: 64, color: Colors.grey),
+                      const SizedBox(height: 16),
+                      const Text("Todavía no hay negocios registrados.", style: TextStyle(color: Colors.grey)),
+                      if (widget.puedeCrear) ...[
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          onPressed: _mostrarFormularioCrear,
+                          icon: const Icon(Icons.add),
+                          label: const Text("Crear el primer negocio"),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              )
+            else if (_negociosFiltrados.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: Text(
+                    "Ningún negocio coincide con \"${_busquedaCtrl.text}\"",
+                    style: const TextStyle(color: Colors.grey),
+                  ),
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final n = _negociosFiltrados[index];
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        child: ListTile(
+                          leading: avatarConLogo(logoUrl: n.logoUrl, icono: Icons.business_center, nombre: n.nombreComercial),
+                          title: Text(n.nombreComercial, style: const TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Text(
+                            [
+                              "Cédula: ${n.cedula}",
+                              if (n.nombreSocio != null && n.nombreSocio!.isNotEmpty) "Contador: ${n.nombreSocio}",
+                              n.planNombre != null && n.planNombre!.isNotEmpty
+                                  ? "Plan: ${n.planNombre} (${n.facturasDisponibles ?? 0}/${n.limiteFacturasMensual ?? 0} facturas disp.)"
+                                  : "Sin plan asignado",
+                            ].join(" · "),
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (widget.puedeGestionarPlanes)
+                                IconButton(
+                                  icon: const Icon(Icons.workspace_premium_outlined),
+                                  tooltip: "Cambiar plan",
+                                  onPressed: () => _cambiarPlan(n),
+                                ),
+                              if (widget.esSuperusuario)
+                                IconButton(
+                                  icon: Icon(Icons.payments_outlined, color: _colorEstadoSuscripcion(n.suscripcionEstado)),
+                                  tooltip: "Renta de la plataforma: ${_estadosSuscripcion[n.suscripcionEstado] ?? 'Sin registrar'}",
+                                  onPressed: () => _gestionarSuscripcion(n),
+                                ),
+                              const Icon(Icons.chevron_right),
+                            ],
+                          ),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => ResumenFiscalNegocioScreen(negocio: n)),
+                          ),
+                        ),
+                      );
+                    },
+                    childCount: _negociosFiltrados.length,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
       floatingActionButton: widget.puedeCrear
           ? FloatingActionButton.extended(
