@@ -814,7 +814,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
 
     Map<String, List<Factura>> grouped = {};
     for (var f in facturasOrdenadas) {
-      String dateKey = f.fechaEmision.split('T')[0];
+      final cr = aFechaCostaRica(f.fechaEmision);
+      String dateKey = "${cr.year.toString().padLeft(4, '0')}-${cr.month.toString().padLeft(2, '0')}-${cr.day.toString().padLeft(2, '0')}";
       grouped.putIfAbsent(dateKey, () => []).add(f);
     }
 
@@ -964,7 +965,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(formatearColones(f.totalFactura), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                              Text(f.fechaEmision.contains('T') ? f.fechaEmision.split('T')[1].substring(0, 5) : "", style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                              Text(horaCostaRica(f.fechaEmision), style: const TextStyle(fontSize: 10, color: Colors.grey)),
                             ],
                           ),
                           onTap: () async {
@@ -1026,16 +1027,21 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     );
   }
 
-  String _formatearFechaSimple(String dateIso) {
+  String _formatearFechaSimple(String dateKey) {
+    // dateKey es "yyyy-MM-dd" ya calculado en hora de Costa Rica (ver
+    // _renderizarFacturas) -- se parsea con hora fija de mediodía para que
+    // nunca se corra de día por redondeos de zona horaria al comparar.
     try {
-      DateTime dt = DateTime.parse(dateIso);
-      DateTime hoy = DateTime.now();
+      final partes = dateKey.split('-');
+      final dt = DateTime(int.parse(partes[0]), int.parse(partes[1]), int.parse(partes[2]), 12);
+      final hoyCr = aFechaCostaRica(DateTime.now().toUtc().toIso8601String());
+      final hoy = DateTime(hoyCr.year, hoyCr.month, hoyCr.day, 12);
       if (dt.year == hoy.year && dt.month == hoy.month && dt.day == hoy.day) return "HOY";
-      DateTime ayer = hoy.subtract(const Duration(days: 1));
+      final ayer = hoy.subtract(const Duration(days: 1));
       if (dt.year == ayer.year && dt.month == ayer.month && dt.day == ayer.day) return "AYER";
       final meses = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
       return "${dt.day} ${meses[dt.month - 1]}, ${dt.year}";
-    } catch (e) { return dateIso; }
+    } catch (e) { return dateKey; }
   }
 
   Widget _renderizarDashboard(List<Factura> facturas, bool cargando) {
