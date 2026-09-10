@@ -8,6 +8,7 @@ import 'negocio.dart';
 import 'onvo_cobro_automatico_screen.dart';
 import 'perfil_usuario_screen.dart';
 import 'plan.dart';
+import 'reportes_contador_screen.dart';
 import 'resumen_fiscal_screen.dart';
 import 'socio.dart';
 import 'login.dart';
@@ -554,6 +555,15 @@ class _NegociosScreenState extends State<NegociosScreen> {
         ),
         actions: [
           accionAppBar(icono: Icons.refresh_rounded, tooltip: "Recargar", onPressed: _recargarTodo),
+          if (widget.puedeCrear)
+            accionAppBar(
+              icono: Icons.insert_chart_outlined,
+              tooltip: "Reportes",
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ReportesContadorScreen()),
+              ),
+            ),
           if (widget.puedeCrear)
             accionAppBar(icono: Icons.account_circle_rounded, tooltip: "Mi Perfil", onPressed: _abrirMiPerfil),
           accionAppBar(

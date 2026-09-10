@@ -177,6 +177,178 @@ class ExportService {
     await _guardarExcel(excel, dialogTitle: 'Guardar Reporte de Facturación', fileName: 'reporte_facturacion.xlsx');
   }
 
+  /// Exporta el reporte consolidado (GET /reportes/consolidado/, ver
+  /// ReporteConsolidadoView) a PDF -- ventas y/o compras de un cliente en un
+  /// rango de fechas, con el desglose de IVA por tarifa cuando hay ventas.
+  static Future<void> exportReporteConsolidadoToPdf(Map<String, dynamic> reporte, String periodo) async {
+    final negocioNombre = reporte['negocio_nombre']?.toString() ?? '';
+    final ventas = reporte['ventas'] as Map<String, dynamic>?;
+    final compras = reporte['compras'] as Map<String, dynamic>?;
+
+    final widgets = <pw.Widget>[
+      pw.Header(
+        level: 0,
+        child: pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text('Reporte de Ventas y Compras', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+                pw.Text('Periodo: $periodo', style: const pw.TextStyle(fontSize: 12)),
+              ],
+            ),
+            pw.Text(negocioNombre, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+          ],
+        ),
+      ),
+      pw.SizedBox(height: 16),
+    ];
+
+    if (ventas != null) {
+      final documentos = (ventas['documentos'] as List?) ?? [];
+      widgets.addAll([
+        pw.Text('Ventas', style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 6),
+        pw.TableHelper.fromTextArray(
+          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+          headers: const ['Fecha', 'Documento', 'Tipo', 'Cliente', 'Total'],
+          data: documentos.map((f) => [
+            (f['fecha']?.toString() ?? '').split('T').first,
+            f['consecutivo']?.toString() ?? '',
+            f['tipo_documento']?.toString() ?? '',
+            f['cliente']?.toString() ?? '',
+            formatearColones(double.tryParse(f['total'].toString()) ?? 0),
+          ]).toList(),
+        ),
+        pw.SizedBox(height: 8),
+        pw.Align(
+          alignment: pw.Alignment.centerRight,
+          child: pw.Text(
+            'Total Ventas: ${formatearColones(double.tryParse(ventas['total'].toString()) ?? 0)}',
+            style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14),
+          ),
+        ),
+        pw.SizedBox(height: 12),
+      ]);
+      final desglose = (ventas['desglose_impuestos'] as List?) ?? [];
+      if (desglose.isNotEmpty) {
+        widgets.addAll([
+          pw.Text('Desglose de IVA por tarifa', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 6),
+          pw.TableHelper.fromTextArray(
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            headers: const ['Tarifa', 'Base Imponible', 'Monto de Impuesto'],
+            data: desglose.map((d) => [
+              d['tarifa']?.toString() ?? '',
+              formatearColones(double.tryParse(d['base_imponible'].toString()) ?? 0),
+              formatearColones(double.tryParse(d['monto_impuesto'].toString()) ?? 0),
+            ]).toList(),
+          ),
+          pw.SizedBox(height: 16),
+        ]);
+      }
+    }
+
+    if (compras != null) {
+      final documentos = (compras['documentos'] as List?) ?? [];
+      widgets.addAll([
+        pw.Text('Compras', style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 6),
+        pw.TableHelper.fromTextArray(
+          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+          headers: const ['Fecha', 'Proveedor', 'N.° Factura Proveedor', 'Total'],
+          data: documentos.map((c) => [
+            (c['fecha']?.toString() ?? '').split('T').first,
+            c['proveedor']?.toString() ?? '',
+            c['numero_factura_proveedor']?.toString() ?? '',
+            formatearColones(double.tryParse(c['total'].toString()) ?? 0),
+          ]).toList(),
+        ),
+        pw.SizedBox(height: 8),
+        pw.Align(
+          alignment: pw.Alignment.centerRight,
+          child: pw.Text(
+            'Total Compras: ${formatearColones(double.tryParse(compras['total'].toString()) ?? 0)}',
+            style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14),
+          ),
+        ),
+      ]);
+    }
+
+    final pdf = pw.Document(theme: await _cargarTema());
+    pdf.addPage(pw.MultiPage(pageFormat: PdfPageFormat.a4, build: (context) => widgets));
+    await Printing.layoutPdf(onLayout: (format) async => pdf.save(), name: 'Reporte_$negocioNombre.pdf');
+  }
+
+  /// Exporta el reporte consolidado a Excel -- una hoja por sección
+  /// (Ventas/Desglose IVA/Compras) que exista en la respuesta.
+  static Future<void> exportReporteConsolidadoToExcel(Map<String, dynamic> reporte) async {
+    var excel = Excel.createExcel();
+    final ventas = reporte['ventas'] as Map<String, dynamic>?;
+    final compras = reporte['compras'] as Map<String, dynamic>?;
+
+    if (ventas != null) {
+      final hojaVentas = excel['Ventas'];
+      hojaVentas.appendRow([
+        TextCellValue('Fecha'), TextCellValue('Documento'), TextCellValue('Tipo'),
+        TextCellValue('Cliente'), TextCellValue('Total'),
+      ]);
+      for (var f in (ventas['documentos'] as List? ?? [])) {
+        hojaVentas.appendRow([
+          TextCellValue((f['fecha']?.toString() ?? '').split('T').first),
+          TextCellValue(f['consecutivo']?.toString() ?? ''),
+          TextCellValue(f['tipo_documento']?.toString() ?? ''),
+          TextCellValue(f['cliente']?.toString() ?? ''),
+          DoubleCellValue(double.tryParse(f['total'].toString()) ?? 0),
+        ]);
+      }
+      final desglose = (ventas['desglose_impuestos'] as List?) ?? [];
+      if (desglose.isNotEmpty) {
+        final hojaDesglose = excel['Desglose IVA'];
+        hojaDesglose.appendRow([
+          TextCellValue('Tarifa'), TextCellValue('Base Imponible'), TextCellValue('Monto de Impuesto'),
+        ]);
+        for (var d in desglose) {
+          hojaDesglose.appendRow([
+            TextCellValue(d['tarifa']?.toString() ?? ''),
+            DoubleCellValue(double.tryParse(d['base_imponible'].toString()) ?? 0),
+            DoubleCellValue(double.tryParse(d['monto_impuesto'].toString()) ?? 0),
+          ]);
+        }
+      }
+    }
+
+    if (compras != null) {
+      final hojaCompras = excel['Compras'];
+      hojaCompras.appendRow([
+        TextCellValue('Fecha'), TextCellValue('Proveedor'), TextCellValue('N.° Factura Proveedor'), TextCellValue('Total'),
+      ]);
+      for (var c in (compras['documentos'] as List? ?? [])) {
+        hojaCompras.appendRow([
+          TextCellValue((c['fecha']?.toString() ?? '').split('T').first),
+          TextCellValue(c['proveedor']?.toString() ?? ''),
+          TextCellValue(c['numero_factura_proveedor']?.toString() ?? ''),
+          DoubleCellValue(double.tryParse(c['total'].toString()) ?? 0),
+        ]);
+      }
+    }
+
+    // Excel siempre trae una hoja "Sheet1" por defecto -- se borra al final,
+    // una vez que ya existe al menos otra hoja real (si se borra antes o si
+    // termina siendo la única, la librería lanza error).
+    if (excel.sheets.containsKey('Sheet1') && excel.sheets.length > 1) {
+      excel.delete('Sheet1');
+    }
+
+    final negocioNombre = reporte['negocio_nombre']?.toString() ?? 'reporte';
+    await _guardarExcel(
+      excel,
+      dialogTitle: 'Guardar Reporte de Ventas y Compras',
+      fileName: 'reporte_${negocioNombre.replaceAll(' ', '_')}.xlsx',
+    );
+  }
+
   /// Exporta el listado general de Cuentas por Cobrar a PDF
   static Future<void> exportSaldosToPdf(List<Map<String, dynamic>> saldos, String negocioNombre) async {
     final pdf = pw.Document(theme: await _cargarTema());

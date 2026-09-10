@@ -10,6 +10,7 @@ import 'negocios_screen.dart';
 import 'detalle_contador_screen.dart';
 import 'resumen_fiscal_screen.dart';
 import 'perfil_usuario_screen.dart';
+import 'reportes_contador_screen.dart';
 import 'dashboard_despacho_widgets.dart';
 import 'login.dart';
 import 'widgets/bloqueo_salida_raiz.dart';
@@ -329,6 +330,14 @@ class _ContadoresScreenState extends State<ContadoresScreen> {
             icono: Icons.refresh_rounded,
             tooltip: "Recargar",
             onPressed: _recargarTodo,
+          ),
+          accionAppBar(
+            icono: Icons.insert_chart_outlined,
+            tooltip: "Reportes",
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const ReportesContadorScreen()),
+            ),
           ),
           accionAppBar(
             icono: Icons.account_circle_rounded,
