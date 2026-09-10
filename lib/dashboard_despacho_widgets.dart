@@ -94,7 +94,16 @@ Widget buildDashboardHeader(
             ],
           ),
         ],
+        ..._buildRecordatorioFiscal(d['recordatorio_fiscal'] as Map?),
         ..._buildSeccionAlertas((d['alertas_suscripcion'] as List?) ?? [], onAbrirNegocio),
+        ..._buildSeccionAlertasHacienda((d['alertas_hacienda'] as List?) ?? [], onAbrirNegocio),
+        ..._buildSeccionCuentasVencidas(
+          (d['cuentas_por_cobrar_vencidas'] as List?) ?? [],
+          (d['total_cuentas_por_cobrar_vencidas'] as num?) ?? 0,
+          onAbrirNegocio,
+        ),
+        ..._buildSeccionCertificados((d['certificados_por_vencer'] as List?) ?? [], onAbrirNegocio),
+        ..._buildSeccionClientesInactivos((d['clientes_inactivos'] as List?) ?? [], onAbrirNegocio),
         if (mostrarContadores) ..._buildSeccionCarga((d['carga_por_contador'] as List?) ?? []),
         ..._buildSeccionActividad(
           (d['facturas_recientes'] as List?) ?? [],
@@ -147,6 +156,239 @@ List<Widget> _buildSeccionAlertas(List alertas, Future<void> Function(int) onAbr
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
                 child: Text(etiquetaEstado, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(width: 4),
+              const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
+            ],
+          ),
+        ),
+      );
+    }),
+  ];
+}
+
+List<Widget> _buildRecordatorioFiscal(Map? r) {
+  if (r == null) return [];
+  final diasIva = (r['dias_para_iva'] as num?)?.toInt();
+  final diasRenta = (r['dias_para_renta'] as num?)?.toInt();
+  if (diasIva == null || diasRenta == null) return [];
+  Color colorPara(int dias) => dias <= 5 ? Colors.red : (dias <= 10 ? Colors.amber.shade800 : AppColors.primary);
+  return [
+    const SizedBox(height: 12),
+    Row(
+      children: [
+        Expanded(
+          child: _tarjetaFiscal(
+            "IVA (D-104)", r['proxima_iva']?.toString() ?? '', diasIva, colorPara(diasIva),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _tarjetaFiscal(
+            "Renta (D-101)", r['proxima_renta']?.toString() ?? '', diasRenta, colorPara(diasRenta),
+          ),
+        ),
+      ],
+    ),
+  ];
+}
+
+Widget _tarjetaFiscal(String titulo, String fecha, int dias, Color color) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.06),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: color.withOpacity(0.15)),
+    ),
+    child: Row(
+      children: [
+        Icon(Icons.event_note_outlined, color: color, size: 18),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(titulo, style: TextStyle(fontSize: 11, color: Colors.grey[600], fontWeight: FontWeight.bold)),
+              Text(
+                dias == 0 ? "Vence hoy ($fecha)" : (dias < 0 ? "Venció ($fecha)" : "Vence en $dias día(s) ($fecha)"),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+List<Widget> _buildSeccionAlertasHacienda(List alertas, Future<void> Function(int) onAbrirNegocio) {
+  if (alertas.isEmpty) return [];
+  return [
+    const SizedBox(height: 18),
+    const Divider(),
+    const SizedBox(height: 6),
+    Text("Pendientes en Hacienda", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textStrong)),
+    const SizedBox(height: 8),
+    ...alertas.map((a) {
+      final estado = a['estado'] as String?;
+      final esRechazo = estado == '4' || estado == '5';
+      final color = esRechazo ? Colors.red : Colors.amber.shade800;
+      return InkWell(
+        onTap: () => onAbrirNegocio(a['negocio_id']),
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(color: color.withOpacity(0.06), borderRadius: BorderRadius.circular(10)),
+          child: Row(
+            children: [
+              Icon(esRechazo ? Icons.error_outline : Icons.hourglass_top_outlined, color: color, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "${a['negocio_nombre'] ?? ''} · ${a['tipo'] ?? ''} ${a['consecutivo'] ?? ''}",
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
+                child: Text(a['estado_texto'] ?? '', style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(width: 4),
+              const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
+            ],
+          ),
+        ),
+      );
+    }),
+  ];
+}
+
+List<Widget> _buildSeccionCuentasVencidas(List cuentas, num total, Future<void> Function(int) onAbrirNegocio) {
+  if (cuentas.isEmpty) return [];
+  return [
+    const SizedBox(height: 18),
+    const Divider(),
+    const SizedBox(height: 6),
+    Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text("Cuentas por Cobrar Vencidas", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textStrong)),
+        Text(formatearColones(total, decimales: 0), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.red)),
+      ],
+    ),
+    const SizedBox(height: 8),
+    ...cuentas.map((c) {
+      final dias = (c['dias_vencida'] as num?)?.toInt() ?? 0;
+      return InkWell(
+        onTap: () => onAbrirNegocio(c['negocio_id']),
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(color: Colors.red.withOpacity(0.06), borderRadius: BorderRadius.circular(10)),
+          child: Row(
+            children: [
+              const Icon(Icons.money_off_outlined, color: Colors.red, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("${c['negocio_nombre'] ?? ''} · ${c['cliente'] ?? ''}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), overflow: TextOverflow.ellipsis),
+                    Text("Vencida hace $dias día(s)", style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                  ],
+                ),
+              ),
+              Text(
+                formatearColones(double.tryParse(c['total'].toString()) ?? 0, decimales: 0),
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.red),
+              ),
+              const SizedBox(width: 4),
+              const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
+            ],
+          ),
+        ),
+      );
+    }),
+  ];
+}
+
+List<Widget> _buildSeccionCertificados(List certs, Future<void> Function(int) onAbrirNegocio) {
+  if (certs.isEmpty) return [];
+  return [
+    const SizedBox(height: 18),
+    const Divider(),
+    const SizedBox(height: 6),
+    Text("Certificados por Vencer", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textStrong)),
+    const SizedBox(height: 8),
+    ...certs.map((c) {
+      final dias = (c['dias_restantes'] as num?)?.toInt() ?? 0;
+      final color = dias <= 15 ? Colors.red : Colors.amber.shade800;
+      return InkWell(
+        onTap: () => onAbrirNegocio(c['negocio_id']),
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(color: color.withOpacity(0.06), borderRadius: BorderRadius.circular(10)),
+          child: Row(
+            children: [
+              Icon(Icons.badge_outlined, color: color, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(c['negocio_nombre'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), overflow: TextOverflow.ellipsis),
+              ),
+              Text(
+                dias < 0 ? "Vencido" : "Vence en $dias día(s)",
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color),
+              ),
+              const SizedBox(width: 4),
+              const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
+            ],
+          ),
+        ),
+      );
+    }),
+  ];
+}
+
+List<Widget> _buildSeccionClientesInactivos(List clientes, Future<void> Function(int) onAbrirNegocio) {
+  if (clientes.isEmpty) return [];
+  return [
+    const SizedBox(height: 18),
+    const Divider(),
+    const SizedBox(height: 6),
+    Text("Clientes sin Actividad Reciente", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textStrong)),
+    const SizedBox(height: 8),
+    ...clientes.map((c) {
+      final dias = c['dias_sin_facturar'] as num?;
+      return InkWell(
+        onTap: () => onAbrirNegocio(c['negocio_id']),
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(color: Colors.grey.withOpacity(0.08), borderRadius: BorderRadius.circular(10)),
+          child: Row(
+            children: [
+              Icon(Icons.pause_circle_outline, color: Colors.grey[600], size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(c['negocio_nombre'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), overflow: TextOverflow.ellipsis),
+              ),
+              Text(
+                dias == null ? "Sin facturas" : "Sin facturar hace ${dias.toInt()} día(s)",
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
               const SizedBox(width: 4),
               const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
