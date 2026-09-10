@@ -232,6 +232,25 @@ class _NotasCreditoDebitoScreenState extends State<NotasCreditoDebitoScreen> wit
     );
   }
 
+  // Mismo mapeo de estado_hacienda que DetalleFacturaScreen (comparten
+  // Factura.ESTADOS_HACIENDA) -- acá faltaba mostrarlo del todo, la nota
+  // quedaba sin ninguna pista visual de si Hacienda la aceptó o no.
+  (Color, String) _estadoNotaCredito(String estadoHacienda) {
+    switch (estadoHacienda) {
+      case '3':
+        return (Colors.green, 'Aceptada');
+      case '4':
+        return (Colors.red, 'Rechazada');
+      case '5':
+        return (Colors.red, 'Error técnico');
+      case '1':
+      case '2':
+        return (Colors.orange, 'Procesando');
+      default:
+        return (Colors.grey, 'Desconocido');
+    }
+  }
+
   Widget _buildListaCredito() {
     if (_cargandoCredito) return const Center(child: CircularProgressIndicator());
     if (_notasCredito.isEmpty) {
@@ -244,12 +263,25 @@ class _NotasCreditoDebitoScreenState extends State<NotasCreditoDebitoScreen> wit
         itemCount: _notasCredito.length,
         itemBuilder: (context, i) {
           final n = _notasCredito[i];
+          final (colorEstado, textoEstado) = _estadoNotaCredito(n.estadoHacienda);
           return Card(
             margin: const EdgeInsets.only(bottom: 10),
             child: ListTile(
               leading: const Icon(Icons.assignment_return_outlined, color: Colors.blue),
               title: Text("NC-${n.consecutivo} · ${n.receptorNombre}", style: TextStyle(color: AppColors.textStrong, fontWeight: FontWeight.bold)),
-              subtitle: Text("Factura F-${n.facturaConsecutivo ?? '?'} · ${n.motivo}", style: TextStyle(color: AppColors.textMuted)),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Factura F-${n.facturaConsecutivo ?? '?'} · ${n.motivo}", style: TextStyle(color: AppColors.textMuted)),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(color: colorEstado.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+                    child: Text(textoEstado, style: TextStyle(color: colorEstado, fontWeight: FontWeight.w600, fontSize: 11.5)),
+                  ),
+                ],
+              ),
+              isThreeLine: true,
               trailing: Text(formatearColones(n.total), style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
               onTap: () => ExportService.exportNotaCreditoToPdf(n),
             ),
