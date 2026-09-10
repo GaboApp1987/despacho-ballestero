@@ -30,6 +30,8 @@ class _NotasCreditoDebitoScreenState extends State<NotasCreditoDebitoScreen> wit
   late final TabController _tabController;
   bool _cargandoCredito = true;
   bool _cargandoDebito = true;
+  bool _actualizandoEstados = false;
+  final Set<int> _consultandoIndividual = {};
   List<NotaCredito> _notasCredito = [];
   List<Map<String, dynamic>> _notasDebito = [];
 
@@ -60,6 +62,57 @@ class _NotasCreditoDebitoScreenState extends State<NotasCreditoDebitoScreen> wit
       // Si falla, se queda con lo que ya tenía cargado.
     }
     if (mounted) setState(() => _cargandoCredito = false);
+  }
+
+  /// Consulta a Hacienda el estado real de UNA nota de crédito puntual
+  /// (botón "Consultar estado" de cada tarjeta) y la actualiza en la
+  /// lista sin recargar todo.
+  Future<void> _consultarEstadoNota(NotaCredito n) async {
+    setState(() => _consultandoIndividual.add(n.id));
+    try {
+      final r = await ApiService.post('/notas-credito/${n.id}/consultar-hacienda/', {});
+      if (r.statusCode == 200) {
+        final data = json.decode(utf8.decode(r.bodyBytes));
+        final actualizada = NotaCredito.fromJson(data);
+        if (mounted) {
+          setState(() {
+            final idx = _notasCredito.indexWhere((x) => x.id == n.id);
+            if (idx != -1) _notasCredito[idx] = actualizada;
+          });
+        }
+      } else {
+        final data = json.decode(utf8.decode(r.bodyBytes));
+        throw Exception(data['detail'] ?? 'Error desconocido');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("No se pudo consultar: $e"), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _consultandoIndividual.remove(n.id));
+    }
+  }
+
+  /// Botón "Actualizar" de arriba: consulta a Hacienda TODAS las notas que
+  /// sigan Sin Enviar/Procesando de una sola vez.
+  Future<void> _actualizarEstadosNotasCredito() async {
+    final pendientes = _notasCredito.where((n) => n.estadoHacienda == '1' || n.estadoHacienda == '2').toList();
+    if (pendientes.isEmpty) {
+      await _cargarNotasCredito();
+      return;
+    }
+    setState(() => _actualizandoEstados = true);
+    for (final n in pendientes) {
+      try {
+        await ApiService.post('/notas-credito/${n.id}/consultar-hacienda/', {});
+      } catch (_) {
+        // seguimos con las demás aunque una falle
+      }
+    }
+    await _cargarNotasCredito();
+    if (mounted) setState(() => _actualizandoEstados = false);
   }
 
   Future<void> _cargarNotasDebito() async {
@@ -195,10 +248,23 @@ class _NotasCreditoDebitoScreenState extends State<NotasCreditoDebitoScreen> wit
                   children: [
                     Icon(Icons.assignment_return_outlined, color: AppColors.primary),
                     const SizedBox(width: 10),
-                    Text(
-                      "Notas de Crédito y Débito",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textStrong),
+                    Expanded(
+                      child: Text(
+                        "Notas de Crédito y Débito",
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textStrong),
+                      ),
                     ),
+                    if (_tabController.index == 0)
+                      _actualizandoEstados
+                          ? const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 12),
+                              child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                            )
+                          : IconButton(
+                              icon: const Icon(Icons.refresh),
+                              tooltip: 'Actualizar estados con Hacienda',
+                              onPressed: _actualizarEstadosNotasCredito,
+                            ),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -282,7 +348,29 @@ class _NotasCreditoDebitoScreenState extends State<NotasCreditoDebitoScreen> wit
                 ],
               ),
               isThreeLine: true,
-              trailing: Text(formatearColones(n.total), style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+              trailing: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(formatearColones(n.total), style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+                  if (n.estadoHacienda == '1' || n.estadoHacienda == '2') ...[
+                    const SizedBox(height: 4),
+                    _consultandoIndividual.contains(n.id)
+                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                        : InkWell(
+                            onTap: () => _consultarEstadoNota(n),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.refresh, size: 13, color: AppColors.primary),
+                                const SizedBox(width: 3),
+                                Text('Consultar', style: TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w600)),
+                              ],
+                            ),
+                          ),
+                  ],
+                ],
+              ),
               onTap: () => ExportService.exportNotaCreditoToPdf(n),
             ),
           );
