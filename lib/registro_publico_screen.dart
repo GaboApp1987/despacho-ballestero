@@ -238,6 +238,51 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                       tipo: _tipo,
                       onChanged: _cambiarTipo,
                     ),
+                    const SizedBox(height: 14),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.07),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.primary.withOpacity(0.25)),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.lightbulb_outline, color: AppColors.primary, size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text.rich(
+                              TextSpan(
+                                style: TextStyle(fontSize: 12.5, color: AppColors.textMuted, height: 1.4),
+                                children: [
+                                  const TextSpan(
+                                    text: "Si ya tenés todos los datos que pide Hacienda (certificado, cédula, "
+                                        "actividad económica, etc.), completalos de una vez y quedás listo para "
+                                        "facturar hoy mismo.\n\n",
+                                  ),
+                                  TextSpan(
+                                    text: "Si todavía no los tenés a mano",
+                                    style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textStrong),
+                                  ),
+                                  const TextSpan(
+                                    text: ", no hay problema: registrate solo con usuario, cédula, contraseña y "
+                                        "correo, y empezá a conocer la app ya mismo — para facturar de verdad vas "
+                                        "a necesitar completar esos datos más adelante, cuando los tengas. Si no "
+                                        "sabés cómo conseguirlos, preguntale a ",
+                                  ),
+                                  TextSpan(
+                                    text: "Equilibra",
+                                    style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary),
+                                  ),
+                                  const TextSpan(text: " en el chat de soporte y te ayuda."),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 20),
                     TextFormField(
                       controller: _nombreCtrl,
