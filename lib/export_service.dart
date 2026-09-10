@@ -178,12 +178,24 @@ class ExportService {
   }
 
   /// Exporta el reporte consolidado (GET /reportes/consolidado/, ver
-  /// ReporteConsolidadoView) a PDF -- ventas y/o compras de un cliente en un
-  /// rango de fechas, con el desglose de IVA por tarifa cuando hay ventas.
+  /// ReporteConsolidadoView) a PDF -- ventas, notas de crédito, compras,
+  /// notas de débito y el resumen para la declaración de IVA, según lo que
+  /// venga en la respuesta.
   static Future<void> exportReporteConsolidadoToPdf(Map<String, dynamic> reporte, String periodo) async {
     final negocioNombre = reporte['negocio_nombre']?.toString() ?? '';
     final ventas = reporte['ventas'] as Map<String, dynamic>?;
     final compras = reporte['compras'] as Map<String, dynamic>?;
+    final resumen = reporte['resumen_declaracion'] as Map<String, dynamic>?;
+
+    pw.Widget tablaDesglose(List desglose) => pw.TableHelper.fromTextArray(
+          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+          headers: const ['Tarifa', 'Base Imponible', 'Monto de Impuesto'],
+          data: desglose.map((d) => [
+            d['tarifa']?.toString() ?? '',
+            formatearColones(double.tryParse(d['base_imponible'].toString()) ?? 0),
+            formatearColones(double.tryParse(d['monto_impuesto'].toString()) ?? 0),
+          ]).toList(),
+        );
 
     final widgets = <pw.Widget>[
       pw.Header(
@@ -205,6 +217,35 @@ class ExportService {
       pw.SizedBox(height: 16),
     ];
 
+    if (resumen != null) {
+      final ventasPorTarifa = (resumen['ventas_por_tarifa'] as List?) ?? [];
+      final comprasPorTarifa = (resumen['compras_por_tarifa'] as List?) ?? [];
+      widgets.addAll([
+        pw.Text('Resumen para la declaración de IVA (D-104)', style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 4),
+        pw.Text('Ventas y compras gravadas por tarifa, netas de notas de crédito.', style: const pw.TextStyle(fontSize: 10)),
+        pw.SizedBox(height: 8),
+        pw.Text('Ventas gravadas', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 4),
+        ventasPorTarifa.isEmpty ? pw.Text('Sin ventas gravadas.', style: const pw.TextStyle(fontSize: 11)) : tablaDesglose(ventasPorTarifa),
+        pw.SizedBox(height: 8),
+        pw.Text('Compras gravadas', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 4),
+        comprasPorTarifa.isEmpty ? pw.Text('Sin compras gravadas.', style: const pw.TextStyle(fontSize: 11)) : tablaDesglose(comprasPorTarifa),
+        pw.SizedBox(height: 10),
+        pw.Align(
+          alignment: pw.Alignment.centerRight,
+          child: pw.Text(
+            'IVA a pagar (ventas - crédito fiscal de compras): ${formatearColones(double.tryParse(resumen['iva_a_pagar'].toString()) ?? 0)}',
+            style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 13),
+          ),
+        ),
+        pw.SizedBox(height: 20),
+        pw.Divider(),
+        pw.SizedBox(height: 8),
+      ]);
+    }
+
     if (ventas != null) {
       final documentos = (ventas['documentos'] as List?) ?? [];
       widgets.addAll([
@@ -212,12 +253,14 @@ class ExportService {
         pw.SizedBox(height: 6),
         pw.TableHelper.fromTextArray(
           headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-          headers: const ['Fecha', 'Documento', 'Tipo', 'Cliente', 'Total'],
+          headers: const ['Fecha', 'Documento', 'Tipo', 'Cliente', 'Base', 'IVA', 'Total'],
           data: documentos.map((f) => [
             (f['fecha']?.toString() ?? '').split('T').first,
             f['consecutivo']?.toString() ?? '',
             f['tipo_documento']?.toString() ?? '',
             f['cliente']?.toString() ?? '',
+            formatearColones(double.tryParse(f['subtotal'].toString()) ?? 0),
+            formatearColones(double.tryParse(f['monto_iva'].toString()) ?? 0),
             formatearColones(double.tryParse(f['total'].toString()) ?? 0),
           ]).toList(),
         ),
@@ -231,20 +274,41 @@ class ExportService {
         ),
         pw.SizedBox(height: 12),
       ]);
-      final desglose = (ventas['desglose_impuestos'] as List?) ?? [];
-      if (desglose.isNotEmpty) {
+      final notasCredito = (ventas['notas_credito'] as List?) ?? [];
+      if (notasCredito.isNotEmpty) {
         widgets.addAll([
-          pw.Text('Desglose de IVA por tarifa', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+          pw.Text('Notas de Crédito', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 6),
           pw.TableHelper.fromTextArray(
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-            headers: const ['Tarifa', 'Base Imponible', 'Monto de Impuesto'],
-            data: desglose.map((d) => [
-              d['tarifa']?.toString() ?? '',
-              formatearColones(double.tryParse(d['base_imponible'].toString()) ?? 0),
-              formatearColones(double.tryParse(d['monto_impuesto'].toString()) ?? 0),
+            headers: const ['Fecha', 'N.°', 'Anula Factura', 'Motivo', 'Base', 'IVA', 'Total'],
+            data: notasCredito.map((n) => [
+              (n['fecha']?.toString() ?? '').split('T').first,
+              n['consecutivo']?.toString() ?? '',
+              n['factura_anulada']?.toString() ?? '',
+              n['motivo']?.toString() ?? '',
+              formatearColones(double.tryParse(n['subtotal'].toString()) ?? 0),
+              formatearColones(double.tryParse(n['monto_iva'].toString()) ?? 0),
+              formatearColones(double.tryParse(n['total'].toString()) ?? 0),
             ]).toList(),
           ),
+          pw.SizedBox(height: 8),
+          pw.Align(
+            alignment: pw.Alignment.centerRight,
+            child: pw.Text(
+              'Total Ventas Neto: ${formatearColones(double.tryParse(ventas['total_neto'].toString()) ?? 0)}',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 13),
+            ),
+          ),
+          pw.SizedBox(height: 12),
+        ]);
+      }
+      final desglose = (ventas['desglose_impuestos'] as List?) ?? [];
+      if (desglose.isNotEmpty) {
+        widgets.addAll([
+          pw.Text('Desglose de IVA por tarifa (neto de notas de crédito)', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 6),
+          tablaDesglose(desglose),
           pw.SizedBox(height: 16),
         ]);
       }
@@ -257,11 +321,13 @@ class ExportService {
         pw.SizedBox(height: 6),
         pw.TableHelper.fromTextArray(
           headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-          headers: const ['Fecha', 'Proveedor', 'N.° Factura Proveedor', 'Total'],
+          headers: const ['Fecha', 'Proveedor', 'N.° Factura Proveedor', 'Base (est.)', 'IVA (est.)', 'Total'],
           data: documentos.map((c) => [
             (c['fecha']?.toString() ?? '').split('T').first,
             c['proveedor']?.toString() ?? '',
             c['numero_factura_proveedor']?.toString() ?? '',
+            formatearColones(double.tryParse(c['subtotal_estimado'].toString()) ?? 0),
+            formatearColones(double.tryParse(c['monto_iva_estimado'].toString()) ?? 0),
             formatearColones(double.tryParse(c['total'].toString()) ?? 0),
           ]).toList(),
         ),
@@ -273,7 +339,48 @@ class ExportService {
             style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14),
           ),
         ),
+        pw.SizedBox(height: 12),
       ]);
+      final notasDebito = (compras['notas_debito'] as List?) ?? [];
+      if (notasDebito.isNotEmpty) {
+        widgets.addAll([
+          pw.Text('Notas de Débito', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 6),
+          pw.TableHelper.fromTextArray(
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            headers: const ['Fecha', 'N.°', 'Proveedor', 'Motivo', 'Monto'],
+            data: notasDebito.map((n) => [
+              (n['fecha']?.toString() ?? '').split('T').first,
+              n['numero_documento']?.toString() ?? '',
+              n['proveedor']?.toString() ?? '',
+              n['motivo']?.toString() ?? '',
+              formatearColones(double.tryParse(n['monto'].toString()) ?? 0),
+            ]).toList(),
+          ),
+          pw.SizedBox(height: 8),
+          pw.Align(
+            alignment: pw.Alignment.centerRight,
+            child: pw.Text(
+              'Total Compras Neto: ${formatearColones(double.tryParse(compras['total_neto'].toString()) ?? 0)}',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 13),
+            ),
+          ),
+          pw.SizedBox(height: 12),
+        ]);
+      }
+      final desglose = (compras['desglose_impuestos'] as List?) ?? [];
+      if (desglose.isNotEmpty) {
+        widgets.addAll([
+          pw.Text('Desglose de IVA por tarifa (estimado)', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 6),
+          tablaDesglose(desglose),
+          pw.SizedBox(height: 6),
+          pw.Text(
+            compras['nota_desglose']?.toString() ?? '',
+            style: pw.TextStyle(fontSize: 9, fontStyle: pw.FontStyle.italic),
+          ),
+        ]);
+      }
     }
 
     final pdf = pw.Document(theme: await _cargarTema());
@@ -281,18 +388,45 @@ class ExportService {
     await Printing.layoutPdf(onLayout: (format) async => pdf.save(), name: 'Reporte_$negocioNombre.pdf');
   }
 
-  /// Exporta el reporte consolidado a Excel -- una hoja por sección
-  /// (Ventas/Desglose IVA/Compras) que exista en la respuesta.
+  /// Exporta el reporte consolidado a Excel -- una hoja por sección que
+  /// exista en la respuesta (Resumen Declaración/Ventas/Notas de
+  /// Crédito/Compras/Notas de Débito).
   static Future<void> exportReporteConsolidadoToExcel(Map<String, dynamic> reporte) async {
     var excel = Excel.createExcel();
     final ventas = reporte['ventas'] as Map<String, dynamic>?;
     final compras = reporte['compras'] as Map<String, dynamic>?;
+    final resumen = reporte['resumen_declaracion'] as Map<String, dynamic>?;
+
+    void escribirDesglose(Sheet hoja, List desglose) {
+      hoja.appendRow([TextCellValue('Tarifa'), TextCellValue('Base Imponible'), TextCellValue('Monto de Impuesto')]);
+      for (var d in desglose) {
+        hoja.appendRow([
+          TextCellValue(d['tarifa']?.toString() ?? ''),
+          DoubleCellValue(double.tryParse(d['base_imponible'].toString()) ?? 0),
+          DoubleCellValue(double.tryParse(d['monto_impuesto'].toString()) ?? 0),
+        ]);
+      }
+    }
+
+    if (resumen != null) {
+      final hoja = excel['Resumen Declaracion'];
+      hoja.appendRow([TextCellValue('Ventas gravadas')]);
+      escribirDesglose(hoja, (resumen['ventas_por_tarifa'] as List?) ?? []);
+      hoja.appendRow([TextCellValue('')]);
+      hoja.appendRow([TextCellValue('Compras gravadas')]);
+      escribirDesglose(hoja, (resumen['compras_por_tarifa'] as List?) ?? []);
+      hoja.appendRow([TextCellValue('')]);
+      hoja.appendRow([
+        TextCellValue('IVA a pagar (ventas - crédito fiscal de compras)'),
+        DoubleCellValue(double.tryParse(resumen['iva_a_pagar'].toString()) ?? 0),
+      ]);
+    }
 
     if (ventas != null) {
       final hojaVentas = excel['Ventas'];
       hojaVentas.appendRow([
-        TextCellValue('Fecha'), TextCellValue('Documento'), TextCellValue('Tipo'),
-        TextCellValue('Cliente'), TextCellValue('Total'),
+        TextCellValue('Fecha'), TextCellValue('Documento'), TextCellValue('Tipo'), TextCellValue('Cliente'),
+        TextCellValue('Base'), TextCellValue('IVA'), TextCellValue('Total'),
       ]);
       for (var f in (ventas['documentos'] as List? ?? [])) {
         hojaVentas.appendRow([
@@ -300,47 +434,85 @@ class ExportService {
           TextCellValue(f['consecutivo']?.toString() ?? ''),
           TextCellValue(f['tipo_documento']?.toString() ?? ''),
           TextCellValue(f['cliente']?.toString() ?? ''),
+          DoubleCellValue(double.tryParse(f['subtotal'].toString()) ?? 0),
+          DoubleCellValue(double.tryParse(f['monto_iva'].toString()) ?? 0),
           DoubleCellValue(double.tryParse(f['total'].toString()) ?? 0),
         ]);
       }
-      final desglose = (ventas['desglose_impuestos'] as List?) ?? [];
-      if (desglose.isNotEmpty) {
-        final hojaDesglose = excel['Desglose IVA'];
-        hojaDesglose.appendRow([
-          TextCellValue('Tarifa'), TextCellValue('Base Imponible'), TextCellValue('Monto de Impuesto'),
+
+      final notasCredito = (ventas['notas_credito'] as List?) ?? [];
+      if (notasCredito.isNotEmpty) {
+        final hojaNC = excel['Notas de Credito'];
+        hojaNC.appendRow([
+          TextCellValue('Fecha'), TextCellValue('N.°'), TextCellValue('Anula Factura'), TextCellValue('Motivo'),
+          TextCellValue('Base'), TextCellValue('IVA'), TextCellValue('Total'),
         ]);
-        for (var d in desglose) {
-          hojaDesglose.appendRow([
-            TextCellValue(d['tarifa']?.toString() ?? ''),
-            DoubleCellValue(double.tryParse(d['base_imponible'].toString()) ?? 0),
-            DoubleCellValue(double.tryParse(d['monto_impuesto'].toString()) ?? 0),
+        for (var n in notasCredito) {
+          hojaNC.appendRow([
+            TextCellValue((n['fecha']?.toString() ?? '').split('T').first),
+            TextCellValue(n['consecutivo']?.toString() ?? ''),
+            TextCellValue(n['factura_anulada']?.toString() ?? ''),
+            TextCellValue(n['motivo']?.toString() ?? ''),
+            DoubleCellValue(double.tryParse(n['subtotal'].toString()) ?? 0),
+            DoubleCellValue(double.tryParse(n['monto_iva'].toString()) ?? 0),
+            DoubleCellValue(double.tryParse(n['total'].toString()) ?? 0),
           ]);
         }
+      }
+
+      final desglose = (ventas['desglose_impuestos'] as List?) ?? [];
+      if (desglose.isNotEmpty) {
+        escribirDesglose(excel['Desglose IVA Ventas'], desglose);
       }
     }
 
     if (compras != null) {
       final hojaCompras = excel['Compras'];
       hojaCompras.appendRow([
-        TextCellValue('Fecha'), TextCellValue('Proveedor'), TextCellValue('N.° Factura Proveedor'), TextCellValue('Total'),
+        TextCellValue('Fecha'), TextCellValue('Proveedor'), TextCellValue('N.° Factura Proveedor'),
+        TextCellValue('Base (est.)'), TextCellValue('IVA (est.)'), TextCellValue('Total'),
       ]);
       for (var c in (compras['documentos'] as List? ?? [])) {
         hojaCompras.appendRow([
           TextCellValue((c['fecha']?.toString() ?? '').split('T').first),
           TextCellValue(c['proveedor']?.toString() ?? ''),
           TextCellValue(c['numero_factura_proveedor']?.toString() ?? ''),
+          DoubleCellValue(double.tryParse(c['subtotal_estimado'].toString()) ?? 0),
+          DoubleCellValue(double.tryParse(c['monto_iva_estimado'].toString()) ?? 0),
           DoubleCellValue(double.tryParse(c['total'].toString()) ?? 0),
         ]);
       }
+
+      final notasDebito = (compras['notas_debito'] as List?) ?? [];
+      if (notasDebito.isNotEmpty) {
+        final hojaND = excel['Notas de Debito'];
+        hojaND.appendRow([
+          TextCellValue('Fecha'), TextCellValue('N.°'), TextCellValue('Proveedor'), TextCellValue('Motivo'), TextCellValue('Monto'),
+        ]);
+        for (var n in notasDebito) {
+          hojaND.appendRow([
+            TextCellValue((n['fecha']?.toString() ?? '').split('T').first),
+            TextCellValue(n['numero_documento']?.toString() ?? ''),
+            TextCellValue(n['proveedor']?.toString() ?? ''),
+            TextCellValue(n['motivo']?.toString() ?? ''),
+            DoubleCellValue(double.tryParse(n['monto'].toString()) ?? 0),
+          ]);
+        }
+      }
+
+      final desglose = (compras['desglose_impuestos'] as List?) ?? [];
+      if (desglose.isNotEmpty) {
+        escribirDesglose(excel['Desglose IVA Compras'], desglose);
+      }
     }
 
-    // Excel siempre trae una hoja "Sheet1" por defecto -- se borra al final,
-    // una vez que ya existe al menos otra hoja real (si se borra antes o si
-    // termina siendo la única, la librería lanza error).
-    if (excel.sheets.containsKey('Sheet1') && excel.sheets.length > 1) {
-      excel.delete('Sheet1');
-    }
-
+    // NO se borra la hoja "Sheet1" que trae Excel.createExcel() por defecto:
+    // el propio código del paquete excel (save_file.dart) advierte que
+    // borrar/renombrar la hoja default es una operación insegura ("Maybe
+    // overkill and unsafe... another safer method preferred"), y en la
+    // práctica hacía que excel.encode() fallara silenciosamente y la
+    // exportación no generara ningún archivo. Queda como una pestaña extra
+    // vacía en el archivo, sin romper nada.
     final negocioNombre = reporte['negocio_nombre']?.toString() ?? 'reporte';
     await _guardarExcel(
       excel,

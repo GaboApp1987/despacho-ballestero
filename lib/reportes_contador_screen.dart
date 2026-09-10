@@ -228,6 +228,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
   Widget _resultados() {
     final ventas = _reporte!['ventas'] as Map<String, dynamic>?;
     final compras = _reporte!['compras'] as Map<String, dynamic>?;
+    final resumen = _reporte!['resumen_declaracion'] as Map<String, dynamic>?;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -249,21 +250,131 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
           ],
         ),
         const SizedBox(height: 8),
+        if (resumen != null) _seccionResumenDeclaracion(resumen),
         if (ventas != null) _seccionVentas(ventas),
         if (compras != null) _seccionCompras(compras),
       ],
     );
   }
 
+  Widget _tarjeta({required Widget child}) => Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
+        child: child,
+      );
+
+  Widget _filaDocumento(String titulo, {String? subtitulo, required double total, double? iva, bool esEstimado = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(titulo, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
+                if (subtitulo != null) Text(subtitulo, style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(formatearColones(total), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              if (iva != null)
+                Text(
+                  "IVA: ${formatearColones(iva)}${esEstimado ? ' (est.)' : ''}",
+                  style: TextStyle(fontSize: 10, color: AppColors.textMuted),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tablaDesglose(List desglose) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: desglose
+          .map((d) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(d['tarifa']?.toString() ?? '', style: const TextStyle(fontSize: 12)),
+                    Text(
+                      "Base: ${formatearColones(double.tryParse(d['base_imponible'].toString()) ?? 0)} · "
+                      "Impuesto: ${formatearColones(double.tryParse(d['monto_impuesto'].toString()) ?? 0)}",
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ))
+          .toList(),
+    );
+  }
+
+  Widget _seccionResumenDeclaracion(Map<String, dynamic> r) {
+    final ventasPorTarifa = (r['ventas_por_tarifa'] as List?) ?? [];
+    final comprasPorTarifa = (r['compras_por_tarifa'] as List?) ?? [];
+    final ivaAPagar = double.tryParse(r['iva_a_pagar'].toString()) ?? 0;
+    return _tarjeta(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.fact_check_outlined, color: Color(0xFF4338CA), size: 18),
+              const SizedBox(width: 8),
+              Text("Resumen para la declaración de IVA (D-104)", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "Ventas y compras gravadas por tarifa, netas de notas de crédito.",
+            style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+          ),
+          const SizedBox(height: 12),
+          Text("Ventas gravadas", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
+          const SizedBox(height: 6),
+          ventasPorTarifa.isEmpty
+              ? Text("Sin ventas gravadas en este período.", style: TextStyle(fontSize: 12, color: AppColors.textMuted))
+              : _tablaDesglose(ventasPorTarifa),
+          const SizedBox(height: 12),
+          Text("Compras gravadas", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
+          const SizedBox(height: 6),
+          comprasPorTarifa.isEmpty
+              ? Text("Sin compras gravadas en este período.", style: TextStyle(fontSize: 12, color: AppColors.textMuted))
+              : _tablaDesglose(comprasPorTarifa),
+          const SizedBox(height: 12),
+          const Divider(),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text("IVA a pagar (ventas − crédito fiscal de compras)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              Text(
+                formatearColones(ivaAPagar),
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: ivaAPagar >= 0 ? const Color(0xFF4338CA) : Colors.green),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _seccionVentas(Map<String, dynamic> ventas) {
     final documentos = (ventas['documentos'] as List?) ?? [];
+    final notasCredito = (ventas['notas_credito'] as List?) ?? [];
     final desglose = (ventas['desglose_impuestos'] as List?) ?? [];
     final total = double.tryParse(ventas['total'].toString()) ?? 0;
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
+    final totalNotas = double.tryParse(ventas['total_notas_credito'].toString()) ?? 0;
+    final totalNeto = double.tryParse(ventas['total_neto'].toString()) ?? 0;
+    return _tarjeta(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -278,43 +389,43 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
           if (documentos.isEmpty)
             Text("Sin ventas en este período.", style: TextStyle(color: AppColors.textMuted))
           else
-            ...documentos.map((f) => Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          "${f['tipo_documento']} ${f['consecutivo']} · ${f['cliente'] ?? ''}",
-                          style: const TextStyle(fontSize: 12),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Text(
-                        formatearColones(double.tryParse(f['total'].toString()) ?? 0),
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
+            ...documentos.map((f) => _filaDocumento(
+                  "${f['tipo_documento']} ${f['consecutivo']} · ${f['cliente'] ?? ''}",
+                  total: double.tryParse(f['total'].toString()) ?? 0,
+                  iva: double.tryParse(f['monto_iva'].toString()) ?? 0,
                 )),
+          if (notasCredito.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Divider(),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text("Notas de Crédito (${notasCredito.length})", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
+                Text("- ${formatearColones(totalNotas)}", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.red)),
+              ],
+            ),
+            const SizedBox(height: 6),
+            ...notasCredito.map((n) => _filaDocumento(
+                  "NC ${n['consecutivo']}${n['factura_anulada'] != null ? ' · anula F-${n['factura_anulada']}' : ''}",
+                  subtitulo: n['motivo']?.toString(),
+                  total: double.tryParse(n['total'].toString()) ?? 0,
+                  iva: double.tryParse(n['monto_iva'].toString()) ?? 0,
+                )),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text("Total neto (ventas − notas de crédito)", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                Text(formatearColones(totalNeto), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ],
           if (desglose.isNotEmpty) ...[
             const SizedBox(height: 12),
             const Divider(),
-            Text("Desglose de IVA por tarifa", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
+            Text("Desglose de IVA por tarifa (neto de notas de crédito)", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
             const SizedBox(height: 6),
-            ...desglose.map((d) => Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(d['tarifa']?.toString() ?? '', style: const TextStyle(fontSize: 12)),
-                      Text(
-                        "Base: ${formatearColones(double.tryParse(d['base_imponible'].toString()) ?? 0)} · "
-                        "Impuesto: ${formatearColones(double.tryParse(d['monto_impuesto'].toString()) ?? 0)}",
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ],
-                  ),
-                )),
+            _tablaDesglose(desglose),
           ],
         ],
       ),
@@ -323,11 +434,12 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
 
   Widget _seccionCompras(Map<String, dynamic> compras) {
     final documentos = (compras['documentos'] as List?) ?? [];
+    final notasDebito = (compras['notas_debito'] as List?) ?? [];
+    final desglose = (compras['desglose_impuestos'] as List?) ?? [];
     final total = double.tryParse(compras['total'].toString()) ?? 0;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
+    final totalNotas = double.tryParse(compras['total_notas_debito'].toString()) ?? 0;
+    final totalNeto = double.tryParse(compras['total_neto'].toString()) ?? 0;
+    return _tarjeta(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -342,24 +454,49 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
           if (documentos.isEmpty)
             Text("Sin compras en este período.", style: TextStyle(color: AppColors.textMuted))
           else
-            ...documentos.map((c) => Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          "${c['proveedor'] ?? 'Sin proveedor'} · N.° ${c['numero_factura_proveedor'] ?? ''}",
-                          style: const TextStyle(fontSize: 12),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Text(
-                        formatearColones(double.tryParse(c['total'].toString()) ?? 0),
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
+            ...documentos.map((c) => _filaDocumento(
+                  "${c['proveedor'] ?? 'Sin proveedor'} · N.° ${c['numero_factura_proveedor'] ?? ''}",
+                  total: double.tryParse(c['total'].toString()) ?? 0,
+                  iva: double.tryParse(c['monto_iva_estimado'].toString()) ?? 0,
+                  esEstimado: true,
                 )),
+          if (notasDebito.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Divider(),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text("Notas de Débito (${notasDebito.length})", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
+                Text("+ ${formatearColones(totalNotas)}", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const SizedBox(height: 6),
+            ...notasDebito.map((n) => _filaDocumento(
+                  "ND ${n['numero_documento'] ?? ''} · ${n['proveedor'] ?? ''}",
+                  subtitulo: n['motivo']?.toString(),
+                  total: double.tryParse(n['monto'].toString()) ?? 0,
+                )),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text("Total neto (compras + notas de débito)", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                Text(formatearColones(totalNeto), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ],
+          if (desglose.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Divider(),
+            Text("Desglose de IVA por tarifa (estimado)", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
+            const SizedBox(height: 6),
+            _tablaDesglose(desglose),
+            const SizedBox(height: 6),
+            Text(
+              compras['nota_desglose']?.toString() ?? '',
+              style: TextStyle(fontSize: 10, color: AppColors.textMuted, fontStyle: FontStyle.italic),
+            ),
+          ],
         ],
       ),
     );
