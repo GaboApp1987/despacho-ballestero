@@ -22,7 +22,7 @@ class MyApp extends StatelessWidget {
       builder: (context, esOscuro, _) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
-          title: 'Despacho Ballestero',
+          title: 'Equilibra',
           theme: esOscuro ? AppTheme.dark : AppTheme.light,
           home: const LoginScreen(), // <--- La App inicia aquí con el diseño completo
         );
