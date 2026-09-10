@@ -355,14 +355,21 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                       TextFormField(
                         controller: _correoHaciendaCtrl,
                         keyboardType: TextInputType.emailAddress,
-                        decoration: const InputDecoration(labelText: "Correo registrado ante Hacienda", border: OutlineInputBorder()),
-                        validator: (v) => (v == null || !v.contains('@')) ? "Correo inválido" : null,
+                        decoration: const InputDecoration(
+                          labelText: "Correo registrado ante Hacienda (opcional)",
+                          helperText: "Si no lo tenés a mano, lo completás después desde el perfil del negocio",
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (v) => (v != null && v.trim().isNotEmpty && !v.contains('@')) ? "Correo inválido" : null,
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _codigoActividadCtrl,
-                        decoration: const InputDecoration(labelText: "Código de actividad económica (Hacienda)", border: OutlineInputBorder()),
-                        validator: (v) => (v == null || v.trim().isEmpty) ? "Requerido" : null,
+                        decoration: const InputDecoration(
+                          labelText: "Código de actividad económica (Hacienda) (opcional)",
+                          helperText: "Si no lo tenés a mano, lo completás después desde el perfil del negocio",
+                          border: OutlineInputBorder(),
+                        ),
                       ),
                     ],
                     if (_requierePago) ...[
