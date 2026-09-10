@@ -264,7 +264,13 @@ class _ContadoresScreenState extends State<ContadoresScreen> {
                           if (ctx.mounted) Navigator.pop(ctx);
                           _cargarSocios();
                         } else {
-                          throw Exception(utf8.decode(response.bodyBytes));
+                          final data = json.decode(utf8.decode(response.bodyBytes));
+                          dynamic mensaje = data['detail'] ?? data['password'] ?? data['username'];
+                          if (mensaje == null && data is Map && data.isNotEmpty) {
+                            mensaje = data.values.first;
+                          }
+                          mensaje ??= 'No se pudo crear el contador.';
+                          throw Exception(mensaje is List ? mensaje.join(' ') : mensaje);
                         }
                       } catch (e) {
                         setStateDialog(() => guardando = false);
