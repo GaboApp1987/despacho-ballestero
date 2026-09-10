@@ -463,6 +463,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           const SizedBox(height: 8),
                           TextField(
                             controller: _usernameController,
+                            autofillHints: const [AutofillHints.username],
                             decoration: InputDecoration(
                               hintText: "Ingrese su usuario",
                               prefixIcon: const Icon(Icons.person_outline, size: 20),
@@ -486,6 +487,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           TextField(
                             controller: _passwordController,
                             obscureText: _ocultarClave,
+                            autofillHints: const [AutofillHints.password],
                             onSubmitted: (_) => _isLoading ? null : _login(),
                             decoration: InputDecoration(
                               hintText: "••••••••",
