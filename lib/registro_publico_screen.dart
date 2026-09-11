@@ -43,6 +43,7 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
   final _cedulaCtrl = TextEditingController();
   final _correoHaciendaCtrl = TextEditingController();
   final _codigoActividadCtrl = TextEditingController();
+  final _codigoPromocionalCtrl = TextEditingController();
   String _tipoCedula = '02';
 
   bool _cargandoPlanes = true;
@@ -96,6 +97,7 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
     _cedulaCtrl.dispose();
     _correoHaciendaCtrl.dispose();
     _codigoActividadCtrl.dispose();
+    _codigoPromocionalCtrl.dispose();
     super.dispose();
   }
 
@@ -166,6 +168,7 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
         'plan': _planSeleccionadoId,
         'telefono': _telefonoCtrl.text.trim(),
         'prueba_gratis': _pruebaGratis,
+        'codigo_promocional': _codigoPromocionalCtrl.text.trim(),
       },
       if (_tipo == 'negocio') ...{
         'cedula': _cedulaCtrl.text.trim(),
@@ -185,7 +188,11 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
       await ApiService.saveTokens(access: datos['access'], refresh: datos['refresh']);
 
       if (!mounted) return;
-      if (_requierePago && !_pruebaGratis) {
+      // Se lee de la RESPUESTA del backend, no del checkbox local -- un
+      // código promocional válido también salta el pago, aunque el
+      // checkbox de "prueba gratis" nunca se haya marcado.
+      final quedoEnPrueba = datos['prueba_gratis'] == true;
+      if (_requierePago && !quedoEnPrueba) {
         await Navigator.push(
           context,
           MaterialPageRoute(
@@ -426,6 +433,17 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                             ? "No te vamos a cobrar nada todavía."
                             : "Vas a poder pagar con tarjeta justo después de crear la cuenta.",
                         style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _codigoPromocionalCtrl,
+                        textCapitalization: TextCapitalization.characters,
+                        decoration: const InputDecoration(
+                          labelText: "Código promocional (opcional)",
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                          prefixIcon: Icon(Icons.card_giftcard, size: 20),
+                        ),
                       ),
                     ],
                     const SizedBox(height: 16),
