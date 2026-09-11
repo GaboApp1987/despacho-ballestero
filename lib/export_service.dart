@@ -183,6 +183,51 @@ class ExportService {
   /// venga en la respuesta.
   static Future<void> exportReporteConsolidadoToPdf(Map<String, dynamic> reporte, String periodo) async {
     final negocioNombre = reporte['negocio_nombre']?.toString() ?? '';
+    final pdf = pw.Document(theme: await _cargarTema());
+    pdf.addPage(pw.MultiPage(pageFormat: PdfPageFormat.a4, build: (context) => _widgetsReporteConsolidado(reporte, periodo)));
+    await Printing.layoutPdf(onLayout: (format) async => pdf.save(), name: 'Reporte_$negocioNombre.pdf');
+  }
+
+  /// Igual que exportReporteConsolidadoToPdf pero para varios negocios a la
+  /// vez (selección múltiple o "todos" en la pestaña de Reportes del
+  /// contador): arma un PDF único con una portada de resumen por cliente y
+  /// luego el detalle completo de cada uno, cada uno arrancando en página
+  /// nueva.
+  static Future<void> exportReportesConsolidadosToPdf(List<Map<String, dynamic>> reportes, String periodo) async {
+    final widgets = <pw.Widget>[
+      pw.Header(
+        level: 0,
+        child: pw.Text('Reporte de Ventas y Compras — Resumen por Cliente', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+      ),
+      pw.Text('Periodo: $periodo', style: const pw.TextStyle(fontSize: 12)),
+      pw.SizedBox(height: 12),
+      pw.TableHelper.fromTextArray(
+        headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+        headers: const ['Cliente', 'Total Ventas', 'Total Compras', 'IVA a pagar'],
+        data: reportes.map((r) {
+          final resumen = r['resumen_declaracion'] as Map<String, dynamic>?;
+          final ventas = r['ventas'] as Map<String, dynamic>?;
+          final compras = r['compras'] as Map<String, dynamic>?;
+          return [
+            r['negocio_nombre']?.toString() ?? '',
+            ventas != null ? formatearColones(double.tryParse(ventas['total'].toString()) ?? 0) : '-',
+            compras != null ? formatearColones(double.tryParse(compras['total'].toString()) ?? 0) : '-',
+            resumen != null ? formatearColones(double.tryParse(resumen['iva_a_pagar'].toString()) ?? 0) : '-',
+          ];
+        }).toList(),
+      ),
+    ];
+    for (final reporte in reportes) {
+      widgets.add(pw.NewPage());
+      widgets.addAll(_widgetsReporteConsolidado(reporte, periodo));
+    }
+    final pdf = pw.Document(theme: await _cargarTema());
+    pdf.addPage(pw.MultiPage(pageFormat: PdfPageFormat.a4, build: (context) => widgets));
+    await Printing.layoutPdf(onLayout: (format) async => pdf.save(), name: 'Reportes_Clientes.pdf');
+  }
+
+  static List<pw.Widget> _widgetsReporteConsolidado(Map<String, dynamic> reporte, String periodo) {
+    final negocioNombre = reporte['negocio_nombre']?.toString() ?? '';
     final ventas = reporte['ventas'] as Map<String, dynamic>?;
     final compras = reporte['compras'] as Map<String, dynamic>?;
     final resumen = reporte['resumen_declaracion'] as Map<String, dynamic>?;
@@ -383,9 +428,7 @@ class ExportService {
       }
     }
 
-    final pdf = pw.Document(theme: await _cargarTema());
-    pdf.addPage(pw.MultiPage(pageFormat: PdfPageFormat.a4, build: (context) => widgets));
-    await Printing.layoutPdf(onLayout: (format) async => pdf.save(), name: 'Reporte_$negocioNombre.pdf');
+    return widgets;
   }
 
   /// Exporta el reporte consolidado a Excel -- una hoja por sección que
@@ -393,9 +436,73 @@ class ExportService {
   /// Crédito/Compras/Notas de Débito).
   static Future<void> exportReporteConsolidadoToExcel(Map<String, dynamic> reporte) async {
     var excel = Excel.createExcel();
+    _escribirReporteConsolidadoEnExcel(excel, reporte);
+
+    // NO se borra la hoja "Sheet1" que trae Excel.createExcel() por defecto:
+    // el propio código del paquete excel (save_file.dart) advierte que
+    // borrar/renombrar la hoja default es una operación insegura ("Maybe
+    // overkill and unsafe... another safer method preferred"), y en la
+    // práctica hacía que excel.encode() fallara silenciosamente y la
+    // exportación no generara ningún archivo. Queda como una pestaña extra
+    // vacía en el archivo, sin romper nada.
+    final negocioNombre = reporte['negocio_nombre']?.toString() ?? 'reporte';
+    await _guardarExcel(
+      excel,
+      dialogTitle: 'Guardar Reporte de Ventas y Compras',
+      fileName: 'reporte_${negocioNombre.replaceAll(' ', '_')}.xlsx',
+    );
+  }
+
+  /// Igual que exportReporteConsolidadoToExcel pero para varios negocios:
+  /// una hoja "Resumen" con el total de cada cliente, y luego las hojas de
+  /// detalle de cada uno con el nombre del cliente como prefijo (truncado a
+  /// lo que entra en el límite de 31 caracteres que exige xlsx).
+  static Future<void> exportReportesConsolidadosToExcel(List<Map<String, dynamic>> reportes) async {
+    var excel = Excel.createExcel();
+
+    final hojaResumen = excel['Resumen'];
+    hojaResumen.appendRow([
+      TextCellValue('Cliente'), TextCellValue('Total Ventas'), TextCellValue('Total Compras'), TextCellValue('IVA a pagar'),
+    ]);
+    for (final r in reportes) {
+      final resumen = r['resumen_declaracion'] as Map<String, dynamic>?;
+      final ventas = r['ventas'] as Map<String, dynamic>?;
+      final compras = r['compras'] as Map<String, dynamic>?;
+      hojaResumen.appendRow([
+        TextCellValue(r['negocio_nombre']?.toString() ?? ''),
+        ventas != null ? DoubleCellValue(double.tryParse(ventas['total'].toString()) ?? 0) : TextCellValue('-'),
+        compras != null ? DoubleCellValue(double.tryParse(compras['total'].toString()) ?? 0) : TextCellValue('-'),
+        resumen != null ? DoubleCellValue(double.tryParse(resumen['iva_a_pagar'].toString()) ?? 0) : TextCellValue('-'),
+      ]);
+    }
+
+    for (var i = 0; i < reportes.length; i++) {
+      final nombreCorto = (reportes[i]['negocio_nombre']?.toString() ?? 'Cliente ${i + 1}');
+      final prefijo = '${i + 1}-${nombreCorto.length > 12 ? nombreCorto.substring(0, 12) : nombreCorto} ';
+      _escribirReporteConsolidadoEnExcel(excel, reportes[i], prefijo: prefijo);
+    }
+
+    await _guardarExcel(
+      excel,
+      dialogTitle: 'Guardar Reportes de Ventas y Compras',
+      fileName: 'reportes_clientes.xlsx',
+    );
+  }
+
+  /// Escribe las hojas de un reporte consolidado (Ventas/Compras/Notas/
+  /// Desgloses) dentro de un Excel ya creado. `prefijo` distingue las hojas
+  /// cuando se combinan varios reportes en un mismo archivo (ver
+  /// exportReportesConsolidadosToExcel) -- los nombres de hoja en xlsx no
+  /// pueden pasar de 31 caracteres, de ahí el truncado del prefijo.
+  static void _escribirReporteConsolidadoEnExcel(Excel excel, Map<String, dynamic> reporte, {String prefijo = ''}) {
     final ventas = reporte['ventas'] as Map<String, dynamic>?;
     final compras = reporte['compras'] as Map<String, dynamic>?;
     final resumen = reporte['resumen_declaracion'] as Map<String, dynamic>?;
+
+    String nombreHoja(String base) {
+      final nombre = '$prefijo$base';
+      return nombre.length > 31 ? nombre.substring(0, 31) : nombre;
+    }
 
     void escribirDesglose(Sheet hoja, List desglose) {
       hoja.appendRow([TextCellValue('Tarifa'), TextCellValue('Base Imponible'), TextCellValue('Monto de Impuesto')]);
@@ -409,7 +516,7 @@ class ExportService {
     }
 
     if (resumen != null) {
-      final hoja = excel['Resumen Declaracion'];
+      final hoja = excel[nombreHoja('Resumen Declaracion')];
       hoja.appendRow([TextCellValue('Ventas gravadas')]);
       escribirDesglose(hoja, (resumen['ventas_por_tarifa'] as List?) ?? []);
       hoja.appendRow([TextCellValue('')]);
@@ -423,7 +530,7 @@ class ExportService {
     }
 
     if (ventas != null) {
-      final hojaVentas = excel['Ventas'];
+      final hojaVentas = excel[nombreHoja('Ventas')];
       hojaVentas.appendRow([
         TextCellValue('Fecha'), TextCellValue('Documento'), TextCellValue('Tipo'), TextCellValue('Cliente'),
         TextCellValue('Base'), TextCellValue('IVA'), TextCellValue('Total'),
@@ -442,7 +549,7 @@ class ExportService {
 
       final notasCredito = (ventas['notas_credito'] as List?) ?? [];
       if (notasCredito.isNotEmpty) {
-        final hojaNC = excel['Notas de Credito'];
+        final hojaNC = excel[nombreHoja('Notas de Credito')];
         hojaNC.appendRow([
           TextCellValue('Fecha'), TextCellValue('N.°'), TextCellValue('Anula Factura'), TextCellValue('Motivo'),
           TextCellValue('Base'), TextCellValue('IVA'), TextCellValue('Total'),
@@ -462,12 +569,12 @@ class ExportService {
 
       final desglose = (ventas['desglose_impuestos'] as List?) ?? [];
       if (desglose.isNotEmpty) {
-        escribirDesglose(excel['Desglose IVA Ventas'], desglose);
+        escribirDesglose(excel[nombreHoja('Desglose IVA Ventas')], desglose);
       }
     }
 
     if (compras != null) {
-      final hojaCompras = excel['Compras'];
+      final hojaCompras = excel[nombreHoja('Compras')];
       hojaCompras.appendRow([
         TextCellValue('Fecha'), TextCellValue('Proveedor'), TextCellValue('N.° Factura Proveedor'),
         TextCellValue('Base (est.)'), TextCellValue('IVA (est.)'), TextCellValue('Total'),
@@ -485,7 +592,7 @@ class ExportService {
 
       final notasDebito = (compras['notas_debito'] as List?) ?? [];
       if (notasDebito.isNotEmpty) {
-        final hojaND = excel['Notas de Debito'];
+        final hojaND = excel[nombreHoja('Notas de Debito')];
         hojaND.appendRow([
           TextCellValue('Fecha'), TextCellValue('N.°'), TextCellValue('Proveedor'), TextCellValue('Motivo'), TextCellValue('Monto'),
         ]);
@@ -502,23 +609,9 @@ class ExportService {
 
       final desglose = (compras['desglose_impuestos'] as List?) ?? [];
       if (desglose.isNotEmpty) {
-        escribirDesglose(excel['Desglose IVA Compras'], desglose);
+        escribirDesglose(excel[nombreHoja('Desglose IVA Compras')], desglose);
       }
     }
-
-    // NO se borra la hoja "Sheet1" que trae Excel.createExcel() por defecto:
-    // el propio código del paquete excel (save_file.dart) advierte que
-    // borrar/renombrar la hoja default es una operación insegura ("Maybe
-    // overkill and unsafe... another safer method preferred"), y en la
-    // práctica hacía que excel.encode() fallara silenciosamente y la
-    // exportación no generara ningún archivo. Queda como una pestaña extra
-    // vacía en el archivo, sin romper nada.
-    final negocioNombre = reporte['negocio_nombre']?.toString() ?? 'reporte';
-    await _guardarExcel(
-      excel,
-      dialogTitle: 'Guardar Reporte de Ventas y Compras',
-      fileName: 'reporte_${negocioNombre.replaceAll(' ', '_')}.xlsx',
-    );
   }
 
   /// Exporta el listado general de Cuentas por Cobrar a PDF

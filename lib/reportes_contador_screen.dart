@@ -25,13 +25,16 @@ class ReportesContadorScreen extends StatefulWidget {
 class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
   bool _cargandoNegocios = true;
   List<Negocio> _negocios = [];
-  Negocio? _negocioSeleccionado;
+  final Set<Negocio> _negociosSeleccionados = {};
   _TipoReporteContador _tipo = _TipoReporteContador.ambos;
   late DateTime _fechaInicio;
   late DateTime _fechaFin;
 
   bool _generando = false;
+  // Un solo cliente seleccionado -> _reporte (vista detallada de siempre).
+  // Dos o más -> _reportes (resumen por cliente + exportación combinada).
   Map<String, dynamic>? _reporte;
+  List<Map<String, dynamic>>? _reportes;
   String? _error;
 
   @override
@@ -53,7 +56,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
         if (mounted) {
           setState(() {
             _negocios = negocios;
-            _negocioSeleccionado = negocios.isNotEmpty ? negocios.first : null;
+            if (negocios.isNotEmpty) _negociosSeleccionados.add(negocios.first);
           });
         }
       }
@@ -83,31 +86,116 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
     }
   }
 
+  Future<Map<String, dynamic>> _pedirReporte(int negocioId, String tipoStr) async {
+    final r = await ApiService.get(
+      '/reportes/consolidado/?negocio=$negocioId'
+      '&fecha_inicio=${_fmtFecha(_fechaInicio)}&fecha_fin=${_fmtFecha(_fechaFin)}&tipo=$tipoStr',
+    );
+    final data = json.decode(utf8.decode(r.bodyBytes));
+    if (r.statusCode != 200) {
+      throw Exception(data['detail'] ?? 'No se pudo generar el reporte.');
+    }
+    return data as Map<String, dynamic>;
+  }
+
   Future<void> _generarReporte() async {
-    if (_negocioSeleccionado == null) return;
+    if (_negociosSeleccionados.isEmpty) return;
     setState(() {
       _generando = true;
       _error = null;
+      _reporte = null;
+      _reportes = null;
     });
+    final tipoStr = switch (_tipo) {
+      _TipoReporteContador.ventas => 'ventas',
+      _TipoReporteContador.compras => 'compras',
+      _TipoReporteContador.ambos => 'ambos',
+    };
     try {
-      final tipoStr = switch (_tipo) {
-        _TipoReporteContador.ventas => 'ventas',
-        _TipoReporteContador.compras => 'compras',
-        _TipoReporteContador.ambos => 'ambos',
-      };
-      final r = await ApiService.get(
-        '/reportes/consolidado/?negocio=${_negocioSeleccionado!.id}'
-        '&fecha_inicio=${_fmtFecha(_fechaInicio)}&fecha_fin=${_fmtFecha(_fechaFin)}&tipo=$tipoStr',
-      );
-      final data = json.decode(utf8.decode(r.bodyBytes));
-      if (r.statusCode != 200) {
-        throw Exception(data['detail'] ?? 'No se pudo generar el reporte.');
+      if (_negociosSeleccionados.length == 1) {
+        final data = await _pedirReporte(_negociosSeleccionados.first.id, tipoStr);
+        if (mounted) setState(() => _reporte = data);
+      } else {
+        // Uno por uno (no en paralelo) para no saturar al backend si el
+        // contador elige "Todos" con una cartera grande de negocios.
+        final reportes = <Map<String, dynamic>>[];
+        for (final negocio in _negociosSeleccionados) {
+          reportes.add(await _pedirReporte(negocio.id, tipoStr));
+        }
+        if (mounted) setState(() => _reportes = reportes);
       }
-      if (mounted) setState(() => _reporte = data);
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     } finally {
       if (mounted) setState(() => _generando = false);
+    }
+  }
+
+  Future<void> _elegirClientes() async {
+    final seleccionTemporal = Set<Negocio>.from(_negociosSeleccionados);
+    final resultado = await showDialog<Set<Negocio>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text("Elegí los clientes"),
+          content: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CheckboxListTile(
+                  title: const Text("Seleccionar todos", style: TextStyle(fontWeight: FontWeight.bold)),
+                  value: seleccionTemporal.length == _negocios.length,
+                  onChanged: (marcado) => setDialogState(() {
+                    if (marcado == true) {
+                      seleccionTemporal
+                        ..clear()
+                        ..addAll(_negocios);
+                    } else {
+                      seleccionTemporal.clear();
+                    }
+                  }),
+                ),
+                const Divider(height: 1),
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: _negocios
+                        .map((n) => CheckboxListTile(
+                              title: Text(n.nombreComercial, overflow: TextOverflow.ellipsis),
+                              value: seleccionTemporal.contains(n),
+                              onChanged: (marcado) => setDialogState(() {
+                                if (marcado == true) {
+                                  seleccionTemporal.add(n);
+                                } else {
+                                  seleccionTemporal.remove(n);
+                                }
+                              }),
+                            ))
+                        .toList(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
+            ElevatedButton(
+              onPressed: seleccionTemporal.isEmpty ? null : () => Navigator.pop(ctx, seleccionTemporal),
+              child: const Text("Listo"),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (resultado != null) {
+      setState(() {
+        _negociosSeleccionados
+          ..clear()
+          ..addAll(resultado);
+        _reporte = null;
+        _reportes = null;
+      });
     }
   }
 
@@ -142,6 +230,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
                 child: Text(_error!, style: const TextStyle(color: Colors.red)),
               ),
             if (_reporte != null) _resultados(),
+            if (_reportes != null) _resultadosMultiples(),
           ],
         ),
       ),
@@ -160,23 +249,39 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("Cliente", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
+          Text("Cliente(s)", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
           const SizedBox(height: 6),
           _cargandoNegocios
               ? const LinearProgressIndicator()
               : _negocios.isEmpty
                   ? Text("No tenés negocios en tu cartera todavía.", style: TextStyle(color: AppColors.textMuted))
-                  : DropdownButtonFormField<Negocio>(
-                      initialValue: _negocioSeleccionado,
-                      isExpanded: true,
-                      decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10)),
-                      items: _negocios
-                          .map((n) => DropdownMenuItem(value: n, child: Text(n.nombreComercial, overflow: TextOverflow.ellipsis)))
-                          .toList(),
-                      onChanged: (n) => setState(() {
-                        _negocioSeleccionado = n;
-                        _reporte = null;
-                      }),
+                  : InkWell(
+                      onTap: _elegirClientes,
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        decoration: BoxDecoration(border: Border.all(color: AppColors.border), borderRadius: BorderRadius.circular(10)),
+                        child: Row(
+                          children: [
+                            Icon(Icons.people_outline, size: 18, color: AppColors.textMuted),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _negociosSeleccionados.isEmpty
+                                    ? "Elegí uno o más clientes"
+                                    : _negociosSeleccionados.length == 1
+                                        ? _negociosSeleccionados.first.nombreComercial
+                                        : _negociosSeleccionados.length == _negocios.length
+                                            ? "Todos los clientes (${_negocios.length})"
+                                            : "${_negociosSeleccionados.length} clientes seleccionados",
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Icon(Icons.arrow_drop_down, color: AppColors.textMuted),
+                          ],
+                        ),
+                      ),
                     ),
           const SizedBox(height: 16),
           Text("Período", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
@@ -213,7 +318,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: (_generando || _negocioSeleccionado == null) ? null : _generarReporte,
+              onPressed: (_generando || _negociosSeleccionados.isEmpty) ? null : _generarReporte,
               icon: _generando
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.insert_chart_outlined),
@@ -222,6 +327,70 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _resultadosMultiples() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                "Resultado (${_reportes!.length} clientes)",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textStrong),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () => ExportService.exportReportesConsolidadosToPdf(_reportes!, _periodoTexto),
+              icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent, size: 18),
+              label: const Text("PDF"),
+            ),
+            TextButton.icon(
+              onPressed: () => ExportService.exportReportesConsolidadosToExcel(_reportes!),
+              icon: const Icon(Icons.table_chart, color: Colors.green, size: 18),
+              label: const Text("Excel"),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          "Vista resumida por cliente. El detalle completo (documento por documento) va en el PDF o Excel exportado.",
+          style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+        ),
+        const SizedBox(height: 12),
+        ..._reportes!.map((r) {
+          final ventas = r['ventas'] as Map<String, dynamic>?;
+          final compras = r['compras'] as Map<String, dynamic>?;
+          final resumen = r['resumen_declaracion'] as Map<String, dynamic>?;
+          final ivaAPagar = resumen != null ? double.tryParse(resumen['iva_a_pagar'].toString()) ?? 0 : null;
+          return _tarjeta(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(r['negocio_nombre']?.toString() ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                const SizedBox(height: 8),
+                if (ventas != null) _filaDocumento("Ventas", total: double.tryParse(ventas['total'].toString()) ?? 0),
+                if (compras != null) _filaDocumento("Compras", total: double.tryParse(compras['total'].toString()) ?? 0),
+                if (ivaAPagar != null) ...[
+                  const Divider(),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text("IVA a pagar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      Text(
+                        formatearColones(ivaAPagar),
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: ivaAPagar >= 0 ? const Color(0xFF4338CA) : Colors.green),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          );
+        }),
+      ],
     );
   }
 
