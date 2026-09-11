@@ -44,6 +44,14 @@ class _OnvoCobroAutomaticoScreenState extends State<OnvoCobroAutomaticoScreen> {
     switch (widget.tipo) {
       case 'negocio':
         return '/suscripciones-negocio';
+      // El backend (MiPerfilView) siempre manda "rol": "socio" para un
+      // contador independiente, nunca "contador" -- ese caso nunca
+      // coincidía y caía en el "default" de despacho por error. Reportado
+      // real: un contador independiente reactivando su suscripción
+      // terminaba llamando a /suscripciones-despacho/<id-equivocado>/,
+      // que respondía 404 porque ese id era en realidad el de su
+      // SuscripcionSocio, no el de una SuscripcionDespacho.
+      case 'socio':
       case 'contador':
         return '/suscripciones-socio';
       default:
