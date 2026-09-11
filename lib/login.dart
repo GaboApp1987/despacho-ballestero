@@ -459,14 +459,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
                           const InstalarAppBanner(),
 
-                          Text("Usuario", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: AppColors.textMuted)),
+                          Text("Correo electrónico", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: AppColors.textMuted)),
                           const SizedBox(height: 8),
                           TextField(
                             controller: _usernameController,
-                            autofillHints: const [AutofillHints.username],
+                            keyboardType: TextInputType.emailAddress,
+                            // El backend acepta correo O usuario en este
+                            // mismo campo (ver EmailOUsernameBackend) --
+                            // así las cuentas viejas sin correo guardado
+                            // siguen entrando con su usuario de siempre.
+                            autofillHints: const [AutofillHints.email, AutofillHints.username],
                             decoration: InputDecoration(
-                              hintText: "Ingrese su usuario",
-                              prefixIcon: const Icon(Icons.person_outline, size: 20),
+                              hintText: "Ingrese su correo electrónico",
+                              prefixIcon: const Icon(Icons.mail_outline, size: 20),
                               filled: true,
                               fillColor: AppColors.background,
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
