@@ -1,5 +1,9 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
+import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'api_service.dart';
@@ -45,6 +49,15 @@ class _FormularioCotizacionState extends State<FormularioCotizacion> {
   bool _isLoading = true;
   bool _isSaving = false;
   bool _procesandoNota = false;
+
+  /// En Web y en el celular (Android/iOS empaquetados con este mismo
+  /// código) sí tiene sentido ofrecer "Tomar foto" -- en el armado de
+  /// escritorio (Windows/Linux/macOS) no hay una cámara "del navegador"
+  /// que ofrecer, así que ahí se salta directo al selector de archivos.
+  bool get _esEscritorio {
+    if (kIsWeb) return false;
+    return Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+  }
 
   final TextEditingController _busquedaCtrl = TextEditingController();
   String _busqueda = '';
@@ -121,11 +134,58 @@ class _FormularioCotizacionState extends State<FormularioCotizacion> {
   /// agrega al carrito -- en vez de tipear todo a mano. Nunca guarda nada
   /// solo: el negocio revisa el carrito resultante antes de confirmar la
   /// cotización, igual que si lo hubiera armado a mano.
+  /// Antes usaba solo FilePicker (un selector de archivos genérico): en el
+  /// navegador eso NO ofrece la opción de "Tomar foto" con la cámara, solo
+  /// elegir un archivo ya guardado -- reportado real por un usuario que
+  /// quería fotografiar una nota a mano en el momento. Con image_picker y
+  /// ImageSource.camera el navegador sí pide permiso de cámara y abre la
+  /// captura directa (en Android/iOS/Web); en el armado de escritorio
+  /// (Windows) no hay una cámara "nativa" del navegador que ofrecer, así
+  /// que ahí se salta directo al selector de archivos de siempre.
+  Future<Uint8List?> _tomarFotoConCamara() async {
+    final foto = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 85);
+    if (foto == null) return null;
+    return foto.readAsBytes();
+  }
+
   Future<void> _escanearNota() async {
-    final resultado = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
-    if (resultado == null || resultado.files.single.bytes == null) return;
-    final bytes = resultado.files.single.bytes!;
-    final nombre = resultado.files.single.name;
+    Uint8List? bytes;
+    String nombre = 'nota.jpg';
+
+    if (!_esEscritorio) {
+      final origen = await showModalBottomSheet<String>(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_camera_outlined),
+                title: const Text("Tomar foto"),
+                onTap: () => Navigator.pop(ctx, 'camara'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.folder_open_outlined),
+                title: const Text("Elegir archivo"),
+                onTap: () => Navigator.pop(ctx, 'archivo'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (origen == null) return;
+      if (origen == 'camara') {
+        bytes = await _tomarFotoConCamara();
+        if (bytes == null) return;
+      }
+    }
+
+    if (bytes == null) {
+      final resultado = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
+      if (resultado == null || resultado.files.single.bytes == null) return;
+      bytes = resultado.files.single.bytes!;
+      nombre = resultado.files.single.name;
+    }
 
     setState(() => _procesandoNota = true);
     try {

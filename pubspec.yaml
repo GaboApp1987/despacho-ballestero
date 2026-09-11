@@ -20,6 +20,7 @@ dependencies:
   excel: ^4.0.3
   path_provider: ^2.1.2
   file_picker: ^8.0.0
+  image_picker: ^1.1.2
   # Compartir
   share_plus: ^10.1.0
   url_launcher: ^6.3.0
