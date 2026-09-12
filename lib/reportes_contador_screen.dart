@@ -66,6 +66,23 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
     if (mounted) setState(() => _cargandoNegocios = false);
   }
 
+  /// Los botones de exportar llamaban a ExportService directo en el
+  /// onPressed -- si algo fallaba (ej. un dato inesperado del backend), la
+  /// excepción quedaba en un Future sin capturar y no pasaba nada visible:
+  /// "toco el ícono de Excel y no hace nada". Con esto al menos se ve el
+  /// error real en pantalla en vez de fallar en silencio.
+  Future<void> _exportar(Future<void> Function() accion) async {
+    try {
+      await accion();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("No se pudo exportar: $e"), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   String _fmtFecha(DateTime d) => "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
 
   String get _periodoTexto =>
@@ -343,12 +360,12 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
               ),
             ),
             TextButton.icon(
-              onPressed: () => ExportService.exportReportesConsolidadosToPdf(_reportes!, _periodoTexto),
+              onPressed: () => _exportar(() => ExportService.exportReportesConsolidadosToPdf(_reportes!, _periodoTexto)),
               icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent, size: 18),
               label: const Text("PDF"),
             ),
             TextButton.icon(
-              onPressed: () => ExportService.exportReportesConsolidadosToExcel(_reportes!),
+              onPressed: () => _exportar(() => ExportService.exportReportesConsolidadosToExcel(_reportes!)),
               icon: const Icon(Icons.table_chart, color: Colors.green, size: 18),
               label: const Text("Excel"),
             ),
@@ -407,12 +424,12 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
               child: Text("Resultado", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textStrong)),
             ),
             TextButton.icon(
-              onPressed: () => ExportService.exportReporteConsolidadoToPdf(_reporte!, _periodoTexto),
+              onPressed: () => _exportar(() => ExportService.exportReporteConsolidadoToPdf(_reporte!, _periodoTexto)),
               icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent, size: 18),
               label: const Text("PDF"),
             ),
             TextButton.icon(
-              onPressed: () => ExportService.exportReporteConsolidadoToExcel(_reporte!),
+              onPressed: () => _exportar(() => ExportService.exportReporteConsolidadoToExcel(_reporte!)),
               icon: const Icon(Icons.table_chart, color: Colors.green, size: 18),
               label: const Text("Excel"),
             ),
