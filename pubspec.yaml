@@ -31,6 +31,19 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.14.3
+
+# Ícono de la app (Android y Windows) -- se regenera con
+# `dart run flutter_launcher_icons` cada vez que cambie
+# assets/branding/icon_source.png (el wordmark "equilibra" sobre fondo
+# oscuro, mismo trazo que el logo animado del login).
+flutter_launcher_icons:
+  android: true
+  windows:
+    generate: true
+    image_path: "assets/branding/icon_source.png"
+    icon_size: 256
+  image_path: "assets/branding/icon_source.png"
 
 flutter:
   uses-material-design: true
