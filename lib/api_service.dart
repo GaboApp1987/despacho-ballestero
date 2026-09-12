@@ -5,9 +5,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ApiService {
   // URL base del servidor Django. Por defecto apunta a local (para "flutter
   // run" normal, sin tocar nada). Para compilar apuntando a producción:
-  //   flutter build windows --dart-define=API_BASE_URL=https://web-production-925bf0.up.railway.app/api
+  //   flutter build windows --dart-define=API_BASE_URL=https://equilibracr.com/api
   // o para probar en caliente contra producción con hot reload:
-  //   flutter run -d windows --dart-define=API_BASE_URL=https://web-production-925bf0.up.railway.app/api
+  //   flutter run -d windows --dart-define=API_BASE_URL=https://equilibracr.com/api
+  // OJO: tiene que ser equilibracr.com, NUNCA el dominio *.up.railway.app --
+  // Railway tiene ALLOWED_HOSTS=equilibracr.com, así que cualquier build
+  // (web, windows, android) que apunte al dominio de railway.app recibe
+  // "Bad Request (400)" en TODAS las peticiones reales (login incluido),
+  // aunque los archivos estáticos sigan cargando bien. Pasó real en
+  // producción el 2026-09-11: cuatro builds seguidos con la URL de railway
+  // dejaron el login roto sin que el build avisara nada.
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: 'http://127.0.0.1:8000/api',
