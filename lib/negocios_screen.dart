@@ -51,6 +51,14 @@ class _NegociosScreenState extends State<NegociosScreen> {
     '04': 'NITE',
   };
 
+  // Solo quien ve la cartera COMPLETA de otros (despacho o superusuario,
+  // nunca un contador viendo sus propios negocios) puede mover un cliente
+  // de un contador a otro -- ver reasignar_negocios en el backend
+  // (SocioViewSet), que ya exige que el contador destino sea válido para
+  // quien hace el pedido (mismo despacho, o cualquiera si es superusuario).
+  bool get _puedeReasignar => !widget.puedeCrear && widget.puedeGestionarPlanes;
+  List<Map<String, dynamic>> _sociosDisponibles = [];
+
   @override
   void initState() {
     super.initState();
@@ -60,9 +68,112 @@ class _NegociosScreenState extends State<NegociosScreen> {
       _cargarMiSocio();
       _dashboardFuture = _cargarDashboard();
     }
+    if (_puedeReasignar) {
+      _cargarSociosDisponibles();
+    }
     _busquedaCtrl.addListener(() {
       setState(() => _filtro = _busquedaCtrl.text.trim().toLowerCase());
     });
+  }
+
+  Future<void> _cargarSociosDisponibles() async {
+    try {
+      final response = await ApiService.get('/socios/');
+      if (response.statusCode == 200) {
+        final List data = json.decode(utf8.decode(response.bodyBytes));
+        if (mounted) {
+          setState(() {
+            _sociosDisponibles = data
+                .map((j) => {'id': j['id'], 'nombre': j['nombre'] ?? '', 'nombre_despacho': j['nombre_despacho']})
+                .toList();
+          });
+        }
+      }
+    } catch (_) {
+      // Si falla, el botón de reasignar simplemente no encuentra candidatos.
+    }
+  }
+
+  Future<void> _reasignarNegocio(Negocio negocio) async {
+    if (negocio.socioId == null) return;
+    final candidatos = _sociosDisponibles.where((s) => s['id'] != negocio.socioId).toList();
+    if (candidatos.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("No hay otro contador disponible para reasignar.")),
+      );
+      return;
+    }
+
+    int? seleccionado;
+    final resultado = await showDialog<int>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setStateDialog) => AlertDialog(
+          title: Text("Reasignar ${negocio.nombreComercial}"),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 360),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Contador actual: ${negocio.nombreSocio ?? 'Sin asignar'}",
+                  style: TextStyle(color: AppColors.textMuted),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int?>(
+                  initialValue: seleccionado,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: "Nuevo contador", border: OutlineInputBorder()),
+                  items: candidatos
+                      .map((s) => DropdownMenuItem<int?>(
+                            value: s['id'] as int,
+                            child: Text(
+                              widget.esSuperusuario && s['nombre_despacho'] != null
+                                  ? "${s['nombre']} (${s['nombre_despacho']})"
+                                  : s['nombre'].toString(),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ))
+                      .toList(),
+                  onChanged: (v) => setStateDialog(() => seleccionado = v),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
+            ElevatedButton(
+              onPressed: seleccionado == null ? null : () => Navigator.pop(ctx, seleccionado),
+              child: const Text("Reasignar"),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (resultado == null) return;
+
+    try {
+      final response = await ApiService.post('/socios/${negocio.socioId}/reasignar-negocios/', {
+        'negocio_ids': [negocio.id],
+        'nuevo_socio_id': resultado,
+      });
+      final datos = json.decode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        _cargarNegocios();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("${negocio.nombreComercial} pasó a ${datos['nuevo_socio']}.")),
+          );
+        }
+      } else {
+        throw Exception(datos['detail'] ?? 'Error desconocido');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo reasignar: $e")));
+      }
+    }
   }
 
   @override
@@ -767,6 +878,12 @@ class _NegociosScreenState extends State<NegociosScreen> {
                                   icon: const Icon(Icons.workspace_premium_outlined),
                                   tooltip: "Cambiar plan",
                                   onPressed: () => _cambiarPlan(n),
+                                ),
+                              if (_puedeReasignar)
+                                IconButton(
+                                  icon: const Icon(Icons.swap_horiz),
+                                  tooltip: "Reasignar a otro contador",
+                                  onPressed: () => _reasignarNegocio(n),
                                 ),
                               if (widget.esSuperusuario)
                                 IconButton(

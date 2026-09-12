@@ -51,6 +51,7 @@ class Negocio {
   final String? pinLlave;
   final String? llaveCriptografica;
   final String? entornoHacienda;
+  final int? socioId;
   final String? nombreSocio;
   final bool tieneUsuario;
   final String? logoUrl;
@@ -76,6 +77,7 @@ class Negocio {
     this.pinLlave,
     this.llaveCriptografica,
     this.entornoHacienda,
+    this.socioId,
     this.nombreSocio,
     this.tieneUsuario = false,
     this.logoUrl,
@@ -105,6 +107,7 @@ class Negocio {
       pinLlave: json['pin_llave'],
       llaveCriptografica: json['llave_criptografica'],
       entornoHacienda: json['entorno_hacienda'],
+      socioId: json['socio'],
       nombreSocio: json['nombre_socio'],
       tieneUsuario: json['tiene_usuario'] ?? false,
       logoUrl: json['logo'],
