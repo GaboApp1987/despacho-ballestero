@@ -350,6 +350,10 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
       // Si la pregunta vino por voz, la respuesta se lee en voz alta y al
       // terminar el micrófono se reactiva solo (ver setCompletionHandler).
       if (_modoConversacion) _hablar(respuesta);
+      // La IA marca cuando detecta que no puede resolver algo sola (ver
+      // sugerir_contacto en el backend) -- se abre el formulario solo en
+      // vez de esperar a que la persona note el botón de abajo.
+      if (data['sugerir_contacto'] == true && mounted) _abrirDejarMensaje();
     } catch (e) {
       const mensajeError = 'No pude responder ahora mismo. Podés dejar tu mensaje con el botón de abajo y te contactamos.';
       setState(() => _mensajes.add(_ChatMensaje('assistant', '$mensajeError ($e)')));
