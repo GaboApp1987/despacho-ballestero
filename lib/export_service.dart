@@ -10,6 +10,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
+import 'descarga_navegador_stub.dart' if (dart.library.html) 'descarga_navegador_web.dart';
 import 'api_service.dart';
 import 'factura.dart';
 import 'nota_credito.dart';
@@ -28,6 +29,15 @@ class ExportService {
   /// el archivo aparte.
   static Future<void> _guardarExcel(Excel excel, {required String dialogTitle, required String fileName}) async {
     final bytes = excel.encode()!;
+    if (kIsWeb) {
+      // file_picker NO implementa saveFile() en Web -- lanza
+      // "UnimplementedError: saveFile() has not been implemented" (lo
+      // confirmamos leyendo su código fuente). Reportado real: "toco el
+      // ícono de Excel y no pasa nada" era justo esta excepción quedando
+      // sin capturar. Se dispara la descarga directo por el navegador.
+      descargarBytesEnNavegador(Uint8List.fromList(bytes), fileName);
+      return;
+    }
     final path = await FilePicker.platform.saveFile(
       dialogTitle: dialogTitle,
       fileName: fileName,
@@ -35,7 +45,7 @@ class ExportService {
       allowedExtensions: ['xlsx'],
       bytes: Uint8List.fromList(bytes),
     );
-    if (!kIsWeb && path != null) {
+    if (path != null) {
       await File(path).writeAsBytes(bytes);
     }
   }
