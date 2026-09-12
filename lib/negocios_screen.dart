@@ -649,6 +649,9 @@ class _NegociosScreenState extends State<NegociosScreen> {
     return BloqueoSalidaRaiz(
       child: Scaffold(
       backgroundColor: AppColors.background,
+      drawer: widget.puedeCrear
+          ? DashboardDrawer(dashboardFuture: _dashboardFuture, onAbrirNegocio: _abrirNegocioPorId, mostrarContadores: false)
+          : null,
       appBar: AppBar(
         leading: Navigator.canPop(context)
             ? IconButton(
@@ -762,7 +765,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
                     if (snapshot.connectionState == ConnectionState.waiting || d.isEmpty) {
                       return const SizedBox.shrink();
                     }
-                    return buildDashboardHeader(d, onAbrirNegocio: _abrirNegocioPorId, mostrarContadores: false);
+                    return buildDashboardHeader(d, context: context, onAbrirNegocio: _abrirNegocioPorId, mostrarContadores: false);
                   },
                 ),
               ),

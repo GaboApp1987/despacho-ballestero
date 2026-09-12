@@ -38,6 +38,7 @@ Widget accionAppBar({
 
 Widget buildDashboardHeader(
   Map<String, dynamic> d, {
+  required BuildContext context,
   required Future<void> Function(int negocioId) onAbrirNegocio,
   bool mostrarContadores = true,
 }) {
@@ -95,15 +96,38 @@ Widget buildDashboardHeader(
           ),
         ],
         ..._buildRecordatorioFiscal(d['recordatorio_fiscal'] as Map?),
-        ..._buildSeccionAlertas((d['alertas_suscripcion'] as List?) ?? [], onAbrirNegocio),
-        ..._buildSeccionAlertasHacienda((d['alertas_hacienda'] as List?) ?? [], onAbrirNegocio),
-        ..._buildSeccionCuentasVencidas(
-          (d['cuentas_por_cobrar_vencidas'] as List?) ?? [],
-          (d['total_cuentas_por_cobrar_vencidas'] as num?) ?? 0,
-          onAbrirNegocio,
+        ..._buildSeccionConVerTodas(
+          context: context,
+          titulo: "Alertas de Suscripción",
+          items: (d['alertas_suscripcion'] as List?) ?? [],
+          constructor: (lista) => _buildSeccionAlertas(lista, onAbrirNegocio),
         ),
-        ..._buildSeccionCertificados((d['certificados_por_vencer'] as List?) ?? [], onAbrirNegocio),
-        ..._buildSeccionClientesInactivos((d['clientes_inactivos'] as List?) ?? [], onAbrirNegocio),
+        ..._buildSeccionConVerTodas(
+          context: context,
+          titulo: "Pendientes en Hacienda",
+          items: (d['alertas_hacienda'] as List?) ?? [],
+          constructor: (lista) => _buildSeccionAlertasHacienda(lista, onAbrirNegocio),
+        ),
+        ..._buildSeccionConVerTodas(
+          context: context,
+          titulo: "Cuentas por Cobrar Vencidas",
+          items: (d['cuentas_por_cobrar_vencidas'] as List?) ?? [],
+          constructor: (lista) => _buildSeccionCuentasVencidas(
+            lista, (d['total_cuentas_por_cobrar_vencidas'] as num?) ?? 0, onAbrirNegocio,
+          ),
+        ),
+        ..._buildSeccionConVerTodas(
+          context: context,
+          titulo: "Certificados por Vencer",
+          items: (d['certificados_por_vencer'] as List?) ?? [],
+          constructor: (lista) => _buildSeccionCertificados(lista, onAbrirNegocio),
+        ),
+        ..._buildSeccionConVerTodas(
+          context: context,
+          titulo: "Clientes sin Actividad Reciente",
+          items: (d['clientes_inactivos'] as List?) ?? [],
+          constructor: (lista) => _buildSeccionClientesInactivos(lista, onAbrirNegocio),
+        ),
         if (mostrarContadores) ..._buildSeccionCarga((d['carga_por_contador'] as List?) ?? []),
         ..._buildSeccionActividad(
           (d['facturas_recientes'] as List?) ?? [],
@@ -554,4 +578,194 @@ Widget _badgeEstado(String texto, Color color) {
     decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
     child: Text(texto, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
   );
+}
+
+/// Recorta una sección a los primeros [previewCount] ítems (el dashboard
+/// venía mostrando TODO de una, hasta 20-100 filas -- una sola sección como
+/// "Pendientes en Hacienda" tapaba el resto de la pantalla) y agrega un
+/// "Ver todas (N)" que lleva a SeccionDashboardScreen con la lista completa,
+/// cuando hay más de las que se muestran acá.
+List<Widget> _buildSeccionConVerTodas({
+  required BuildContext context,
+  required String titulo,
+  required List items,
+  required List<Widget> Function(List) constructor,
+  int previewCount = 3,
+}) {
+  if (items.isEmpty) return [];
+  final widgets = constructor(items.take(previewCount).toList());
+  if (items.length > previewCount) {
+    widgets.add(
+      Align(
+        alignment: Alignment.centerRight,
+        child: TextButton(
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => SeccionDashboardScreen(titulo: titulo, contenido: constructor(items)),
+            ),
+          ),
+          child: Text("Ver todas (${items.length})", style: const TextStyle(fontSize: 12.5)),
+        ),
+      ),
+    );
+  }
+  return widgets;
+}
+
+/// Pantalla genérica para mostrar una sección del dashboard completa (sin
+/// recortar) -- la usan tanto los botones "Ver todas" como el
+/// DashboardDrawer, ambos le pasan el mismo tipo de contenido que ya arman
+/// las funciones _buildSeccionX de arriba.
+class SeccionDashboardScreen extends StatelessWidget {
+  final String titulo;
+  final List<Widget> contenido;
+  const SeccionDashboardScreen({super.key, required this.titulo, required this.contenido});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: Text(titulo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        backgroundColor: const Color(0xFF4F46E5),
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: contenido),
+        ),
+      ),
+    );
+  }
+}
+
+/// Menú lateral del dashboard (despacho y contador): cada sección del
+/// dashboard es una entrada acá, con la cantidad de pendientes como badge,
+/// para no depender de bajar toda la pantalla o de tocar "Ver todas" en
+/// cada una -- a medida que se agreguen más funciones al dashboard, entran
+/// acá en vez de seguir apilando secciones en la pantalla principal.
+class DashboardDrawer extends StatelessWidget {
+  final Future<Map<String, dynamic>> dashboardFuture;
+  final Future<void> Function(int negocioId) onAbrirNegocio;
+  final bool mostrarContadores;
+  const DashboardDrawer({
+    super.key,
+    required this.dashboardFuture,
+    required this.onAbrirNegocio,
+    this.mostrarContadores = true,
+  });
+
+  Widget _item(
+    BuildContext context, {
+    required IconData icono,
+    required String titulo,
+    required List items,
+    required List<Widget> Function(List) constructor,
+  }) {
+    return ListTile(
+      leading: Icon(icono, color: AppColors.textMuted),
+      title: Text(titulo, style: const TextStyle(fontSize: 14)),
+      trailing: items.isEmpty
+          ? null
+          : Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
+              child: Text("${items.length}", style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold)),
+            ),
+      enabled: items.isNotEmpty,
+      onTap: () {
+        Navigator.pop(context);
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => SeccionDashboardScreen(titulo: titulo, contenido: constructor(items))),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Drawer(
+      child: SafeArea(
+        child: FutureBuilder<Map<String, dynamic>>(
+          future: dashboardFuture,
+          builder: (context, snapshot) {
+            final d = snapshot.data ?? {};
+            if (snapshot.connectionState == ConnectionState.waiting || d.isEmpty) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final alertasSuscripcion = (d['alertas_suscripcion'] as List?) ?? [];
+            final alertasHacienda = (d['alertas_hacienda'] as List?) ?? [];
+            final cuentasVencidas = (d['cuentas_por_cobrar_vencidas'] as List?) ?? [];
+            final certificados = (d['certificados_por_vencer'] as List?) ?? [];
+            final clientesInactivos = (d['clientes_inactivos'] as List?) ?? [];
+            final cargaContador = (d['carga_por_contador'] as List?) ?? [];
+            return ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                DrawerHeader(
+                  decoration: const BoxDecoration(color: Color(0xFF4F46E5)),
+                  child: Align(
+                    alignment: Alignment.bottomLeft,
+                    child: Text(
+                      "Secciones del panel",
+                      style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+                _item(
+                  context,
+                  icono: Icons.error_outline,
+                  titulo: "Alertas de Suscripción",
+                  items: alertasSuscripcion,
+                  constructor: (lista) => _buildSeccionAlertas(lista, onAbrirNegocio),
+                ),
+                _item(
+                  context,
+                  icono: Icons.receipt_long_outlined,
+                  titulo: "Pendientes en Hacienda",
+                  items: alertasHacienda,
+                  constructor: (lista) => _buildSeccionAlertasHacienda(lista, onAbrirNegocio),
+                ),
+                _item(
+                  context,
+                  icono: Icons.money_off_outlined,
+                  titulo: "Cuentas por Cobrar Vencidas",
+                  items: cuentasVencidas,
+                  constructor: (lista) => _buildSeccionCuentasVencidas(
+                    lista, (d['total_cuentas_por_cobrar_vencidas'] as num?) ?? 0, onAbrirNegocio,
+                  ),
+                ),
+                _item(
+                  context,
+                  icono: Icons.badge_outlined,
+                  titulo: "Certificados por Vencer",
+                  items: certificados,
+                  constructor: (lista) => _buildSeccionCertificados(lista, onAbrirNegocio),
+                ),
+                _item(
+                  context,
+                  icono: Icons.pause_circle_outline,
+                  titulo: "Clientes sin Actividad",
+                  items: clientesInactivos,
+                  constructor: (lista) => _buildSeccionClientesInactivos(lista, onAbrirNegocio),
+                ),
+                if (mostrarContadores)
+                  _item(
+                    context,
+                    icono: Icons.bar_chart_outlined,
+                    titulo: "Carga por Contador",
+                    items: cargaContador,
+                    constructor: (lista) => _buildSeccionCarga(lista),
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
 }

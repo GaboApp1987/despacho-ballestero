@@ -304,6 +304,7 @@ class _ContadoresScreenState extends State<ContadoresScreen> {
     return BloqueoSalidaRaiz(
       child: Scaffold(
       backgroundColor: AppColors.background,
+      drawer: DashboardDrawer(dashboardFuture: _dashboardFuture, onAbrirNegocio: _abrirNegocioPorId),
       appBar: AppBar(
         backgroundColor: const Color(0xFF4F46E5),
         foregroundColor: Colors.white,
@@ -422,7 +423,7 @@ class _ContadoresScreenState extends State<ContadoresScreen> {
                           d.isEmpty) {
                         return const SizedBox.shrink();
                       }
-                      return buildDashboardHeader(d, onAbrirNegocio: _abrirNegocioPorId);
+                      return buildDashboardHeader(d, context: context, onAbrirNegocio: _abrirNegocioPorId);
                     },
                   ),
                   Padding(
