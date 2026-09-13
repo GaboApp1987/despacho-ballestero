@@ -646,20 +646,32 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
   /// todo en la PRIMERA actividad (índice 0) -- si el contador certifica
   /// varias, tiene que repartir manualmente cuánto es de cada una.
   void _mezclarMesesSugeridos(List meses) {
+    // En modo "egresos por %" los egresos NUNCA vienen del estado de
+    // cuenta -- si el porcentaje ya está puesto se recalculan a partir de
+    // los ingresos nuevos, y si no, se dejan en 0 (el campo de egresos ya
+    // aparece deshabilitado en la tabla en ese modo) para no confundir con
+    // un monto real que no tiene nada que ver con el % que se va a usar.
+    final porcentaje = _cert.modoEgresos == 'porcentaje' ? double.tryParse(_porcentajeCtrl.text.replaceAll(',', '.')) : null;
     for (final m in meses) {
       final etiqueta = (m['mes'] ?? '').toString();
       final ingresos = (m['ingresos'] as num?)?.toDouble() ?? 0;
       final egresos = (m['egresos'] as num?)?.toDouble() ?? 0;
       final existente = _cert.datosMensuales.where((fila) => fila.mes.toLowerCase() == etiqueta.toLowerCase());
+      MesCertificacion fila;
       if (existente.isNotEmpty) {
-        final fila = existente.first;
+        fila = existente.first;
         if (fila.ingresosPorActividad.isEmpty) fila.ingresosPorActividad = [0];
         fila.ingresosPorActividad[0] += ingresos;
-        fila.egresos += egresos;
-        _sincronizarCeldasMes(fila);
       } else {
-        _cert.datosMensuales.add(MesCertificacion(mes: etiqueta, ingresosPorActividad: [ingresos], egresos: egresos));
+        fila = MesCertificacion(mes: etiqueta, ingresosPorActividad: [ingresos]);
+        _cert.datosMensuales.add(fila);
       }
+      if (_cert.modoEgresos == 'manual') {
+        fila.egresos += egresos;
+      } else if (porcentaje != null) {
+        fila.egresos = fila.ingresos * (porcentaje / 100);
+      }
+      _sincronizarCeldasMes(fila);
     }
   }
 
@@ -735,10 +747,18 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
       _cargandoEstadosCuenta = false;
       _progresoEstadosCuenta = '';
     });
+    final faltaPorcentaje = _cert.modoEgresos == 'porcentaje' && _porcentajeCtrl.text.trim().isEmpty;
     if (mounted) {
       if (errores.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Se analizaron $procesados archivo(s). Revisá la tabla antes de generar el documento.")),
+          SnackBar(
+            content: Text(
+              faltaPorcentaje
+                  ? "Se analizaron $procesados archivo(s) (solo ingresos). Escribí el % de egresos arriba de la tabla y tocá \"Aplicar a todos\"."
+                  : "Se analizaron $procesados archivo(s). Revisá la tabla antes de generar el documento.",
+            ),
+            duration: Duration(seconds: faltaPorcentaje ? 6 : 4),
+          ),
         );
       } else {
         // Los errores reales (ej. "el modelo no pudo leer el PDF") importan
