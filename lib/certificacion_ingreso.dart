@@ -2,22 +2,35 @@
 /// ya existente en su cartera) -- ver CertificacionIngreso en el backend.
 class MesCertificacion {
   final String mes; // etiqueta libre, ej "Noviembre 2024"
-  double ingresos;
+  // Un monto por actividad económica, en el MISMO ORDEN que
+  // CertificacionIngreso.actividades -- por posición, no por nombre, para
+  // que renombrar una actividad no desordene los montos ya cargados.
+  List<double> ingresosPorActividad;
   double egresos;
 
-  MesCertificacion({required this.mes, this.ingresos = 0, this.egresos = 0});
+  MesCertificacion({required this.mes, List<double>? ingresosPorActividad, this.egresos = 0})
+      : ingresosPorActividad = ingresosPorActividad ?? [0];
 
+  double get ingresos => ingresosPorActividad.fold(0.0, (a, b) => a + b);
   double get total => ingresos - egresos;
 
   factory MesCertificacion.fromJson(Map<String, dynamic> json) {
+    final lista = json['ingresos_por_actividad'] as List?;
     return MesCertificacion(
       mes: json['mes'] ?? '',
-      ingresos: (json['ingresos'] as num?)?.toDouble() ?? 0,
+      ingresosPorActividad: (lista != null && lista.isNotEmpty)
+          ? lista.map((v) => (v as num).toDouble()).toList()
+          : [(json['ingresos'] as num?)?.toDouble() ?? 0],
       egresos: (json['egresos'] as num?)?.toDouble() ?? 0,
     );
   }
 
-  Map<String, dynamic> toJson() => {'mes': mes, 'ingresos': ingresos, 'egresos': egresos};
+  Map<String, dynamic> toJson() => {
+        'mes': mes,
+        'ingresos_por_actividad': ingresosPorActividad,
+        'ingresos': ingresos,
+        'egresos': egresos,
+      };
 }
 
 class CertificacionIngreso {
@@ -30,6 +43,10 @@ class CertificacionIngreso {
   String nacionalidad;
   String estadoCivil;
   String actividadEconomica;
+  // Nombres de las actividades a certificar -- si tiene más de un
+  // elemento, la tabla de 12 meses muestra una columna de ingresos por
+  // cada una (igual que el formato real que ya usa el despacho).
+  List<String> actividades;
   String numeroActividadEconomica;
   int? anosEjerciendo;
   String proposito;
@@ -62,6 +79,7 @@ class CertificacionIngreso {
     this.nacionalidad = '',
     this.estadoCivil = 'soltero',
     this.actividadEconomica = '',
+    List<String>? actividades,
     this.numeroActividadEconomica = '',
     this.anosEjerciendo,
     this.proposito = '',
@@ -75,7 +93,8 @@ class CertificacionIngreso {
     this.lugarEmision = 'San José',
     this.ingresoBrutoPromedio,
     this.ingresoNetoPromedio,
-  }) : datosMensuales = datosMensuales ?? [];
+  })  : datosMensuales = datosMensuales ?? [],
+        actividades = actividades ?? [];
 
   factory CertificacionIngreso.fromJson(Map<String, dynamic> json) {
     return CertificacionIngreso(
@@ -88,6 +107,7 @@ class CertificacionIngreso {
       nacionalidad: json['nacionalidad'] ?? '',
       estadoCivil: json['estado_civil'] ?? 'soltero',
       actividadEconomica: json['actividad_economica'] ?? '',
+      actividades: ((json['actividades'] as List?) ?? []).map((a) => a.toString()).toList(),
       numeroActividadEconomica: json['numero_actividad_economica'] ?? '',
       anosEjerciendo: json['anos_ejerciendo'],
       proposito: json['proposito'] ?? '',
@@ -114,6 +134,7 @@ class CertificacionIngreso {
         'nacionalidad': nacionalidad,
         'estado_civil': estadoCivil,
         'actividad_economica': actividadEconomica,
+        'actividades': actividades,
         'numero_actividad_economica': numeroActividadEconomica,
         if (anosEjerciendo != null) 'anos_ejerciendo': anosEjerciendo,
         'proposito': proposito,

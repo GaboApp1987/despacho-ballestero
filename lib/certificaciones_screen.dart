@@ -162,11 +162,27 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
   List<Negocio> _negocios = [];
   Negocio? _negocioSeleccionado;
 
+  // Un controlador/focus estable POR CELDA (clave = "mes#índice de
+  // actividad", nunca el monto) para la tabla de 12 meses -- usar el
+  // monto como parte de la key del TextFormField (como se hizo al
+  // principio) recreaba el widget en cada dígito tecleado y perdía el
+  // foco a cada rato. Con un controlador fijo, escribir un valor con
+  // código externo (ver _sincronizarCeldasMes) solo actualiza el texto,
+  // sin reconstruir nada. Los egresos son uno solo por mes (clave = mes).
+  final Map<String, TextEditingController> _ingresosCtrls = {};
+  final Map<String, TextEditingController> _egresosCtrls = {};
+  final Map<String, FocusNode> _ingresosFocus = {};
+  final Map<String, FocusNode> _egresosFocus = {};
+
   final _nombreCtrl = TextEditingController();
   final _cedulaCtrl = TextEditingController();
   final _tipoCedulaCtrl = TextEditingController();
   final _nacionalidadCtrl = TextEditingController();
   final _actividadCtrl = TextEditingController();
+  // Actividades ADICIONALES a la principal (_actividadCtrl) -- cuando hay
+  // al menos una, la tabla de 12 meses muestra una columna de ingresos por
+  // cada actividad en vez de una sola. Ver _actividadesActuales.
+  final List<TextEditingController> _actividadesExtraCtrls = [];
   final _numeroActividadCtrl = TextEditingController();
   final _anosCtrl = TextEditingController();
   final _propositoCtrl = TextEditingController();
@@ -188,6 +204,11 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
     _tipoCedulaCtrl.text = _cert.tipoCedulaTexto;
     _nacionalidadCtrl.text = _cert.nacionalidad;
     _actividadCtrl.text = _cert.actividadEconomica;
+    if (_cert.actividades.length > 1) {
+      for (final a in _cert.actividades.skip(1)) {
+        _actividadesExtraCtrls.add(TextEditingController(text: a));
+      }
+    }
     _numeroActividadCtrl.text = _cert.numeroActividadEconomica;
     _anosCtrl.text = _cert.anosEjerciendo?.toString() ?? '';
     _propositoCtrl.text = _cert.proposito;
@@ -211,6 +232,21 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
     _dirigidoACtrl.dispose();
     _lugarCtrl.dispose();
     _porcentajeCtrl.dispose();
+    for (final c in _actividadesExtraCtrls) {
+      c.dispose();
+    }
+    for (final c in _ingresosCtrls.values) {
+      c.dispose();
+    }
+    for (final c in _egresosCtrls.values) {
+      c.dispose();
+    }
+    for (final f in _ingresosFocus.values) {
+      f.dispose();
+    }
+    for (final f in _egresosFocus.values) {
+      f.dispose();
+    }
     super.dispose();
   }
 
@@ -260,7 +296,92 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
       nuevas.add(anteriores[etiqueta] ?? MesCertificacion(mes: etiqueta));
       cursor = DateTime(cursor.year, cursor.month + 1, 1);
     }
+    // Los controladores/focus de meses que ya no quedan en la tabla (el
+    // contador acortó el periodo) se liberan; los demás se conservan tal
+    // cual -- así no se pierde lo que ya estaba tecleado en esos meses.
+    final etiquetasNuevas = nuevas.map((m) => m.mes).toSet();
+    // _ingresosCtrls/_ingresosFocus están indexados como "mes#actividad";
+    // _egresosCtrls/_egresosFocus son uno por mes directo.
+    for (final clave in _ingresosCtrls.keys.where((k) => !etiquetasNuevas.contains(k.split('#').first)).toList()) {
+      _ingresosCtrls.remove(clave)?.dispose();
+      _ingresosFocus.remove(clave)?.dispose();
+    }
+    for (final clave in _egresosCtrls.keys.where((k) => !etiquetasNuevas.contains(k)).toList()) {
+      _egresosCtrls.remove(clave)?.dispose();
+      _egresosFocus.remove(clave)?.dispose();
+    }
     setState(() => _cert.datosMensuales = nuevas);
+    _sincronizarActividadesEnTabla();
+  }
+
+  /// Actividades a certificar tal como están AHORA en los campos de texto
+  /// (la principal + las adicionales que se hayan agregado). Se usa tanto
+  /// para las columnas de la tabla como para lo que se manda a guardar --
+  /// nunca hace falta mantener esto sincronizado aparte en _cert.
+  List<String> get _actividadesActuales {
+    final principal = _actividadCtrl.text.trim();
+    final extras = _actividadesExtraCtrls.map((c) => c.text.trim()).where((t) => t.isNotEmpty);
+    final lista = [if (principal.isNotEmpty) principal, ...extras];
+    return lista.isEmpty ? const ['Ingresos'] : lista;
+  }
+
+  bool get _multiActividad => _actividadesActuales.length > 1;
+
+  /// Ajusta ingresosPorActividad de cada mes a la cantidad actual de
+  /// actividades -- por POSICIÓN, no por nombre, para que renombrar una
+  /// actividad no le borre el monto ya cargado. Si se agregó una
+  /// actividad, la nueva columna arranca en 0; si se quitó, ese monto se
+  /// pierde (es lo esperado: esa columna ya no existe).
+  void _sincronizarActividadesEnTabla() {
+    final cantidad = _actividadesActuales.length;
+    setState(() {
+      for (final m in _cert.datosMensuales) {
+        final valores = m.ingresosPorActividad;
+        if (valores.length == cantidad) continue;
+        final nuevos = List<double>.generate(cantidad, (i) => i < valores.length ? valores[i] : 0);
+        m.ingresosPorActividad = nuevos;
+      }
+    });
+  }
+
+  void _agregarActividad() {
+    setState(() => _actividadesExtraCtrls.add(TextEditingController()));
+    _sincronizarActividadesEnTabla();
+  }
+
+  void _quitarActividad(int index) {
+    final ctrl = _actividadesExtraCtrls.removeAt(index);
+    ctrl.dispose();
+    _sincronizarActividadesEnTabla();
+  }
+
+  String _formatoMonto(double valor) => valor == 0 ? '' : valor.toStringAsFixed(0);
+
+  TextEditingController _ctrlIngresos(MesCertificacion m, int actividadIndex) => _ingresosCtrls.putIfAbsent(
+        '${m.mes}#$actividadIndex',
+        () => TextEditingController(
+          text: _formatoMonto(actividadIndex < m.ingresosPorActividad.length ? m.ingresosPorActividad[actividadIndex] : 0),
+        ),
+      );
+
+  TextEditingController _ctrlEgresos(MesCertificacion m) =>
+      _egresosCtrls.putIfAbsent(m.mes, () => TextEditingController(text: _formatoMonto(m.egresos)));
+
+  FocusNode _focusIngresos(MesCertificacion m, int actividadIndex) => _ingresosFocus.putIfAbsent('${m.mes}#$actividadIndex', () => FocusNode());
+
+  FocusNode _focusEgresos(MesCertificacion m) => _egresosFocus.putIfAbsent(m.mes, () => FocusNode());
+
+  /// Refleja los montos de m en los controladores de la tabla cuando el
+  /// cambio vino de CÓDIGO (extracción por IA, aplicar % a todos), no de
+  /// que el contador esté tecleando ese campo -- así no hace falta
+  /// reconstruir el TextFormField (que es lo que perdía el foco antes).
+  void _sincronizarCeldasMes(MesCertificacion m) {
+    for (var i = 0; i < m.ingresosPorActividad.length; i++) {
+      final c = _ingresosCtrls['${m.mes}#$i'];
+      if (c != null) c.text = _formatoMonto(m.ingresosPorActividad[i]);
+    }
+    final cEgr = _egresosCtrls[m.mes];
+    if (cEgr != null) cEgr.text = _formatoMonto(m.egresos);
   }
 
   Future<void> _elegirFecha({required bool esInicio}) async {
@@ -289,6 +410,7 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
     setState(() {
       for (final m in _cert.datosMensuales) {
         m.egresos = m.ingresos * (porcentaje / 100);
+        _sincronizarCeldasMes(m);
       }
     });
   }
@@ -336,6 +458,7 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
       ..tipoCedulaTexto = _tipoCedulaCtrl.text.trim()
       ..nacionalidad = _nacionalidadCtrl.text.trim()
       ..actividadEconomica = _actividadCtrl.text.trim()
+      ..actividades = _actividadesActuales
       ..numeroActividadEconomica = _numeroActividadCtrl.text.trim()
       ..anosEjerciendo = int.tryParse(_anosCtrl.text.trim())
       ..proposito = _propositoCtrl.text.trim()
@@ -518,6 +641,10 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
   /// tabla ya construida por _regenerarTabla(), por etiqueta de mes -- si
   /// dos estados de cuenta distintos cubren el mismo mes (dos cuentas del
   /// mismo cliente), sus montos se suman en vez de pisarse.
+  /// Los estados de cuenta bancarios no distinguen a qué actividad
+  /// económica corresponde cada movimiento, así que la IA siempre suma
+  /// todo en la PRIMERA actividad (índice 0) -- si el contador certifica
+  /// varias, tiene que repartir manualmente cuánto es de cada una.
   void _mezclarMesesSugeridos(List meses) {
     for (final m in meses) {
       final etiqueta = (m['mes'] ?? '').toString();
@@ -525,10 +652,13 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
       final egresos = (m['egresos'] as num?)?.toDouble() ?? 0;
       final existente = _cert.datosMensuales.where((fila) => fila.mes.toLowerCase() == etiqueta.toLowerCase());
       if (existente.isNotEmpty) {
-        existente.first.ingresos += ingresos;
-        existente.first.egresos += egresos;
+        final fila = existente.first;
+        if (fila.ingresosPorActividad.isEmpty) fila.ingresosPorActividad = [0];
+        fila.ingresosPorActividad[0] += ingresos;
+        fila.egresos += egresos;
+        _sincronizarCeldasMes(fila);
       } else {
-        _cert.datosMensuales.add(MesCertificacion(mes: etiqueta, ingresos: ingresos, egresos: egresos));
+        _cert.datosMensuales.add(MesCertificacion(mes: etiqueta, ingresosPorActividad: [ingresos], egresos: egresos));
       }
     }
   }
@@ -681,8 +811,13 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                         : DropdownButtonFormField<Negocio>(
                             initialValue: _negocioSeleccionado,
                             decoration: _decoracion("Elegí el cliente"),
+                            style: const TextStyle(color: TemaContador.textoFuerte),
+                            dropdownColor: TemaContador.fondo,
                             items: _negocios
-                                .map((n) => DropdownMenuItem(value: n, child: Text(n.nombreComercial, overflow: TextOverflow.ellipsis)))
+                                .map((n) => DropdownMenuItem(
+                                      value: n,
+                                      child: Text(n.nombreComercial, overflow: TextOverflow.ellipsis, style: const TextStyle(color: TemaContador.textoFuerte)),
+                                    ))
                                 .toList(),
                             onChanged: _prefillDesdeNegocio,
                           ),
@@ -741,15 +876,58 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                       child: DropdownButtonFormField<String>(
                         initialValue: _cert.estadoCivil,
                         decoration: _decoracion("Estado civil"),
+                        style: const TextStyle(color: TemaContador.textoFuerte),
+                        dropdownColor: TemaContador.fondo,
                         items: CertificacionIngreso.estadosCiviles.entries
-                            .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                            .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value, style: const TextStyle(color: TemaContador.textoFuerte))))
                             .toList(),
                         onChanged: (v) => setState(() => _cert.estadoCivil = v ?? 'soltero'),
                       ),
                     ),
                   ]),
                   const SizedBox(height: 10),
-                  TextField(controller: _actividadCtrl, style: const TextStyle(color: TemaContador.textoFuerte), decoration: _decoracion("Actividad económica *")),
+                  TextField(
+                    controller: _actividadCtrl,
+                    style: const TextStyle(color: TemaContador.textoFuerte),
+                    decoration: _decoracion("Actividad económica *"),
+                    onChanged: (_) => _sincronizarActividadesEnTabla(),
+                  ),
+                  if (_actividadesExtraCtrls.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    ..._actividadesExtraCtrls.asMap().entries.map((entry) {
+                      final i = entry.key;
+                      final ctrl = entry.value;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: ctrl,
+                                style: const TextStyle(color: TemaContador.textoFuerte),
+                                decoration: _decoracion("Otra actividad económica"),
+                                onChanged: (_) => _sincronizarActividadesEnTabla(),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close, color: TemaContador.textoTenue),
+                              tooltip: "Quitar actividad",
+                              onPressed: () => _quitarActividad(i),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: _agregarActividad,
+                      style: TextButton.styleFrom(foregroundColor: TemaContador.acento),
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text("Agregar otra actividad económica"),
+                    ),
+                  ),
                   const SizedBox(height: 10),
                   Row(children: [
                     Expanded(child: TextField(controller: _numeroActividadCtrl, style: const TextStyle(color: TemaContador.textoFuerte), decoration: _decoracion("N.° de actividad económica"))),
@@ -795,10 +973,12 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                       child: DropdownButtonFormField<String>(
                         initialValue: _cert.moneda,
                         decoration: _decoracion("Moneda"),
+                        style: const TextStyle(color: TemaContador.textoFuerte),
+                        dropdownColor: TemaContador.fondo,
                         items: const [
-                          DropdownMenuItem(value: 'CRC', child: Text('₡ CRC')),
-                          DropdownMenuItem(value: 'USD', child: Text('\$ USD')),
-                          DropdownMenuItem(value: 'EUR', child: Text('€ EUR')),
+                          DropdownMenuItem(value: 'CRC', child: Text('₡ CRC', style: TextStyle(color: TemaContador.textoFuerte))),
+                          DropdownMenuItem(value: 'USD', child: Text('\$ USD', style: TextStyle(color: TemaContador.textoFuerte))),
+                          DropdownMenuItem(value: 'EUR', child: Text('€ EUR', style: TextStyle(color: TemaContador.textoFuerte))),
                         ],
                         onChanged: (v) => setState(() => _cert.moneda = v ?? 'CRC'),
                       ),
@@ -869,43 +1049,60 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
                       headingRowColor: WidgetStateProperty.all(TemaContador.superficie),
-                      columns: const [
-                        DataColumn(label: Text("Mes")),
-                        DataColumn(label: Text("Ingresos"), numeric: true),
-                        DataColumn(label: Text("Egresos"), numeric: true),
-                        DataColumn(label: Text("Total"), numeric: true),
+                      columns: [
+                        const DataColumn(label: Text("Mes")),
+                        for (final a in _actividadesActuales)
+                          DataColumn(label: Text(_multiActividad ? "Ing.: $a" : "Ingresos"), numeric: true),
+                        if (_multiActividad) const DataColumn(label: Text("Total ingresos"), numeric: true),
+                        const DataColumn(label: Text("Egresos"), numeric: true),
+                        const DataColumn(label: Text("Total"), numeric: true),
                       ],
                       rows: _cert.datosMensuales.map((m) {
+                        // Por si la fila viene de un periodo/actividades
+                        // anterior con menos columnas de las que hay ahora.
+                        while (m.ingresosPorActividad.length < _actividadesActuales.length) {
+                          m.ingresosPorActividad.add(0);
+                        }
                         return DataRow(cells: [
                           DataCell(Text(m.mes, style: const TextStyle(color: TemaContador.textoFuerte))),
+                          for (var i = 0; i < _actividadesActuales.length; i++)
+                            DataCell(SizedBox(
+                              width: 110,
+                              child: TextFormField(
+                                controller: _ctrlIngresos(m, i),
+                                focusNode: _focusIngresos(m, i),
+                                keyboardType: TextInputType.number,
+                                textInputAction: TextInputAction.next,
+                                textAlign: TextAlign.right,
+                                decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
+                                onChanged: (v) {
+                                  m.ingresosPorActividad[i] = double.tryParse(v.replaceAll(',', '')) ?? 0;
+                                  if (_cert.modoEgresos == 'porcentaje') {
+                                    final porcentaje = double.tryParse(_porcentajeCtrl.text.replaceAll(',', '.'));
+                                    if (porcentaje != null) {
+                                      m.egresos = m.ingresos * (porcentaje / 100);
+                                      _egresosCtrls[m.mes]?.text = _formatoMonto(m.egresos);
+                                    }
+                                  }
+                                  setState(() {});
+                                },
+                                onFieldSubmitted: (_) => FocusScope.of(context).nextFocus(),
+                              ),
+                            )),
+                          if (_multiActividad)
+                            DataCell(Text("$_simboloMoneda${m.ingresos.toStringAsFixed(0)}", style: const TextStyle(color: TemaContador.textoFuerte))),
                           DataCell(SizedBox(
                             width: 110,
                             child: TextFormField(
-                              key: ValueKey('ing-${m.mes}-${m.ingresos}'),
-                              initialValue: m.ingresos == 0 ? '' : m.ingresos.toStringAsFixed(0),
-                              keyboardType: TextInputType.number,
-                              textAlign: TextAlign.right,
-                              decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
-                              onChanged: (v) {
-                                m.ingresos = double.tryParse(v.replaceAll(',', '')) ?? 0;
-                                if (_cert.modoEgresos == 'porcentaje') {
-                                  final porcentaje = double.tryParse(_porcentajeCtrl.text.replaceAll(',', '.'));
-                                  if (porcentaje != null) m.egresos = m.ingresos * (porcentaje / 100);
-                                }
-                                setState(() {});
-                              },
-                            ),
-                          )),
-                          DataCell(SizedBox(
-                            width: 110,
-                            child: TextFormField(
-                              key: ValueKey('egr-${m.mes}-${m.egresos}'),
-                              initialValue: m.egresos == 0 ? '' : m.egresos.toStringAsFixed(0),
+                              controller: _ctrlEgresos(m),
+                              focusNode: _focusEgresos(m),
                               enabled: _cert.modoEgresos == 'manual',
                               keyboardType: TextInputType.number,
+                              textInputAction: TextInputAction.next,
                               textAlign: TextAlign.right,
                               decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
                               onChanged: (v) => setState(() => m.egresos = double.tryParse(v.replaceAll(',', '')) ?? 0),
+                              onFieldSubmitted: (_) => FocusScope.of(context).nextFocus(),
                             ),
                           )),
                           DataCell(Text("$_simboloMoneda${m.total.toStringAsFixed(0)}", style: const TextStyle(color: TemaContador.textoFuerte, fontWeight: FontWeight.bold))),
