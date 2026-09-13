@@ -702,7 +702,7 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
 
     setState(() => _cargandoEstadosCuenta = true);
     var procesados = 0;
-    var conError = 0;
+    final errores = <String>[];
     for (final archivo in archivos) {
       if (archivo.bytes == null) continue;
       procesados++;
@@ -720,15 +720,15 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
           final data = json.decode(utf8.decode(response.bodyBytes));
           final meses = (data['meses_sugeridos'] as List?) ?? [];
           if (meses.isEmpty && data['error'] != null) {
-            conError++;
+            errores.add("${archivo.name}: ${data['error']}");
           } else {
             setState(() => _mezclarMesesSugeridos(meses));
           }
         } else {
-          conError++;
+          errores.add("${archivo.name}: HTTP ${response.statusCode}");
         }
-      } catch (_) {
-        conError++;
+      } catch (e) {
+        errores.add("${archivo.name}: $e");
       }
     }
     setState(() {
@@ -736,15 +736,26 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
       _progresoEstadosCuenta = '';
     });
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            conError == 0
-                ? "Se analizaron $procesados archivo(s). Revisá la tabla antes de generar el documento."
-                : "Se analizaron $procesados archivo(s), $conError con error. Revisá la tabla y completá lo que falte a mano.",
+      if (errores.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Se analizaron $procesados archivo(s). Revisá la tabla antes de generar el documento.")),
+        );
+      } else {
+        // Los errores reales (ej. "el modelo no pudo leer el PDF") importan
+        // más que un simple contador -- por eso van en un diálogo que se
+        // puede leer con calma, no en un SnackBar que desaparece solo.
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text("${errores.length} de $procesados archivo(s) con error"),
+            content: SizedBox(
+              width: 420,
+              child: SingleChildScrollView(child: Text(errores.join('\n\n'))),
+            ),
+            actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Entendido"))],
           ),
-        ),
-      );
+        );
+      }
     }
   }
 
