@@ -1049,6 +1049,8 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
                       headingRowColor: WidgetStateProperty.all(TemaContador.superficie),
+                      headingTextStyle: const TextStyle(color: TemaContador.textoFuerte, fontWeight: FontWeight.bold, fontSize: 12.5),
+                      dataTextStyle: const TextStyle(color: TemaContador.textoFuerte),
                       columns: [
                         const DataColumn(label: Text("Mes")),
                         for (final a in _actividadesActuales)
