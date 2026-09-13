@@ -9,7 +9,7 @@ import 'onvo_cobro_automatico_screen.dart';
 import 'perfil_usuario_screen.dart';
 import 'plan.dart';
 import 'reportes_contador_screen.dart';
-import 'certificaciones_screen.dart';
+import 'documentos_contador_screen.dart';
 import 'resumen_fiscal_screen.dart';
 import 'socio.dart';
 import 'login.dart';
@@ -789,7 +789,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
               tooltip: "Certificaciones",
               onPressed: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const CertificacionesScreen()),
+                MaterialPageRoute(builder: (context) => const DocumentosContadorScreen()),
               ),
             ),
           if (widget.puedeCrear)
@@ -1235,7 +1235,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
             item(
               icono: Icons.badge_outlined,
               etiqueta: "Certificaciones",
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CertificacionesScreen())),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DocumentosContadorScreen())),
             ),
             item(icono: Icons.account_circle_rounded, etiqueta: "Mi Perfil", onTap: _abrirMiPerfil),
             item(
