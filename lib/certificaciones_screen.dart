@@ -9,6 +9,29 @@ import 'certificacion_ingreso.dart';
 import 'descarga_navegador_stub.dart' if (dart.library.html) 'descarga_navegador_web.dart';
 import 'negocio.dart';
 
+/// Descarga una certificación ya guardada en PDF o Word -- compartida entre
+/// la lista (descarga rápida sin abrir el formulario) y el formulario
+/// (botones "Guardar y PDF"/"Guardar y Word").
+Future<void> descargarCertificacion(BuildContext context, int certId, String formato) async {
+  try {
+    final response = await ApiService.get('/certificaciones-ingreso/$certId/$formato/');
+    if (response.statusCode == 200) {
+      final nombreArchivo = "certificacion_ingresos_$certId.${formato == 'pdf' ? 'pdf' : 'docx'}";
+      if (kIsWeb) {
+        descargarBytesEnNavegador(response.bodyBytes, nombreArchivo);
+      } else {
+        await FilePicker.platform.saveFile(fileName: nombreArchivo, bytes: response.bodyBytes);
+      }
+    } else if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo descargar (HTTP ${response.statusCode}).")));
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo descargar: $e")));
+    }
+  }
+}
+
 /// Lista de certificaciones de ingresos emitidas por el contador, con
 /// acceso a crear una nueva. Pantalla propia del contador (no del negocio),
 /// por eso siempre usa TemaContador en vez de AppColors.
@@ -119,7 +142,22 @@ class _CertificacionesScreenState extends State<CertificacionesScreen> {
                             style: const TextStyle(color: TemaContador.textoTenue, fontSize: 12.5),
                           ),
                           isThreeLine: true,
-                          trailing: const Icon(Icons.chevron_right, color: TemaContador.acento),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.picture_as_pdf_outlined, color: TemaContador.textoTenue),
+                                tooltip: "Descargar PDF",
+                                onPressed: () => descargarCertificacion(context, c.id!, 'pdf'),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.description_outlined, color: TemaContador.textoTenue),
+                                tooltip: "Descargar Word",
+                                onPressed: () => descargarCertificacion(context, c.id!, 'word'),
+                              ),
+                              const Icon(Icons.chevron_right, color: TemaContador.acento),
+                            ],
+                          ),
                           onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(builder: (context) => CertificacionFormScreen(certificacion: c)),
@@ -501,21 +539,7 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
 
   Future<void> _descargar(String formato) async {
     if (_cert.id == null) return;
-    try {
-      final response = await ApiService.get('/certificaciones-ingreso/${_cert.id}/$formato/');
-      if (response.statusCode == 200 && mounted) {
-        final nombreArchivo = "certificacion_ingresos_${_cert.id}.${formato == 'pdf' ? 'pdf' : 'docx'}";
-        if (kIsWeb) {
-          descargarBytesEnNavegador(response.bodyBytes, nombreArchivo);
-        } else {
-          await FilePicker.platform.saveFile(fileName: nombreArchivo, bytes: response.bodyBytes);
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo descargar: $e")));
-      }
-    }
+    await descargarCertificacion(context, _cert.id!, formato);
   }
 
   /// Aplica lo que devolvió Claude a los controladores del formulario --
