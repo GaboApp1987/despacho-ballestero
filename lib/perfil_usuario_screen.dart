@@ -42,6 +42,14 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
   bool _whatsappCargando = false;
   Map<String, dynamic>? _whatsappResultado;
 
+  final _carneCtrl = TextEditingController();
+  final _especialidadCtrl = TextEditingController();
+  final _direccionProfesionalCtrl = TextEditingController();
+  final _polizaCtrl = TextEditingController();
+  DateTime? _polizaVencimiento;
+  bool _cargandoDatosCpa = true;
+  bool _guardandoDatosCpa = false;
+
   Color get _colorFondo => widget.esContador ? TemaContador.fondo : AppColors.background;
   Color get _colorSuperficie => widget.esContador ? TemaContador.superficie : AppColors.surface;
   Color get _colorBorde => widget.esContador ? TemaContador.borde : AppColors.border;
@@ -68,6 +76,11 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
   void initState() {
     super.initState();
     _logoUrl = widget.logoUrlInicial;
+    if (widget.esContador) {
+      _cargarDatosCpa();
+    } else {
+      _cargandoDatosCpa = false;
+    }
   }
 
   @override
@@ -75,7 +88,68 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
     _actualCtrl.dispose();
     _nuevaCtrl.dispose();
     _confirmarCtrl.dispose();
+    _carneCtrl.dispose();
+    _especialidadCtrl.dispose();
+    _direccionProfesionalCtrl.dispose();
+    _polizaCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _cargarDatosCpa() async {
+    try {
+      final response = await ApiService.get(widget.logoEndpoint);
+      if (response.statusCode == 200 && mounted) {
+        final data = json.decode(utf8.decode(response.bodyBytes));
+        setState(() {
+          _carneCtrl.text = data['carne_cpa'] ?? '';
+          _especialidadCtrl.text = data['especialidad'] ?? '';
+          _direccionProfesionalCtrl.text = data['direccion_profesional'] ?? '';
+          _polizaCtrl.text = data['poliza_fidelidad'] ?? '';
+          _polizaVencimiento = data['poliza_vencimiento'] != null ? DateTime.tryParse(data['poliza_vencimiento']) : null;
+        });
+      }
+    } catch (_) {
+      // si falla, el formulario simplemente queda vacío para llenar de cero
+    }
+    if (mounted) setState(() => _cargandoDatosCpa = false);
+  }
+
+  Future<void> _elegirVencimientoPoliza() async {
+    final elegida = await showDatePicker(
+      context: context,
+      initialDate: _polizaVencimiento ?? DateTime.now(),
+      firstDate: DateTime(2015),
+      lastDate: DateTime(DateTime.now().year + 10),
+    );
+    if (elegida != null) setState(() => _polizaVencimiento = elegida);
+  }
+
+  Future<void> _guardarDatosCpa() async {
+    setState(() => _guardandoDatosCpa = true);
+    try {
+      final response = await ApiService.patch(widget.logoEndpoint, {
+        'carne_cpa': _carneCtrl.text.trim(),
+        'especialidad': _especialidadCtrl.text.trim(),
+        'direccion_profesional': _direccionProfesionalCtrl.text.trim(),
+        'poliza_fidelidad': _polizaCtrl.text.trim(),
+        if (_polizaVencimiento != null) 'poliza_vencimiento': _polizaVencimiento!.toIso8601String().split('T').first,
+      });
+      if (response.statusCode == 200) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Datos profesionales actualizados"), backgroundColor: Colors.green),
+          );
+        }
+      } else {
+        throw Exception(utf8.decode(response.bodyBytes));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      }
+    } finally {
+      if (mounted) setState(() => _guardandoDatosCpa = false);
+    }
   }
 
   Future<void> _abrirCambiarLogo() async {
@@ -420,6 +494,71 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                 ],
               ),
             ),
+            if (widget.esContador) ...[
+              const SizedBox(height: 20),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: _colorSuperficie,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: _colorBorde),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.badge_outlined, size: 20, color: _colorFuerte),
+                        const SizedBox(width: 8),
+                        Text("Datos profesionales (CPA)", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _colorFuerte)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      "Salen en el encabezado y la firma de las certificaciones que emitís.",
+                      style: TextStyle(fontSize: 13, color: widget.esContador ? TemaContador.textoTenue : Colors.grey),
+                    ),
+                    const SizedBox(height: 14),
+                    if (_cargandoDatosCpa)
+                      const Center(child: CircularProgressIndicator())
+                    else ...[
+                      TextField(controller: _carneCtrl, style: TextStyle(color: _colorFuerte), decoration: _decoracionCampo("Carné C.P.A.")),
+                      const SizedBox(height: 10),
+                      TextField(controller: _especialidadCtrl, style: TextStyle(color: _colorFuerte), decoration: _decoracionCampo("Especialidad (ej: Impuestos)")),
+                      const SizedBox(height: 10),
+                      TextField(controller: _direccionProfesionalCtrl, style: TextStyle(color: _colorFuerte), decoration: _decoracionCampo("Dirección profesional")),
+                      const SizedBox(height: 10),
+                      TextField(controller: _polizaCtrl, style: TextStyle(color: _colorFuerte), decoration: _decoracionCampo("Póliza de fidelidad No.")),
+                      const SizedBox(height: 10),
+                      InkWell(
+                        onTap: _elegirVencimientoPoliza,
+                        child: InputDecorator(
+                          decoration: _decoracionCampo("Vence el"),
+                          child: Text(
+                            _polizaVencimiento == null
+                                ? "Sin definir"
+                                : "${_polizaVencimiento!.day}/${_polizaVencimiento!.month}/${_polizaVencimiento!.year}",
+                            style: TextStyle(color: _colorFuerte),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _guardandoDatosCpa ? null : _guardarDatosCpa,
+                          style: ElevatedButton.styleFrom(backgroundColor: _colorAcento, foregroundColor: Colors.white),
+                          child: _guardandoDatosCpa
+                              ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Text("Guardar datos profesionales", style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
