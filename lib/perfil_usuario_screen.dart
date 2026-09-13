@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'theme/app_theme.dart';
 
 import 'api_service.dart';
@@ -36,6 +37,8 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
   bool _ocultarActual = true;
   bool _ocultarNueva = true;
   bool _cambiandoPassword = false;
+  bool _whatsappCargando = false;
+  Map<String, dynamic>? _whatsappResultado;
 
   @override
   void initState() {
@@ -119,6 +122,34 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
       }
     } finally {
       if (mounted) setState(() => _cambiandoPassword = false);
+    }
+  }
+
+  Future<void> _vincularWhatsApp() async {
+    setState(() => _whatsappCargando = true);
+    try {
+      final response = await ApiService.post('/whatsapp/generar-codigo/', {});
+      final data = json.decode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        setState(() => _whatsappResultado = data);
+      } else {
+        throw Exception(data['detail'] ?? 'No se pudo generar el código de vinculación');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$e")));
+      }
+    } finally {
+      if (mounted) setState(() => _whatsappCargando = false);
+    }
+  }
+
+  Future<void> _abrirCodigoEnWhatsApp() async {
+    final uri = Uri.parse(_whatsappResultado!['wa_link']);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication) && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("No se pudo abrir WhatsApp.")),
+      );
     }
   }
 
@@ -258,6 +289,87 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                           : const Text("Actualizar Contraseña", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
                     ),
                   ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.chat_outlined, size: 20),
+                      SizedBox(width: 8),
+                      Text("WhatsApp", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  if (_whatsappResultado == null) ...[
+                    const Text(
+                      "Vinculá tu WhatsApp para recibir avisos y consultarle cosas al asistente directamente desde ahí.",
+                      style: TextStyle(fontSize: 13, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _whatsappCargando ? null : _vincularWhatsApp,
+                        icon: _whatsappCargando
+                            ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.link),
+                        label: const Text("Vincular WhatsApp"),
+                      ),
+                    ),
+                  ] else if (_whatsappResultado!['telefono'] != null) ...[
+                    Row(
+                      children: [
+                        const Icon(Icons.check_circle, color: Colors.green, size: 18),
+                        const SizedBox(width: 6),
+                        Expanded(child: Text("Ya vinculado: ${_whatsappResultado!['telefono']}", style: const TextStyle(fontSize: 13))),
+                      ],
+                    ),
+                  ] else ...[
+                    Text(
+                      "Enviá este código desde tu WhatsApp al número indicado para completar la vinculación (vence en ${_whatsappResultado!['vence_en_minutos']} minutos):",
+                      style: const TextStyle(fontSize: 13, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.background,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Text(
+                        _whatsappResultado!['codigo'] ?? '',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 2),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _abrirCodigoEnWhatsApp,
+                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                        icon: const Icon(Icons.open_in_new, color: Colors.black),
+                        label: const Text(
+                          "Abrir WhatsApp y enviar código",
+                          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
