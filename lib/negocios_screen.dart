@@ -92,6 +92,10 @@ class _NegociosScreenState extends State<NegociosScreen> {
   // Sidebar fija del contador (pantallas anchas): colapsa a solo íconos en
   // vez de esconderse del todo, así la navegación siempre queda a mano.
   bool _sidebarColapsada = false;
+  // Pestaña activa dentro de la sidebar (0 = Inicio/resumen, 1 = Clientes).
+  // Solo aplica en pantallas anchas -- en móvil se sigue mostrando todo
+  // junto en un solo scroll, como antes.
+  int _pestanaContador = 0;
 
   static const Map<String, String> _tiposCedula = {
     '01': 'Física',
@@ -835,11 +839,21 @@ class _NegociosScreenState extends State<NegociosScreen> {
           slivers: [
             if (esAncho)
               SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: _accionAppBarClara(icono: Icons.refresh_rounded, tooltip: "Recargar", onPressed: _recargarTodo),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  decoration: const BoxDecoration(
+                    color: _PaletaContador.fondo,
+                    border: Border(bottom: BorderSide(color: _PaletaContador.borde)),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        _pestanaContador == 0 ? "Inicio" : "Clientes",
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _PaletaContador.textoFuerte),
+                      ),
+                      const Spacer(),
+                      _accionAppBarClara(icono: Icons.refresh_rounded, tooltip: "Recargar", onPressed: _recargarTodo),
+                    ],
                   ),
                 ),
               ),
@@ -850,66 +864,69 @@ class _NegociosScreenState extends State<NegociosScreen> {
             // hacer scroll para verlo completo -- quedaba "estático". Ahora
             // todo vive en un mismo CustomScrollView, dashboard y lista de
             // clientes incluidos, así que la pantalla entera se desplaza junta.
-            if (widget.puedeCrear && _miSocio != null)
-              SliverToBoxAdapter(
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-                  decoration: const BoxDecoration(
-                    color: _PaletaContador.superficie,
-                    border: Border(bottom: BorderSide(color: _PaletaContador.acento, width: 2)),
-                  ),
-                  child: Row(
-                    children: [
-                      avatarConLogo(
-                        logoUrl: _miSocio!.logoUrl,
-                        icono: Icons.badge_outlined,
-                        radius: 28,
-                        color: _PaletaContador.acento,
-                        fondo: _PaletaContador.acento.withOpacity(0.14),
-                        nombre: _miSocio!.nombre,
-                      ),
-                      const SizedBox(width: 18),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              "CONTADOR INDEPENDIENTE",
-                              style: TextStyle(
-                                color: _PaletaContador.acento, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 1.2,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              _miSocio!.nombre,
-                              style: const TextStyle(color: _PaletaContador.textoFuerte, fontSize: 20, fontWeight: FontWeight.w800),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _miSocio!.email,
-                              style: const TextStyle(color: _PaletaContador.textoTenue, fontSize: 13),
-                            ),
-                          ],
+            if (!esAncho || _pestanaContador == 0) ...[
+              if (widget.puedeCrear && _miSocio != null)
+                SliverToBoxAdapter(
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+                    decoration: const BoxDecoration(
+                      color: _PaletaContador.superficie,
+                      border: Border(bottom: BorderSide(color: _PaletaContador.acento, width: 2)),
+                    ),
+                    child: Row(
+                      children: [
+                        avatarConLogo(
+                          logoUrl: _miSocio!.logoUrl,
+                          icono: Icons.badge_outlined,
+                          radius: 28,
+                          color: _PaletaContador.acento,
+                          fondo: _PaletaContador.acento.withOpacity(0.14),
+                          nombre: _miSocio!.nombre,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 18),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "CONTADOR INDEPENDIENTE",
+                                style: TextStyle(
+                                  color: _PaletaContador.acento, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 1.2,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _miSocio!.nombre,
+                                style: const TextStyle(color: _PaletaContador.textoFuerte, fontSize: 20, fontWeight: FontWeight.w800),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _miSocio!.email,
+                                style: const TextStyle(color: _PaletaContador.textoTenue, fontSize: 13),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            if (widget.puedeCrear)
-              SliverToBoxAdapter(
-                child: FutureBuilder<Map<String, dynamic>>(
-                  future: _dashboardFuture,
-                  builder: (context, snapshot) {
-                    final d = snapshot.data ?? {};
-                    if (snapshot.connectionState == ConnectionState.waiting || d.isEmpty) {
-                      return const SizedBox.shrink();
-                    }
-                    return buildDashboardHeader(d, context: context, onAbrirNegocio: _abrirNegocioPorId, mostrarContadores: false, esContador: esContador);
-                  },
+              if (widget.puedeCrear)
+                SliverToBoxAdapter(
+                  child: FutureBuilder<Map<String, dynamic>>(
+                    future: _dashboardFuture,
+                    builder: (context, snapshot) {
+                      final d = snapshot.data ?? {};
+                      if (snapshot.connectionState == ConnectionState.waiting || d.isEmpty) {
+                        return const SizedBox.shrink();
+                      }
+                      return buildDashboardHeader(d, context: context, onAbrirNegocio: _abrirNegocioPorId, mostrarContadores: false, esContador: esContador);
+                    },
+                  ),
                 ),
-              ),
+            ],
+            if (!esAncho || _pestanaContador == 1) ...[
             if (_negocios.isNotEmpty)
               SliverToBoxAdapter(
                 child: Column(
@@ -1082,6 +1099,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
                   ),
                 ),
               ),
+            ],
           ],
         ),
       );
@@ -1168,7 +1186,18 @@ class _NegociosScreenState extends State<NegociosScreen> {
             ),
             const Divider(color: Colors.white12, height: 1),
             const SizedBox(height: 12),
-            item(icono: Icons.home_rounded, etiqueta: "Inicio", activo: true, onTap: () {}),
+            item(
+              icono: Icons.home_rounded,
+              etiqueta: "Inicio",
+              activo: _pestanaContador == 0,
+              onTap: () => setState(() => _pestanaContador = 0),
+            ),
+            item(
+              icono: Icons.groups_outlined,
+              etiqueta: "Clientes",
+              activo: _pestanaContador == 1,
+              onTap: () => setState(() => _pestanaContador = 1),
+            ),
             item(
               icono: Icons.insert_chart_outlined,
               etiqueta: "Reportes",
