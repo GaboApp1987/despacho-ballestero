@@ -8,6 +8,17 @@ import 'widgets/staggered_entrance.dart';
 /// cartera, el dueño del despacho ve la de todos sus contadores), así que la
 /// misma UI sirve para ambos — sólo cambia si se muestra o no la tarjeta de
 /// "Contadores" (no tiene sentido para un contador viendo su propio perfil).
+///
+/// Este bloque sigue el tema global (AppColors, oscuro por defecto) porque
+/// así lo necesita la pantalla del despacho. La pantalla del contador tiene
+/// su propia paleta clara y este bloque se veía "importado" de otro tema
+/// (caja oscura sobre fondo blanco) -- buildDashboardHeader(esContador: true)
+/// pisa esos dos colores acá antes de construir las secciones, sin tocar
+/// AppColors ni afectar al despacho.
+class _TemaDashboard {
+  static Color fondo = AppColors.surface;
+  static Color texto = AppColors.textStrong;
+}
 
 /// Botón de acción moderno para AppBars con fondo de color (círculo
 /// translúcido tipo "vidrio esmerilado" en vez del IconButton plano).
@@ -41,7 +52,11 @@ Widget buildDashboardHeader(
   required BuildContext context,
   required Future<void> Function(int negocioId) onAbrirNegocio,
   bool mostrarContadores = true,
+  bool esContador = false,
 }) {
+  _TemaDashboard.fondo = esContador ? const Color(0xFFF8FAFC) : AppColors.surface;
+  _TemaDashboard.texto = esContador ? const Color(0xFF0F172A) : AppColors.textStrong;
+
   final cantContadores = (d['cantidad_contadores'] as num?)?.toInt() ?? 0;
   final cantNegocios = (d['cantidad_negocios'] as num?)?.toInt() ?? 0;
   final facturasMes = (d['facturas_mes_actual'] as num?)?.toInt() ?? 0;
@@ -52,7 +67,7 @@ Widget buildDashboardHeader(
 
   return Container(
     width: double.infinity,
-    color: AppColors.surface,
+    color: _TemaDashboard.fondo,
     padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -145,7 +160,7 @@ List<Widget> _buildSeccionAlertas(List alertas, Future<void> Function(int) onAbr
     const SizedBox(height: 18),
     const Divider(),
     const SizedBox(height: 6),
-    Text("Alertas de Suscripción", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textStrong)),
+    Text("Alertas de Suscripción", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _TemaDashboard.texto)),
     const SizedBox(height: 8),
     ...alertas.map((a) {
       final estado = a['estado'] as String;
@@ -253,7 +268,7 @@ List<Widget> _buildSeccionAlertasHacienda(List alertas, Future<void> Function(in
     const SizedBox(height: 18),
     const Divider(),
     const SizedBox(height: 6),
-    Text("Pendientes en Hacienda", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textStrong)),
+    Text("Pendientes en Hacienda", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _TemaDashboard.texto)),
     const SizedBox(height: 8),
     ...alertas.map((a) {
       final estado = a['estado'] as String?;
@@ -306,7 +321,7 @@ List<Widget> _buildSeccionCuentasVencidas(List cuentas, num total, Future<void> 
     Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text("Cuentas por Cobrar Vencidas", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textStrong)),
+        Text("Cuentas por Cobrar Vencidas", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _TemaDashboard.texto)),
         Text(formatearColones(total, decimales: 0), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.red)),
       ],
     ),
@@ -353,7 +368,7 @@ List<Widget> _buildSeccionCertificados(List certs, Future<void> Function(int) on
     const SizedBox(height: 18),
     const Divider(),
     const SizedBox(height: 6),
-    Text("Certificados por Vencer", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textStrong)),
+    Text("Certificados por Vencer", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _TemaDashboard.texto)),
     const SizedBox(height: 8),
     ...certs.map((c) {
       final dias = (c['dias_restantes'] as num?)?.toInt() ?? 0;
@@ -392,7 +407,7 @@ List<Widget> _buildSeccionClientesInactivos(List clientes, Future<void> Function
     const SizedBox(height: 18),
     const Divider(),
     const SizedBox(height: 6),
-    Text("Clientes sin Actividad Reciente", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textStrong)),
+    Text("Clientes sin Actividad Reciente", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _TemaDashboard.texto)),
     const SizedBox(height: 8),
     ...clientes.map((c) {
       final dias = c['dias_sin_facturar'] as num?;
@@ -434,7 +449,7 @@ List<Widget> _buildSeccionCarga(List carga) {
     const SizedBox(height: 18),
     const Divider(),
     const SizedBox(height: 6),
-    Text("Carga de Trabajo por Contador", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textStrong)),
+    Text("Carga de Trabajo por Contador", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _TemaDashboard.texto)),
     const SizedBox(height: 10),
     ...carga.map((c) {
       final cantidad = (c['cantidad_negocios'] as num).toInt();
@@ -485,7 +500,7 @@ List<Widget> _buildSeccionActividad(List facturas, List clientes, {bool mostrarC
     const SizedBox(height: 18),
     const Divider(),
     const SizedBox(height: 6),
-    Text("Actividad Reciente", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textStrong)),
+    Text("Actividad Reciente", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _TemaDashboard.texto)),
     const SizedBox(height: 8),
     Row(
       crossAxisAlignment: CrossAxisAlignment.start,

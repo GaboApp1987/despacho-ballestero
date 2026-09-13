@@ -906,7 +906,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
                     if (snapshot.connectionState == ConnectionState.waiting || d.isEmpty) {
                       return const SizedBox.shrink();
                     }
-                    return buildDashboardHeader(d, context: context, onAbrirNegocio: _abrirNegocioPorId, mostrarContadores: false);
+                    return buildDashboardHeader(d, context: context, onAbrirNegocio: _abrirNegocioPorId, mostrarContadores: false, esContador: esContador);
                   },
                 ),
               ),
