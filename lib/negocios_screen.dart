@@ -29,6 +29,11 @@ class _PaletaContador {
   static const Color textoFuerte = Color(0xFF0F172A);
   static const Color textoTenue = Color(0xFF64748B);
   static const Color borde = Color(0xFFE2E8F0);
+  // Sidebar (navegación fija en pantallas anchas) -- navy sobrio, no negro
+  // puro, a tono con la referencia que pidió el usuario.
+  static const Color sidebarFondo = Color(0xFF101A2E);
+  static const Color sidebarTexto = Color(0xFFC3CBDA);
+  static const Color sidebarTextoActivo = Colors.white;
 }
 
 /// Versión clara de accionAppBar (dashboard_despacho_widgets.dart) -- esa
@@ -84,6 +89,9 @@ class _NegociosScreenState extends State<NegociosScreen> {
   late Future<Map<String, dynamic>> _dashboardFuture;
   final TextEditingController _busquedaCtrl = TextEditingController();
   String _filtro = "";
+  // Sidebar fija del contador (pantallas anchas): colapsa a solo íconos en
+  // vez de esconderse del todo, así la navegación siempre queda a mano.
+  bool _sidebarColapsada = false;
 
   static const Map<String, String> _tiposCedula = {
     '01': 'Física',
@@ -688,13 +696,14 @@ class _NegociosScreenState extends State<NegociosScreen> {
   @override
   Widget build(BuildContext context) {
     final esContador = widget.puedeCrear;
+    final esAncho = esContador && MediaQuery.sizeOf(context).width >= 900;
     return BloqueoSalidaRaiz(
       child: Scaffold(
       backgroundColor: esContador ? _PaletaContador.fondo : AppColors.background,
-      drawer: widget.puedeCrear
+      drawer: (!esAncho && widget.puedeCrear)
           ? DashboardDrawer(dashboardFuture: _dashboardFuture, onAbrirNegocio: _abrirNegocioPorId, mostrarContadores: false)
           : null,
-      appBar: AppBar(
+      appBar: esAncho ? null : AppBar(
         leading: Navigator.canPop(context)
             ? IconButton(
                 icon: const Icon(Icons.arrow_back),
@@ -798,10 +807,42 @@ class _NegociosScreenState extends State<NegociosScreen> {
           const SizedBox(width: 6),
         ],
       ),
-      body: Container(
+      body: esAncho
+          ? Row(
+              children: [
+                _sidebarContador(context),
+                Expanded(child: _contenidoNegocios(context, esContador, esAncho)),
+              ],
+            )
+          : _contenidoNegocios(context, esContador, esAncho),
+      floatingActionButton: widget.puedeCrear
+          ? FloatingActionButton.extended(
+              onPressed: _mostrarFormularioCrear,
+              icon: const Icon(Icons.add),
+              label: const Text("NUEVO NEGOCIO"),
+              backgroundColor: esContador ? _PaletaContador.acento : null,
+              foregroundColor: esContador ? Colors.white : null,
+            )
+          : null,
+    ),
+    );
+  }
+
+  Widget _contenidoNegocios(BuildContext context, bool esContador, bool esAncho) {
+    return Container(
         color: esContador ? _PaletaContador.fondo : AppColors.surfaceSubtle,
         child: CustomScrollView(
           slivers: [
+            if (esAncho)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: _accionAppBarClara(icono: Icons.refresh_rounded, tooltip: "Recargar", onPressed: _recargarTodo),
+                  ),
+                ),
+              ),
             // Antes el dashboard (tarjeta del contador + buildDashboardHeader)
             // vivía en un Column fijo por fuera del Expanded con la lista de
             // negocios, así que si crecía más que la pantalla (como pasó al
@@ -1043,17 +1084,123 @@ class _NegociosScreenState extends State<NegociosScreen> {
               ),
           ],
         ),
+      );
+  }
+
+  Widget _sidebarContador(BuildContext context) {
+    final ancho = _sidebarColapsada ? 72.0 : 240.0;
+
+    Widget item({required IconData icono, required String etiqueta, required VoidCallback onTap, bool activo = false}) {
+      final contenido = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icono, size: 22, color: activo ? _PaletaContador.sidebarTextoActivo : _PaletaContador.sidebarTexto),
+          if (!_sidebarColapsada) ...[
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                etiqueta,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: activo ? _PaletaContador.sidebarTextoActivo : _PaletaContador.sidebarTexto,
+                  fontWeight: activo ? FontWeight.w700 : FontWeight.w500,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ],
+        ],
+      );
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+        child: Material(
+          color: activo ? _PaletaContador.acento : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: _sidebarColapsada ? Center(child: contenido) : contenido,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      width: ancho,
+      color: _PaletaContador.sidebarFondo,
+      child: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 12, 20),
+              child: Row(
+                children: [
+                  if (!_sidebarColapsada) ...[
+                    avatarConLogo(
+                      logoUrl: _miSocio?.logoUrl,
+                      icono: Icons.badge_outlined,
+                      radius: 18,
+                      color: _PaletaContador.sidebarTextoActivo,
+                      fondo: Colors.white.withOpacity(0.12),
+                      nombre: _miSocio?.nombre ?? '',
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _miSocio?.nombre ?? 'Contador',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14),
+                      ),
+                    ),
+                  ],
+                  IconButton(
+                    icon: Icon(_sidebarColapsada ? Icons.chevron_right : Icons.chevron_left, color: _PaletaContador.sidebarTexto),
+                    tooltip: _sidebarColapsada ? "Expandir menú" : "Colapsar menú",
+                    onPressed: () => setState(() => _sidebarColapsada = !_sidebarColapsada),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(color: Colors.white12, height: 1),
+            const SizedBox(height: 12),
+            item(icono: Icons.home_rounded, etiqueta: "Inicio", activo: true, onTap: () {}),
+            item(
+              icono: Icons.insert_chart_outlined,
+              etiqueta: "Reportes",
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ReportesContadorScreen())),
+            ),
+            item(icono: Icons.account_circle_rounded, etiqueta: "Mi Perfil", onTap: _abrirMiPerfil),
+            item(
+              icono: Icons.support_agent,
+              etiqueta: "Soporte",
+              onTap: () => mostrarSoporteChat(context, contexto: 'usuario'),
+            ),
+            const Spacer(),
+            const Divider(color: Colors.white12, height: 1),
+            const SizedBox(height: 8),
+            item(
+              icono: Icons.logout,
+              etiqueta: "Cerrar sesión",
+              onTap: () async {
+                await ApiService.logout();
+                if (context.mounted) {
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (context) => const LoginScreen()),
+                    (route) => false,
+                  );
+                }
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
       ),
-      floatingActionButton: widget.puedeCrear
-          ? FloatingActionButton.extended(
-              onPressed: _mostrarFormularioCrear,
-              icon: const Icon(Icons.add),
-              label: const Text("NUEVO NEGOCIO"),
-              backgroundColor: esContador ? _PaletaContador.acento : null,
-              foregroundColor: esContador ? Colors.white : null,
-            )
-          : null,
-    ),
     );
   }
 }
