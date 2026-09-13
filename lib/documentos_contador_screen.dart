@@ -1,12 +1,39 @@
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 
+import 'api_service.dart';
 import 'certificaciones_screen.dart';
+import 'atestiguamientos_screen.dart';
+import 'flujo_caja_screen.dart';
+import 'descarga_navegador_stub.dart' if (dart.library.html) 'descarga_navegador_web.dart';
+
+/// Descarga cualquiera de los documentos del contador (certificación de
+/// ingresos, atestiguamiento, flujo de caja) en PDF o Word -- comparten el
+/// mismo patrón de endpoint /{recurso}/{id}/{formato}/.
+Future<void> descargarDocumento(BuildContext context, String endpointBase, int id, String formato, String prefijoArchivo) async {
+  try {
+    final response = await ApiService.get('/$endpointBase/$id/$formato/');
+    if (response.statusCode == 200) {
+      final nombreArchivo = "${prefijoArchivo}_$id.${formato == 'pdf' ? 'pdf' : 'docx'}";
+      if (kIsWeb) {
+        descargarBytesEnNavegador(response.bodyBytes, nombreArchivo);
+      } else {
+        await FilePicker.platform.saveFile(fileName: nombreArchivo, bytes: response.bodyBytes);
+      }
+    } else if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo descargar (HTTP ${response.statusCode}).")));
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo descargar: $e")));
+    }
+  }
+}
 
 /// Punto de entrada de "Certificaciones" en la sidebar del contador: un
-/// menú con los distintos documentos que puede emitir (certificación de
-/// ingresos ya armada; atestiguamientos y flujo de caja proyectado
-/// pendientes de formato real -- ver _ProximamenteScreen).
+/// menú con los distintos documentos que puede emitir.
 class DocumentosContadorScreen extends StatelessWidget {
   const DocumentosContadorScreen({super.key});
 
@@ -40,10 +67,10 @@ class DocumentosContadorScreen extends StatelessWidget {
             context,
             icono: Icons.verified_outlined,
             titulo: "Atestiguamientos",
-            subtitulo: "Próximamente",
+            subtitulo: "Informe de certificación genérico (Circular 02-2022 del Colegio de CPA).",
             onTap: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const _ProximamenteScreen(titulo: "Atestiguamientos")),
+              MaterialPageRoute(builder: (context) => const AtestiguamientosScreen()),
             ),
           ),
           const SizedBox(height: 12),
@@ -51,10 +78,10 @@ class DocumentosContadorScreen extends StatelessWidget {
             context,
             icono: Icons.trending_up,
             titulo: "Flujo de Caja Proyectado",
-            subtitulo: "Próximamente",
+            subtitulo: "Información financiera prospectiva (NITA 3400 / Circular 21-2010).",
             onTap: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const _ProximamenteScreen(titulo: "Flujo de Caja Proyectado")),
+              MaterialPageRoute(builder: (context) => const FlujoCajaScreen()),
             ),
           ),
         ],
@@ -85,45 +112,3 @@ class DocumentosContadorScreen extends StatelessWidget {
   }
 }
 
-class _ProximamenteScreen extends StatelessWidget {
-  final String titulo;
-
-  const _ProximamenteScreen({required this.titulo});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: TemaContador.fondo,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: TemaContador.textoFuerte),
-          tooltip: "Volver",
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(titulo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: TemaContador.textoFuerte)),
-        iconTheme: const IconThemeData(color: TemaContador.textoFuerte),
-        backgroundColor: TemaContador.fondo,
-        elevation: 0,
-      ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.construction_outlined, size: 64, color: Colors.grey),
-              const SizedBox(height: 16),
-              Text("$titulo -- todavía en construcción", style: const TextStyle(fontWeight: FontWeight.bold, color: TemaContador.textoFuerte)),
-              const SizedBox(height: 8),
-              const Text(
-                "Compartí un ejemplo real de este documento (igual que hiciste con la certificación de ingresos) para armarlo con el formato exacto que usás.",
-                textAlign: TextAlign.center,
-                style: TextStyle(color: TemaContador.textoTenue, fontSize: 13),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
