@@ -15,19 +15,45 @@ import 'login.dart';
 import 'widgets/bloqueo_salida_raiz.dart';
 import 'widgets/soporte_chat.dart';
 
-/// Paleta "Grafito & Esmeralda" -- solo para cuando esta pantalla la ve un
+/// Paleta "Blanco & Cobalto" -- solo para cuando esta pantalla la ve un
 /// CONTADOR viendo su propia cartera (widget.puedeCrear), a propósito
 /// distinta del resto de la app (que usa AppColors, cian sobre azul
 /// marino/blanco), para que se note de un vistazo que no es la pantalla de
 /// un negocio. No toca AppColors -- el negocio y el resto de pantallas
-/// siguen exactamente igual.
+/// siguen exactamente igual. (Segunda versión: la primera, grafito+esmeralda,
+/// no le gustó al usuario -- este es el reemplazo, minimalista y claro.)
 class _PaletaContador {
-  static const Color fondo = Color(0xFF12161C);
-  static const Color superficie = Color(0xFF171C24);
-  static const Color acento = Color(0xFF10B981);
-  static const Color textoFuerte = Color(0xFFF1F5F9);
-  static const Color textoTenue = Color(0xFF8A97A8);
-  static const Color borde = Color(0xFF242B36);
+  static const Color fondo = Color(0xFFFFFFFF);
+  static const Color superficie = Color(0xFFF8FAFC);
+  static const Color acento = Color(0xFF1D4ED8);
+  static const Color textoFuerte = Color(0xFF0F172A);
+  static const Color textoTenue = Color(0xFF64748B);
+  static const Color borde = Color(0xFFE2E8F0);
+}
+
+/// Versión clara de accionAppBar (dashboard_despacho_widgets.dart) -- esa
+/// usa ícono blanco sobre círculo translúcido blanco, pensada para el
+/// AppBar morado de siempre; sobre el AppBar blanco del contador quedaría
+/// invisible, así que acá va una variante con ícono oscuro sin círculo.
+Widget _accionAppBarClara({required IconData icono, required String tooltip, required VoidCallback onPressed}) {
+  return Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 3),
+    child: Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onPressed,
+          child: Padding(
+            padding: const EdgeInsets.all(9),
+            child: Icon(icono, color: _PaletaContador.textoFuerte, size: 20),
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 class NegociosScreen extends StatefulWidget {
@@ -676,7 +702,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
                 onPressed: () => Navigator.pop(context),
               )
             : null,
-        backgroundColor: esContador ? _PaletaContador.superficie : const Color(0xFF4F46E5),
+        backgroundColor: esContador ? _PaletaContador.fondo : const Color(0xFF4F46E5),
         foregroundColor: esContador ? _PaletaContador.textoFuerte : Colors.white,
         elevation: 0,
         title: esContador
@@ -701,38 +727,74 @@ class _NegociosScreenState extends State<NegociosScreen> {
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
               ),
         actions: [
-          accionAppBar(icono: Icons.refresh_rounded, tooltip: "Recargar", onPressed: _recargarTodo),
+          if (esContador)
+            _accionAppBarClara(icono: Icons.refresh_rounded, tooltip: "Recargar", onPressed: _recargarTodo)
+          else
+            accionAppBar(icono: Icons.refresh_rounded, tooltip: "Recargar", onPressed: _recargarTodo),
           if (widget.puedeCrear)
+            esContador
+                ? _accionAppBarClara(
+                    icono: Icons.insert_chart_outlined,
+                    tooltip: "Reportes",
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const ReportesContadorScreen()),
+                    ),
+                  )
+                : accionAppBar(
+                    icono: Icons.insert_chart_outlined,
+                    tooltip: "Reportes",
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const ReportesContadorScreen()),
+                    ),
+                  ),
+          if (widget.puedeCrear)
+            esContador
+                ? _accionAppBarClara(icono: Icons.account_circle_rounded, tooltip: "Mi Perfil", onPressed: _abrirMiPerfil)
+                : accionAppBar(icono: Icons.account_circle_rounded, tooltip: "Mi Perfil", onPressed: _abrirMiPerfil),
+          if (esContador)
+            _accionAppBarClara(
+              icono: Icons.support_agent,
+              tooltip: "Soporte",
+              onPressed: () => mostrarSoporteChat(context, contexto: 'usuario'),
+            )
+          else
             accionAppBar(
-              icono: Icons.insert_chart_outlined,
-              tooltip: "Reportes",
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ReportesContadorScreen()),
-              ),
+              icono: Icons.support_agent,
+              tooltip: "Soporte",
+              onPressed: () => mostrarSoporteChat(context, contexto: 'usuario'),
             ),
-          if (widget.puedeCrear)
-            accionAppBar(icono: Icons.account_circle_rounded, tooltip: "Mi Perfil", onPressed: _abrirMiPerfil),
-          accionAppBar(
-            icono: Icons.support_agent,
-            tooltip: "Soporte",
-            onPressed: () => mostrarSoporteChat(context, contexto: 'usuario'),
-          ),
           if (!Navigator.canPop(context))
-            accionAppBar(
-              icono: Icons.logout,
-              tooltip: "Cerrar sesión",
-              onPressed: () async {
-                await ApiService.logout();
-                if (context.mounted) {
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(builder: (context) => const LoginScreen()),
-                    (route) => false,
-                  );
-                }
-              },
-            ),
+            esContador
+                ? _accionAppBarClara(
+                    icono: Icons.logout,
+                    tooltip: "Cerrar sesión",
+                    onPressed: () async {
+                      await ApiService.logout();
+                      if (context.mounted) {
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(builder: (context) => const LoginScreen()),
+                          (route) => false,
+                        );
+                      }
+                    },
+                  )
+                : accionAppBar(
+                    icono: Icons.logout,
+                    tooltip: "Cerrar sesión",
+                    onPressed: () async {
+                      await ApiService.logout();
+                      if (context.mounted) {
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(builder: (context) => const LoginScreen()),
+                          (route) => false,
+                        );
+                      }
+                    },
+                  ),
           const SizedBox(width: 6),
         ],
       ),
@@ -988,7 +1050,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
               icon: const Icon(Icons.add),
               label: const Text("NUEVO NEGOCIO"),
               backgroundColor: esContador ? _PaletaContador.acento : null,
-              foregroundColor: esContador ? Colors.black : null,
+              foregroundColor: esContador ? Colors.white : null,
             )
           : null,
     ),
