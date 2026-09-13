@@ -837,7 +837,11 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                       children: [
                         OutlinedButton.icon(
                           onPressed: _analizandoSolicitante ? null : _analizarImagenSolicitante,
-                          style: OutlinedButton.styleFrom(foregroundColor: TemaContador.acento, side: const BorderSide(color: TemaContador.acento)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: TemaContador.acento,
+                            disabledForegroundColor: TemaContador.textoTenue,
+                            side: const BorderSide(color: TemaContador.acento),
+                          ),
                           icon: _analizandoSolicitante
                               ? const SizedBox(height: 14, width: 14, child: CircularProgressIndicator(strokeWidth: 2))
                               : const Icon(Icons.image_outlined, size: 18),
@@ -845,7 +849,11 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                         ),
                         OutlinedButton.icon(
                           onPressed: _analizandoSolicitante ? null : _analizarTextoSolicitante,
-                          style: OutlinedButton.styleFrom(foregroundColor: TemaContador.acento, side: const BorderSide(color: TemaContador.acento)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: TemaContador.acento,
+                            disabledForegroundColor: TemaContador.textoTenue,
+                            side: const BorderSide(color: TemaContador.acento),
+                          ),
                           icon: const Icon(Icons.content_paste, size: 18),
                           label: const Text("Pegar texto"),
                         ),
@@ -996,7 +1004,11 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       onPressed: _cargandoEstadosCuenta ? null : _cargarEstadosCuenta,
-                      style: OutlinedButton.styleFrom(foregroundColor: TemaContador.acento, side: const BorderSide(color: TemaContador.acento)),
+                      style: OutlinedButton.styleFrom(
+                            foregroundColor: TemaContador.acento,
+                            disabledForegroundColor: TemaContador.textoTenue,
+                            side: const BorderSide(color: TemaContador.acento),
+                          ),
                       icon: _cargandoEstadosCuenta
                           ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
                           : const Icon(Icons.upload_file_outlined),
@@ -1141,7 +1153,11 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
             children: [
               Expanded(
                 child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(foregroundColor: TemaContador.acento, side: const BorderSide(color: TemaContador.acento)),
+                  style: OutlinedButton.styleFrom(
+                            foregroundColor: TemaContador.acento,
+                            disabledForegroundColor: TemaContador.textoTenue,
+                            side: const BorderSide(color: TemaContador.acento),
+                          ),
                   onPressed: _guardando ? null : () => _guardar(luegoDescargarPdf: false),
                   child: const Text("Guardar"),
                 ),
@@ -1149,7 +1165,12 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(backgroundColor: TemaContador.acento, foregroundColor: Colors.white),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: TemaContador.acento,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: TemaContador.acento.withOpacity(0.5),
+                    disabledForegroundColor: Colors.white,
+                  ),
                   onPressed: _guardando ? null : () => _guardar(luegoDescargarPdf: true),
                   icon: _guardando
                       ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
@@ -1160,7 +1181,12 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(backgroundColor: TemaContador.textoFuerte, foregroundColor: Colors.white),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: TemaContador.textoFuerte,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: TemaContador.textoFuerte.withOpacity(0.5),
+                    disabledForegroundColor: Colors.white,
+                  ),
                   onPressed: _guardando ? null : () => _guardar(luegoDescargarPdf: false, luegoDescargarWord: true),
                   icon: const Icon(Icons.description_outlined),
                   label: const Text("Guardar y Word"),
