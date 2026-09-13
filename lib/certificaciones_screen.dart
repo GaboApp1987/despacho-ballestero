@@ -156,6 +156,9 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
   bool _clienteExistente = false;
   bool _cargandoNegocios = true;
   bool _guardando = false;
+  bool _analizandoSolicitante = false;
+  bool _cargandoEstadosCuenta = false;
+  String _progresoEstadosCuenta = '';
   List<Negocio> _negocios = [];
   Negocio? _negocioSeleccionado;
 
@@ -320,7 +323,11 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
     return true;
   }
 
-  Future<void> _guardar({required bool luegoDescargarPdf, bool luegoDescargarWord = false}) async {
+  Future<void> _guardar({
+    required bool luegoDescargarPdf,
+    bool luegoDescargarWord = false,
+    bool quedarseEnPantalla = false,
+  }) async {
     if (!_validar()) return;
     setState(() => _guardando = true);
     _cert
@@ -356,7 +363,7 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
         }
         if (luegoDescargarPdf) await _descargar('pdf');
         if (luegoDescargarWord) await _descargar('word');
-        if (mounted) Navigator.pop(context, true);
+        if (!quedarseEnPantalla && mounted) Navigator.pop(context, true);
       } else {
         throw Exception(utf8.decode(response.bodyBytes));
       }
@@ -385,6 +392,229 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo descargar: $e")));
       }
+    }
+  }
+
+  /// Aplica lo que devolvió Claude a los controladores del formulario --
+  /// nunca pisa un campo que Claude no pudo identificar (viene null), y
+  /// avisa cuántos campos se llenaron para que el contador sepa qué
+  /// revisar antes de guardar.
+  void _aplicarDatosSolicitante(Map<String, dynamic> datos) {
+    final aplicados = <String>[];
+    void set(TextEditingController ctrl, String campo, String etiqueta) {
+      final valor = datos[campo];
+      if (valor != null && valor.toString().trim().isNotEmpty) {
+        ctrl.text = valor.toString();
+        aplicados.add(etiqueta);
+      }
+    }
+
+    set(_nombreCtrl, 'nombre_solicitante', 'Nombre');
+    set(_cedulaCtrl, 'cedula', 'Cédula');
+    set(_tipoCedulaCtrl, 'tipo_cedula_texto', 'Tipo de cédula');
+    set(_nacionalidadCtrl, 'nacionalidad', 'Nacionalidad');
+    set(_actividadCtrl, 'actividad_economica', 'Actividad económica');
+    set(_numeroActividadCtrl, 'numero_actividad_economica', 'N.° de actividad');
+    set(_propositoCtrl, 'proposito', 'Propósito');
+    set(_dirigidoACtrl, 'dirigido_a', 'Dirigido a');
+    if (datos['anos_ejerciendo'] != null) {
+      _anosCtrl.text = datos['anos_ejerciendo'].toString();
+      aplicados.add('Años ejerciendo');
+    }
+    final estadoCivil = datos['estado_civil']?.toString();
+    if (estadoCivil != null && CertificacionIngreso.estadosCiviles.containsKey(estadoCivil)) {
+      setState(() => _cert.estadoCivil = estadoCivil);
+      aplicados.add('Estado civil');
+    }
+    setState(() {});
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            aplicados.isEmpty ? "No se identificó ningún dato en ese material." : "Se llenaron: ${aplicados.join(', ')}. Revisalos antes de guardar.",
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _analizarImagenSolicitante() async {
+    final resultado = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+    final archivos = resultado?.files ?? [];
+    if (archivos.isEmpty || archivos.first.bytes == null) return;
+    final archivo = archivos.first;
+    setState(() => _analizandoSolicitante = true);
+    try {
+      final extension = (archivo.extension ?? 'jpg').toLowerCase();
+      final mimeType = extension == 'png' ? 'image/png' : (extension == 'webp' ? 'image/webp' : 'image/jpeg');
+      final response = await ApiService.postMultipartBytes(
+        '/certificaciones-ingreso/extraer-datos-solicitante/',
+        {},
+        'imagen',
+        archivo.bytes!,
+        archivo.name,
+        contentType: mimeType,
+      );
+      if (response.statusCode == 200) {
+        _aplicarDatosSolicitante(json.decode(utf8.decode(response.bodyBytes)));
+      } else {
+        throw Exception(json.decode(utf8.decode(response.bodyBytes))['detail'] ?? 'Error desconocido');
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo analizar la imagen: $e")));
+    } finally {
+      if (mounted) setState(() => _analizandoSolicitante = false);
+    }
+  }
+
+  Future<void> _analizarTextoSolicitante() async {
+    final textoCtrl = TextEditingController();
+    final texto = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Pegar texto"),
+        content: SizedBox(
+          width: 420,
+          child: TextField(
+            controller: textoCtrl,
+            maxLines: 8,
+            autofocus: true,
+            decoration: const InputDecoration(
+              hintText: "Pegá acá el mensaje o los datos que te mandó el cliente (ej. por WhatsApp)...",
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: TemaContador.acento, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, textoCtrl.text.trim()),
+            child: const Text("Analizar"),
+          ),
+        ],
+      ),
+    );
+    if (texto == null || texto.isEmpty) return;
+    setState(() => _analizandoSolicitante = true);
+    try {
+      final response = await ApiService.post('/certificaciones-ingreso/extraer-datos-solicitante/', {'texto': texto});
+      if (response.statusCode == 200) {
+        _aplicarDatosSolicitante(json.decode(utf8.decode(response.bodyBytes)));
+      } else {
+        throw Exception(json.decode(utf8.decode(response.bodyBytes))['detail'] ?? 'Error desconocido');
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo analizar el texto: $e")));
+    } finally {
+      if (mounted) setState(() => _analizandoSolicitante = false);
+    }
+  }
+
+  /// Suma [meses] (lo que Claude sugirió para UN archivo) dentro de la
+  /// tabla ya construida por _regenerarTabla(), por etiqueta de mes -- si
+  /// dos estados de cuenta distintos cubren el mismo mes (dos cuentas del
+  /// mismo cliente), sus montos se suman en vez de pisarse.
+  void _mezclarMesesSugeridos(List meses) {
+    for (final m in meses) {
+      final etiqueta = (m['mes'] ?? '').toString();
+      final ingresos = (m['ingresos'] as num?)?.toDouble() ?? 0;
+      final egresos = (m['egresos'] as num?)?.toDouble() ?? 0;
+      final existente = _cert.datosMensuales.where((fila) => fila.mes.toLowerCase() == etiqueta.toLowerCase());
+      if (existente.isNotEmpty) {
+        existente.first.ingresos += ingresos;
+        existente.first.egresos += egresos;
+      } else {
+        _cert.datosMensuales.add(MesCertificacion(mes: etiqueta, ingresos: ingresos, egresos: egresos));
+      }
+    }
+  }
+
+  String? _mimeTypePorExtension(String? extension) {
+    switch ((extension ?? '').toLowerCase()) {
+      case 'pdf':
+        return 'application/pdf';
+      case 'xlsx':
+      case 'xlsm':
+        return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      case 'xls':
+        return 'application/vnd.ms-excel';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      default:
+        return null;
+    }
+  }
+
+  Future<void> _cargarEstadosCuenta() async {
+    // La extracción va atada a una certificación ya guardada (se sube como
+    // adjunto de ella) -- si todavía es nueva, la guardamos primero en
+    // silencio para tener un id antes de subir archivos.
+    if (_cert.id == null) {
+      if (!_validar()) return;
+      await _guardar(luegoDescargarPdf: false, quedarseEnPantalla: true);
+      if (_cert.id == null) return;
+    }
+    final resultado = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'xlsx', 'xlsm', 'xls', 'jpg', 'jpeg', 'png'],
+      withData: true,
+    );
+    final archivos = resultado?.files ?? [];
+    if (archivos.isEmpty) return;
+
+    setState(() => _cargandoEstadosCuenta = true);
+    var procesados = 0;
+    var conError = 0;
+    for (final archivo in archivos) {
+      if (archivo.bytes == null) continue;
+      procesados++;
+      setState(() => _progresoEstadosCuenta = "Analizando $procesados de ${archivos.length}: ${archivo.name}");
+      try {
+        final response = await ApiService.postMultipartBytes(
+          '/certificaciones-ingreso/${_cert.id}/adjuntos-con-extraccion/',
+          {},
+          'archivo',
+          archivo.bytes!,
+          archivo.name,
+          contentType: _mimeTypePorExtension(archivo.extension),
+        );
+        if (response.statusCode == 200) {
+          final data = json.decode(utf8.decode(response.bodyBytes));
+          final meses = (data['meses_sugeridos'] as List?) ?? [];
+          if (meses.isEmpty && data['error'] != null) {
+            conError++;
+          } else {
+            setState(() => _mezclarMesesSugeridos(meses));
+          }
+        } else {
+          conError++;
+        }
+      } catch (_) {
+        conError++;
+      }
+    }
+    setState(() {
+      _cargandoEstadosCuenta = false;
+      _progresoEstadosCuenta = '';
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            conError == 0
+                ? "Se analizaron $procesados archivo(s). Revisá la tabla antes de generar el documento."
+                : "Se analizaron $procesados archivo(s), $conError con error. Revisá la tabla y completá lo que falte a mano.",
+          ),
+        ),
+      );
     }
   }
 
@@ -464,6 +694,38 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
               titulo: "Datos del solicitante",
               child: Column(
                 children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: _analizandoSolicitante ? null : _analizarImagenSolicitante,
+                          style: OutlinedButton.styleFrom(foregroundColor: TemaContador.acento, side: const BorderSide(color: TemaContador.acento)),
+                          icon: _analizandoSolicitante
+                              ? const SizedBox(height: 14, width: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.image_outlined, size: 18),
+                          label: const Text("Leer imagen/captura"),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _analizandoSolicitante ? null : _analizarTextoSolicitante,
+                          style: OutlinedButton.styleFrom(foregroundColor: TemaContador.acento, side: const BorderSide(color: TemaContador.acento)),
+                          icon: const Icon(Icons.content_paste, size: 18),
+                          label: const Text("Pegar texto"),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      "Subí una captura (ej. de WhatsApp) o pegá el texto y la IA prellena estos campos -- siempre revisalos antes de guardar.",
+                      style: TextStyle(fontSize: 11.5, color: TemaContador.textoTenue),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   TextField(controller: _nombreCtrl, style: const TextStyle(color: TemaContador.textoFuerte), decoration: _decoracion("Nombre completo *")),
                   const SizedBox(height: 10),
                   Row(children: [
@@ -550,6 +812,23 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _cargandoEstadosCuenta ? null : _cargarEstadosCuenta,
+                      style: OutlinedButton.styleFrom(foregroundColor: TemaContador.acento, side: const BorderSide(color: TemaContador.acento)),
+                      icon: _cargandoEstadosCuenta
+                          ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.upload_file_outlined),
+                      label: Text(_cargandoEstadosCuenta ? _progresoEstadosCuenta : "Cargar estados de cuenta (IA)"),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    "Subí los estados de cuenta (PDF/Excel) del cliente -- la IA suma ingresos y egresos por mes. Podés seleccionar varios de una vez.",
+                    style: TextStyle(fontSize: 11.5, color: TemaContador.textoTenue),
+                  ),
+                  const SizedBox(height: 12),
                   SegmentedButton<String>(
                     segments: const [
                       ButtonSegment(value: 'manual', label: Text("Egresos manuales")),
@@ -602,6 +881,7 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                           DataCell(SizedBox(
                             width: 110,
                             child: TextFormField(
+                              key: ValueKey('ing-${m.mes}-${m.ingresos}'),
                               initialValue: m.ingresos == 0 ? '' : m.ingresos.toStringAsFixed(0),
                               keyboardType: TextInputType.number,
                               textAlign: TextAlign.right,

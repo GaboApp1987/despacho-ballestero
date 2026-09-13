@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
@@ -184,15 +185,27 @@ class ApiService {
     Map<String, String> campos,
     String fieldName,
     List<int> bytes,
-    String filename,
-  ) async {
+    String filename, {
+    String? contentType,
+  }) async {
     final url = Uri.parse('$baseUrl$endpoint');
     return _conRenovacion((headers) async {
       final request = http.MultipartRequest('POST', url);
       final headersSinContentType = Map<String, String>.from(headers)..remove('Content-Type');
       request.headers.addAll(headersSinContentType);
       request.fields.addAll(campos);
-      request.files.add(http.MultipartFile.fromBytes(fieldName, bytes, filename: filename));
+      // Sin `contentType` explícito, MultipartFile.fromBytes manda
+      // application/octet-stream sin importar el archivo -- eso hace que
+      // Django (request.FILES[...].content_type) y por lo tanto la API de
+      // Anthropic (que exige el media_type real de la imagen/PDF) reciban
+      // un tipo incorrecto. Pasarlo acá es necesario para cualquier subida
+      // que dependa de content_type en el backend (ej. certificaciones).
+      request.files.add(http.MultipartFile.fromBytes(
+        fieldName,
+        bytes,
+        filename: filename,
+        contentType: contentType != null ? MediaType.parse(contentType) : null,
+      ));
       final streamed = await request.send();
       return http.Response.fromStream(streamed);
     });
