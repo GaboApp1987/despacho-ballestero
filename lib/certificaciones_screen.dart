@@ -85,11 +85,10 @@ class _CertificacionesScreenState extends State<CertificacionesScreen> {
                       const Icon(Icons.badge_outlined, size: 64, color: Colors.grey),
                       const SizedBox(height: 16),
                       const Text("Todavía no emitiste ninguna certificación.", style: TextStyle(color: Colors.grey)),
-                      const SizedBox(height: 16),
-                      OutlinedButton.icon(
-                        onPressed: _nuevaCertificacion,
-                        icon: const Icon(Icons.add),
-                        label: const Text("Crear la primera"),
+                      const SizedBox(height: 4),
+                      const Text(
+                        "Usá el botón \"Nueva certificación\" para crear la primera.",
+                        style: TextStyle(color: Colors.grey, fontSize: 12),
                       ),
                     ],
                   ),
@@ -663,6 +662,7 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
             children: [
               Expanded(
                 child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(foregroundColor: TemaContador.acento, side: const BorderSide(color: TemaContador.acento)),
                   onPressed: _guardando ? null : () => _guardar(luegoDescargarPdf: false),
                   child: const Text("Guardar"),
                 ),
