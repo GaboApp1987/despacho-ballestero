@@ -15,6 +15,21 @@ import 'login.dart';
 import 'widgets/bloqueo_salida_raiz.dart';
 import 'widgets/soporte_chat.dart';
 
+/// Paleta "Grafito & Esmeralda" -- solo para cuando esta pantalla la ve un
+/// CONTADOR viendo su propia cartera (widget.puedeCrear), a propósito
+/// distinta del resto de la app (que usa AppColors, cian sobre azul
+/// marino/blanco), para que se note de un vistazo que no es la pantalla de
+/// un negocio. No toca AppColors -- el negocio y el resto de pantallas
+/// siguen exactamente igual.
+class _PaletaContador {
+  static const Color fondo = Color(0xFF12161C);
+  static const Color superficie = Color(0xFF171C24);
+  static const Color acento = Color(0xFF10B981);
+  static const Color textoFuerte = Color(0xFFF1F5F9);
+  static const Color textoTenue = Color(0xFF8A97A8);
+  static const Color borde = Color(0xFF242B36);
+}
+
 class NegociosScreen extends StatefulWidget {
   /// true si el usuario puede dar de alta negocios nuevos (contadores, o admin).
   final bool puedeCrear;
@@ -646,9 +661,10 @@ class _NegociosScreenState extends State<NegociosScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final esContador = widget.puedeCrear;
     return BloqueoSalidaRaiz(
       child: Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: esContador ? _PaletaContador.fondo : AppColors.background,
       drawer: widget.puedeCrear
           ? DashboardDrawer(dashboardFuture: _dashboardFuture, onAbrirNegocio: _abrirNegocioPorId, mostrarContadores: false)
           : null,
@@ -660,13 +676,30 @@ class _NegociosScreenState extends State<NegociosScreen> {
                 onPressed: () => Navigator.pop(context),
               )
             : null,
-        backgroundColor: const Color(0xFF4F46E5),
-        foregroundColor: Colors.white,
+        backgroundColor: esContador ? _PaletaContador.superficie : const Color(0xFF4F46E5),
+        foregroundColor: esContador ? _PaletaContador.textoFuerte : Colors.white,
         elevation: 0,
-        title: const Text(
-          "Mis Negocios",
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
-        ),
+        title: esContador
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    "PANEL DEL CONTADOR",
+                    style: TextStyle(
+                      fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 1.4, color: _PaletaContador.acento,
+                    ),
+                  ),
+                  const Text(
+                    "Mis Clientes",
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20, color: _PaletaContador.textoFuerte),
+                  ),
+                ],
+              )
+            : const Text(
+                "Mis Negocios",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+              ),
         actions: [
           accionAppBar(icono: Icons.refresh_rounded, tooltip: "Recargar", onPressed: _recargarTodo),
           if (widget.puedeCrear)
@@ -704,7 +737,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
         ],
       ),
       body: Container(
-        color: AppColors.surfaceSubtle,
+        color: esContador ? _PaletaContador.fondo : AppColors.surfaceSubtle,
         child: CustomScrollView(
           slivers: [
             // Antes el dashboard (tarjeta del contador + buildDashboardHeader)
@@ -718,36 +751,41 @@ class _NegociosScreenState extends State<NegociosScreen> {
               SliverToBoxAdapter(
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
                   decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0xFF4F46E5), Color(0xFF312E81)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                    color: _PaletaContador.superficie,
+                    border: Border(bottom: BorderSide(color: _PaletaContador.acento, width: 2)),
                   ),
                   child: Row(
                     children: [
                       avatarConLogo(
                         logoUrl: _miSocio!.logoUrl,
                         icono: Icons.badge_outlined,
-                        radius: 26,
-                        color: Colors.white,
-                        fondo: Colors.white24,
+                        radius: 28,
+                        color: _PaletaContador.acento,
+                        fondo: _PaletaContador.acento.withOpacity(0.14),
                         nombre: _miSocio!.nombre,
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 18),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            const Text(
+                              "CONTADOR INDEPENDIENTE",
+                              style: TextStyle(
+                                color: _PaletaContador.acento, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 1.2,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
                             Text(
                               _miSocio!.nombre,
-                              style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                              style: const TextStyle(color: _PaletaContador.textoFuerte, fontSize: 20, fontWeight: FontWeight.w800),
                             ),
+                            const SizedBox(height: 2),
                             Text(
-                              "Contador · ${_miSocio!.email}",
-                              style: const TextStyle(color: Colors.white70, fontSize: 13),
+                              _miSocio!.email,
+                              style: const TextStyle(color: _PaletaContador.textoTenue, fontSize: 13),
                             ),
                           ],
                         ),
@@ -774,13 +812,21 @@ class _NegociosScreenState extends State<NegociosScreen> {
                 child: Column(
                   children: [
                     Padding(
-                      padding: EdgeInsets.fromLTRB(16, widget.puedeCrear ? 16 : 12, 16, 4),
+                      padding: EdgeInsets.fromLTRB(16, widget.puedeCrear ? 24 : 12, 16, 4),
                       child: Row(
                         children: [
+                          if (esContador) ...[
+                            Container(width: 4, height: 18, color: _PaletaContador.acento),
+                            const SizedBox(width: 8),
+                          ],
                           Expanded(
                             child: Text(
-                              "Mis Clientes (${_negocios.length})",
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textStrong),
+                              esContador ? "CARTERA DE CLIENTES (${_negocios.length})" : "Mis Clientes (${_negocios.length})",
+                              style: esContador
+                                  ? const TextStyle(
+                                      fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: _PaletaContador.textoFuerte,
+                                    )
+                                  : TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textStrong),
                             ),
                           ),
                         ],
@@ -790,27 +836,35 @@ class _NegociosScreenState extends State<NegociosScreen> {
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                       child: TextField(
                         controller: _busquedaCtrl,
+                        style: esContador ? const TextStyle(color: _PaletaContador.textoFuerte) : null,
                         decoration: InputDecoration(
                           hintText: "Buscar negocio por nombre o cédula...",
-                          prefixIcon: const Icon(Icons.search, size: 20),
+                          hintStyle: esContador ? const TextStyle(color: _PaletaContador.textoTenue) : null,
+                          prefixIcon: Icon(Icons.search, size: 20, color: esContador ? _PaletaContador.acento : null),
                           suffixIcon: _filtro.isEmpty
                               ? null
                               : IconButton(
-                                  icon: const Icon(Icons.close, size: 18),
+                                  icon: Icon(Icons.close, size: 18, color: esContador ? _PaletaContador.textoTenue : null),
                                   onPressed: () => _busquedaCtrl.clear(),
                                 ),
                           isDense: true,
                           filled: true,
-                          fillColor: Colors.white,
+                          fillColor: esContador ? _PaletaContador.superficie : Colors.white,
                           contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide.none,
+                            borderSide: esContador ? const BorderSide(color: _PaletaContador.borde) : BorderSide.none,
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide.none,
+                            borderSide: esContador ? const BorderSide(color: _PaletaContador.borde) : BorderSide.none,
                           ),
+                          focusedBorder: esContador
+                              ? OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: const BorderSide(color: _PaletaContador.acento, width: 1.5),
+                                )
+                              : null,
                         ),
                       ),
                     ),
@@ -859,11 +913,27 @@ class _NegociosScreenState extends State<NegociosScreen> {
                     (context, index) {
                       final n = _negociosFiltrados[index];
                       return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        margin: const EdgeInsets.only(bottom: 10),
+                        color: esContador ? _PaletaContador.superficie : null,
+                        elevation: esContador ? 0 : null,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(esContador ? 10 : 12),
+                          side: esContador ? const BorderSide(color: _PaletaContador.borde) : BorderSide.none,
+                        ),
                         child: ListTile(
-                          leading: avatarConLogo(logoUrl: n.logoUrl, icono: Icons.business_center, nombre: n.nombreComercial),
-                          title: Text(n.nombreComercial, style: const TextStyle(fontWeight: FontWeight.bold)),
+                          leading: avatarConLogo(
+                            logoUrl: n.logoUrl,
+                            icono: Icons.business_center,
+                            nombre: n.nombreComercial,
+                            color: esContador ? _PaletaContador.acento : null,
+                            fondo: esContador ? _PaletaContador.acento.withOpacity(0.14) : null,
+                          ),
+                          title: Text(
+                            n.nombreComercial,
+                            style: esContador
+                                ? const TextStyle(fontWeight: FontWeight.w700, color: _PaletaContador.textoFuerte)
+                                : const TextStyle(fontWeight: FontWeight.bold),
+                          ),
                           subtitle: Text(
                             [
                               "Cédula: ${n.cedula}",
@@ -872,19 +942,20 @@ class _NegociosScreenState extends State<NegociosScreen> {
                                   ? "Plan: ${n.planNombre} (${n.facturasDisponibles ?? 0}/${n.limiteFacturasMensual ?? 0} facturas disp.)"
                                   : "Sin plan asignado",
                             ].join(" · "),
+                            style: esContador ? const TextStyle(color: _PaletaContador.textoTenue, fontSize: 12.5) : null,
                           ),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               if (widget.puedeGestionarPlanes)
                                 IconButton(
-                                  icon: const Icon(Icons.workspace_premium_outlined),
+                                  icon: Icon(Icons.workspace_premium_outlined, color: esContador ? _PaletaContador.textoTenue : null),
                                   tooltip: "Cambiar plan",
                                   onPressed: () => _cambiarPlan(n),
                                 ),
                               if (_puedeReasignar)
                                 IconButton(
-                                  icon: const Icon(Icons.swap_horiz),
+                                  icon: Icon(Icons.swap_horiz, color: esContador ? _PaletaContador.textoTenue : null),
                                   tooltip: "Reasignar a otro contador",
                                   onPressed: () => _reasignarNegocio(n),
                                 ),
@@ -894,7 +965,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
                                   tooltip: "Renta de la plataforma: ${_estadosSuscripcion[n.suscripcionEstado] ?? 'Sin registrar'}",
                                   onPressed: () => _gestionarSuscripcion(n),
                                 ),
-                              const Icon(Icons.chevron_right),
+                              Icon(Icons.chevron_right, color: esContador ? _PaletaContador.acento : null),
                             ],
                           ),
                           onTap: () => Navigator.push(
@@ -916,6 +987,8 @@ class _NegociosScreenState extends State<NegociosScreen> {
               onPressed: _mostrarFormularioCrear,
               icon: const Icon(Icons.add),
               label: const Text("NUEVO NEGOCIO"),
+              backgroundColor: esContador ? _PaletaContador.acento : null,
+              foregroundColor: esContador ? Colors.black : null,
             )
           : null,
     ),
