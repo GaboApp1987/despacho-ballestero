@@ -235,8 +235,12 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
       appBar: AppBar(
         backgroundColor: widget.esContador ? TemaContador.fondo : const Color(0xFF4F46E5),
         foregroundColor: widget.esContador ? TemaContador.textoFuerte : Colors.white,
+        iconTheme: IconThemeData(color: widget.esContador ? TemaContador.textoFuerte : Colors.white),
         elevation: 0,
-        title: const Text("Reportes", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+        title: Text(
+          "Reportes",
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: widget.esContador ? TemaContador.textoFuerte : Colors.white),
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),

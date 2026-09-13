@@ -206,13 +206,14 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
       backgroundColor: _colorFondo,
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: Icon(Icons.arrow_back, color: _colorFuerte),
           tooltip: "Volver",
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text("Mi Perfil", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+        title: Text("Mi Perfil", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: _colorFuerte)),
         backgroundColor: _colorSuperficie,
         foregroundColor: _colorFuerte,
+        iconTheme: IconThemeData(color: _colorFuerte),
         elevation: 0,
       ),
       body: SingleChildScrollView(

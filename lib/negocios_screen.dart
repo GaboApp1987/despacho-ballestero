@@ -736,6 +736,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
             : null,
         backgroundColor: esContador ? _PaletaContador.fondo : const Color(0xFF4F46E5),
         foregroundColor: esContador ? _PaletaContador.textoFuerte : Colors.white,
+        iconTheme: IconThemeData(color: esContador ? _PaletaContador.textoFuerte : Colors.white),
         elevation: 0,
         title: esContador
             ? Column(
@@ -1023,14 +1024,10 @@ class _NegociosScreenState extends State<NegociosScreen> {
                       const SizedBox(height: 16),
                       const Text("Todavía no hay negocios registrados.", style: TextStyle(color: Colors.grey)),
                       if (widget.puedeCrear) ...[
-                        const SizedBox(height: 16),
-                        ElevatedButton.icon(
-                          style: esContador
-                              ? ElevatedButton.styleFrom(backgroundColor: _PaletaContador.acento, foregroundColor: Colors.white)
-                              : null,
-                          onPressed: _mostrarFormularioCrear,
-                          icon: const Icon(Icons.add),
-                          label: const Text("Crear el primer negocio"),
+                        const SizedBox(height: 4),
+                        const Text(
+                          "Usá el botón \"Nuevo Negocio\" para crear el primero.",
+                          style: TextStyle(color: Colors.grey, fontSize: 12),
                         ),
                       ],
                     ],
