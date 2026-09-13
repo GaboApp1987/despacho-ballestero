@@ -16,7 +16,9 @@ enum _TipoReporteContador { ventas, compras, ambos }
 /// consume /reportes/consolidado/ (ver ReporteConsolidadoView) que ya
 /// devuelve el desglose de IVA por tarifa para ventas.
 class ReportesContadorScreen extends StatefulWidget {
-  const ReportesContadorScreen({super.key});
+  final bool esContador;
+
+  const ReportesContadorScreen({super.key, this.esContador = false});
 
   @override
   State<ReportesContadorScreen> createState() => _ReportesContadorScreenState();
@@ -29,6 +31,13 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
   _TipoReporteContador _tipo = _TipoReporteContador.ambos;
   late DateTime _fechaInicio;
   late DateTime _fechaFin;
+
+  Color get _colorFondo => widget.esContador ? TemaContador.fondo : AppColors.background;
+  Color get _colorSuperficie => widget.esContador ? TemaContador.superficie : AppColors.surface;
+  Color get _colorBorde => widget.esContador ? TemaContador.borde : AppColors.border;
+  Color get _colorTenue => widget.esContador ? TemaContador.textoTenue : AppColors.textMuted;
+  Color get _colorFuerte => widget.esContador ? TemaContador.textoFuerte : AppColors.textStrong;
+  Color get _colorAcento => widget.esContador ? TemaContador.acento : const Color(0xFF4338CA);
 
   bool _generando = false;
   // Un solo cliente seleccionado -> _reporte (vista detallada de siempre).
@@ -198,6 +207,9 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
             ElevatedButton(
+              style: widget.esContador
+                  ? ElevatedButton.styleFrom(backgroundColor: TemaContador.acento, foregroundColor: Colors.white)
+                  : null,
               onPressed: seleccionTemporal.isEmpty ? null : () => Navigator.pop(ctx, seleccionTemporal),
               child: const Text("Listo"),
             ),
@@ -219,10 +231,10 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: _colorFondo,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF4F46E5),
-        foregroundColor: Colors.white,
+        backgroundColor: widget.esContador ? TemaContador.fondo : const Color(0xFF4F46E5),
+        foregroundColor: widget.esContador ? TemaContador.textoFuerte : Colors.white,
         elevation: 0,
         title: const Text("Reportes", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
       ),
@@ -233,7 +245,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
           children: [
             Text(
               "Elegí el cliente, el período y qué querés ver.",
-              style: TextStyle(fontSize: 13, color: AppColors.textMuted),
+              style: TextStyle(fontSize: 13, color: _colorTenue),
             ),
             const SizedBox(height: 20),
             _tarjetaFiltros(),
@@ -259,29 +271,29 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: _colorSuperficie,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: _colorBorde),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("Cliente(s)", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
+          Text("Cliente(s)", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _colorTenue)),
           const SizedBox(height: 6),
           _cargandoNegocios
               ? const LinearProgressIndicator()
               : _negocios.isEmpty
-                  ? Text("No tenés negocios en tu cartera todavía.", style: TextStyle(color: AppColors.textMuted))
+                  ? Text("No tenés negocios en tu cartera todavía.", style: TextStyle(color: _colorTenue))
                   : InkWell(
                       onTap: _elegirClientes,
                       borderRadius: BorderRadius.circular(10),
                       child: Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                        decoration: BoxDecoration(border: Border.all(color: AppColors.border), borderRadius: BorderRadius.circular(10)),
+                        decoration: BoxDecoration(border: Border.all(color: _colorBorde), borderRadius: BorderRadius.circular(10)),
                         child: Row(
                           children: [
-                            Icon(Icons.people_outline, size: 18, color: AppColors.textMuted),
+                            Icon(Icons.people_outline, size: 18, color: _colorTenue),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
@@ -295,13 +307,13 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            Icon(Icons.arrow_drop_down, color: AppColors.textMuted),
+                            Icon(Icons.arrow_drop_down, color: _colorTenue),
                           ],
                         ),
                       ),
                     ),
           const SizedBox(height: 16),
-          Text("Período", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
+          Text("Período", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _colorTenue)),
           const SizedBox(height: 6),
           InkWell(
             onTap: _elegirRangoFechas,
@@ -309,10 +321,10 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              decoration: BoxDecoration(border: Border.all(color: AppColors.border), borderRadius: BorderRadius.circular(10)),
+              decoration: BoxDecoration(border: Border.all(color: _colorBorde), borderRadius: BorderRadius.circular(10)),
               child: Row(
                 children: [
-                  Icon(Icons.date_range, size: 18, color: AppColors.textMuted),
+                  Icon(Icons.date_range, size: 18, color: _colorTenue),
                   const SizedBox(width: 8),
                   Text(_periodoTexto),
                 ],
@@ -320,7 +332,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          Text("Qué mostrar", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
+          Text("Qué mostrar", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _colorTenue)),
           const SizedBox(height: 6),
           SegmentedButton<_TipoReporteContador>(
             segments: const [
@@ -330,11 +342,22 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
             ],
             selected: {_tipo},
             onSelectionChanged: (s) => setState(() => _tipo = s.first),
+            style: widget.esContador
+                ? SegmentedButton.styleFrom(
+                    selectedBackgroundColor: TemaContador.acento,
+                    selectedForegroundColor: Colors.white,
+                    foregroundColor: TemaContador.textoFuerte,
+                    side: const BorderSide(color: TemaContador.borde),
+                  )
+                : null,
           ),
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
+              style: widget.esContador
+                  ? ElevatedButton.styleFrom(backgroundColor: TemaContador.acento, foregroundColor: Colors.white)
+                  : null,
               onPressed: (_generando || _negociosSeleccionados.isEmpty) ? null : _generarReporte,
               icon: _generando
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
@@ -356,7 +379,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
             Expanded(
               child: Text(
                 "Resultado (${_reportes!.length} clientes)",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textStrong),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _colorFuerte),
               ),
             ),
             TextButton.icon(
@@ -374,7 +397,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
         const SizedBox(height: 4),
         Text(
           "Vista resumida por cliente. El detalle completo (documento por documento) va en el PDF o Excel exportado.",
-          style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+          style: TextStyle(fontSize: 11, color: _colorTenue),
         ),
         const SizedBox(height: 12),
         ..._reportes!.map((r) {
@@ -398,7 +421,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
                       const Text("IVA a pagar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                       Text(
                         formatearColones(ivaAPagar),
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: ivaAPagar >= 0 ? const Color(0xFF4338CA) : Colors.green),
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: ivaAPagar >= 0 ? _colorAcento : Colors.green),
                       ),
                     ],
                   ),
@@ -421,7 +444,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
         Row(
           children: [
             Expanded(
-              child: Text("Resultado", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textStrong)),
+              child: Text("Resultado", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _colorFuerte)),
             ),
             TextButton.icon(
               onPressed: () => _exportar(() => ExportService.exportReporteConsolidadoToPdf(_reporte!, _periodoTexto)),
@@ -447,7 +470,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
         width: double.infinity,
         margin: const EdgeInsets.only(bottom: 16),
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
+        decoration: BoxDecoration(color: _colorSuperficie, borderRadius: BorderRadius.circular(14), border: Border.all(color: _colorBorde)),
         child: child,
       );
 
@@ -462,7 +485,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(titulo, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
-                if (subtitulo != null) Text(subtitulo, style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                if (subtitulo != null) Text(subtitulo, style: TextStyle(fontSize: 11, color: _colorTenue)),
               ],
             ),
           ),
@@ -473,7 +496,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
               if (iva != null)
                 Text(
                   "IVA: ${formatearColones(iva)}${esEstimado ? ' (est.)' : ''}",
-                  style: TextStyle(fontSize: 10, color: AppColors.textMuted),
+                  style: TextStyle(fontSize: 10, color: _colorTenue),
                 ),
             ],
           ),
@@ -514,7 +537,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.fact_check_outlined, color: Color(0xFF4338CA), size: 18),
+              Icon(Icons.fact_check_outlined, color: _colorAcento, size: 18),
               const SizedBox(width: 8),
               Text("Resumen para la declaración de IVA (D-104)", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
             ],
@@ -522,19 +545,19 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
           const SizedBox(height: 4),
           Text(
             "Ventas y compras gravadas por tarifa, netas de notas de crédito.",
-            style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+            style: TextStyle(fontSize: 11, color: _colorTenue),
           ),
           const SizedBox(height: 12),
-          Text("Ventas gravadas", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
+          Text("Ventas gravadas", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _colorTenue)),
           const SizedBox(height: 6),
           ventasPorTarifa.isEmpty
-              ? Text("Sin ventas gravadas en este período.", style: TextStyle(fontSize: 12, color: AppColors.textMuted))
+              ? Text("Sin ventas gravadas en este período.", style: TextStyle(fontSize: 12, color: _colorTenue))
               : _tablaDesglose(ventasPorTarifa),
           const SizedBox(height: 12),
-          Text("Compras gravadas", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
+          Text("Compras gravadas", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _colorTenue)),
           const SizedBox(height: 6),
           comprasPorTarifa.isEmpty
-              ? Text("Sin compras gravadas en este período.", style: TextStyle(fontSize: 12, color: AppColors.textMuted))
+              ? Text("Sin compras gravadas en este período.", style: TextStyle(fontSize: 12, color: _colorTenue))
               : _tablaDesglose(comprasPorTarifa),
           const SizedBox(height: 12),
           const Divider(),
@@ -544,7 +567,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
               const Text("IVA a pagar (ventas − crédito fiscal de compras)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
               Text(
                 formatearColones(ivaAPagar),
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: ivaAPagar >= 0 ? const Color(0xFF4338CA) : Colors.green),
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: ivaAPagar >= 0 ? _colorAcento : Colors.green),
               ),
             ],
           ),
@@ -568,12 +591,12 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text("Ventas (${documentos.length})", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-              Text(formatearColones(total), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF4338CA))),
+              Text(formatearColones(total), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: _colorAcento)),
             ],
           ),
           const SizedBox(height: 10),
           if (documentos.isEmpty)
-            Text("Sin ventas en este período.", style: TextStyle(color: AppColors.textMuted))
+            Text("Sin ventas en este período.", style: TextStyle(color: _colorTenue))
           else
             ...documentos.map((f) => _filaDocumento(
                   "${f['tipo_documento']} ${f['consecutivo']} · ${f['cliente'] ?? ''}",
@@ -586,7 +609,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text("Notas de Crédito (${notasCredito.length})", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
+                Text("Notas de Crédito (${notasCredito.length})", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _colorTenue)),
                 Text("- ${formatearColones(totalNotas)}", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.red)),
               ],
             ),
@@ -609,7 +632,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
           if (desglose.isNotEmpty) ...[
             const SizedBox(height: 12),
             const Divider(),
-            Text("Desglose de IVA por tarifa (neto de notas de crédito)", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
+            Text("Desglose de IVA por tarifa (neto de notas de crédito)", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _colorTenue)),
             const SizedBox(height: 6),
             _tablaDesglose(desglose),
           ],
@@ -633,12 +656,12 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text("Compras (${documentos.length})", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-              Text(formatearColones(total), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF4338CA))),
+              Text(formatearColones(total), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: _colorAcento)),
             ],
           ),
           const SizedBox(height: 10),
           if (documentos.isEmpty)
-            Text("Sin compras en este período.", style: TextStyle(color: AppColors.textMuted))
+            Text("Sin compras en este período.", style: TextStyle(color: _colorTenue))
           else
             ...documentos.map((c) => _filaDocumento(
                   "${c['proveedor'] ?? 'Sin proveedor'} · N.° ${c['numero_factura_proveedor'] ?? ''}",
@@ -652,7 +675,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text("Notas de Débito (${notasDebito.length})", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
+                Text("Notas de Débito (${notasDebito.length})", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _colorTenue)),
                 Text("+ ${formatearColones(totalNotas)}", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
               ],
             ),
@@ -674,13 +697,13 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
           if (desglose.isNotEmpty) ...[
             const SizedBox(height: 12),
             const Divider(),
-            Text("Desglose de IVA por tarifa (estimado)", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
+            Text("Desglose de IVA por tarifa (estimado)", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _colorTenue)),
             const SizedBox(height: 6),
             _tablaDesglose(desglose),
             const SizedBox(height: 6),
             Text(
               compras['nota_desglose']?.toString() ?? '',
-              style: TextStyle(fontSize: 10, color: AppColors.textMuted, fontStyle: FontStyle.italic),
+              style: TextStyle(fontSize: 10, color: _colorTenue, fontStyle: FontStyle.italic),
             ),
           ],
         ],

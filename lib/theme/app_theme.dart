@@ -186,6 +186,20 @@ class AppColors {
   }
 }
 
+/// Paleta clara + acento cobalto usada SOLO en las pantallas propias del
+/// contador (Mis Clientes, Reportes, Mi Perfil, etc.) para que se vean
+/// claramente distintas del resto de la app, que usa AppColors -- mutable
+/// y casi siempre oscura. Son valores fijos (no cambian con el tema
+/// claro/oscuro global): los mismos que ya usa negocios_screen.dart.
+class TemaContador {
+  static const Color fondo = Color(0xFFFFFFFF);
+  static const Color superficie = Color(0xFFF8FAFC);
+  static const Color acento = Color(0xFF1D4ED8);
+  static const Color textoFuerte = Color(0xFF0F172A);
+  static const Color textoTenue = Color(0xFF64748B);
+  static const Color borde = Color(0xFFE2E8F0);
+}
+
 class AppTheme {
   /// Construye el ThemeData para el modo actual de AppColors -- llamar
   /// AppColors.setDark(...) ANTES de esto para que quede consistente.

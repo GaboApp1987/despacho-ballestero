@@ -16,6 +16,7 @@ class PerfilUsuarioScreen extends StatefulWidget {
   final String? subtitulo;
   final String logoEndpoint; // ej: '/despachos/1/', '/socios/3/', '/negocios/5/'
   final String? logoUrlInicial;
+  final bool esContador;
 
   const PerfilUsuarioScreen({
     super.key,
@@ -23,6 +24,7 @@ class PerfilUsuarioScreen extends StatefulWidget {
     this.subtitulo,
     required this.logoEndpoint,
     this.logoUrlInicial,
+    this.esContador = false,
   });
 
   @override
@@ -39,6 +41,28 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
   bool _cambiandoPassword = false;
   bool _whatsappCargando = false;
   Map<String, dynamic>? _whatsappResultado;
+
+  Color get _colorFondo => widget.esContador ? TemaContador.fondo : AppColors.background;
+  Color get _colorSuperficie => widget.esContador ? TemaContador.superficie : AppColors.surface;
+  Color get _colorBorde => widget.esContador ? TemaContador.borde : AppColors.border;
+  Color get _colorFuerte => widget.esContador ? TemaContador.textoFuerte : AppColors.textStrong;
+  Color get _colorAcento => widget.esContador ? TemaContador.acento : AppColors.primary;
+
+  InputDecoration _decoracionCampo(String label, {Widget? suffixIcon}) {
+    if (!widget.esContador) {
+      return InputDecoration(labelText: label, border: const OutlineInputBorder(), suffixIcon: suffixIcon);
+    }
+    return InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(color: TemaContador.textoTenue),
+      filled: true,
+      fillColor: TemaContador.superficie,
+      border: const OutlineInputBorder(borderSide: BorderSide(color: TemaContador.borde)),
+      enabledBorder: const OutlineInputBorder(borderSide: BorderSide(color: TemaContador.borde)),
+      focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: TemaContador.acento, width: 1.5)),
+      suffixIcon: suffixIcon,
+    );
+  }
 
   @override
   void initState() {
@@ -179,7 +203,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: _colorFondo,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -187,8 +211,8 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text("Mi Perfil", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.textStrong,
+        backgroundColor: _colorSuperficie,
+        foregroundColor: _colorFuerte,
         elevation: 0,
       ),
       body: SingleChildScrollView(
@@ -210,7 +234,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                           bottom: 0,
                           child: Container(
                             padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(color: AppColors.surface, shape: BoxShape.circle),
+                            decoration: BoxDecoration(color: _colorSuperficie, shape: BoxShape.circle),
                             child: const Icon(Icons.edit, color: Colors.white, size: 16),
                           ),
                         ),
@@ -218,7 +242,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  Text(widget.nombre, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text(widget.nombre, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: widget.esContador ? _colorFuerte : null)),
                   if (widget.subtitulo != null)
                     Text(widget.subtitulo!, style: const TextStyle(fontSize: 13, color: Colors.grey)),
                   const SizedBox(height: 4),
@@ -235,23 +259,26 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: _colorSuperficie,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.border),
+                border: Border.all(color: _colorBorde),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("Cambiar Contraseña", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text("Cambiar Contraseña", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: widget.esContador ? _colorFuerte : null)),
                   const SizedBox(height: 16),
                   TextField(
                     controller: _actualCtrl,
                     obscureText: _ocultarActual,
-                    decoration: InputDecoration(
-                      labelText: "Contraseña actual",
-                      border: const OutlineInputBorder(),
+                    style: widget.esContador ? const TextStyle(color: TemaContador.textoFuerte) : null,
+                    decoration: _decoracionCampo(
+                      "Contraseña actual",
                       suffixIcon: IconButton(
-                        icon: Icon(_ocultarActual ? Icons.visibility_off : Icons.visibility),
+                        icon: Icon(
+                          _ocultarActual ? Icons.visibility_off : Icons.visibility,
+                          color: widget.esContador ? TemaContador.textoTenue : null,
+                        ),
                         onPressed: () => setState(() => _ocultarActual = !_ocultarActual),
                       ),
                     ),
@@ -260,11 +287,14 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                   TextField(
                     controller: _nuevaCtrl,
                     obscureText: _ocultarNueva,
-                    decoration: InputDecoration(
-                      labelText: "Nueva contraseña",
-                      border: const OutlineInputBorder(),
+                    style: widget.esContador ? const TextStyle(color: TemaContador.textoFuerte) : null,
+                    decoration: _decoracionCampo(
+                      "Nueva contraseña",
                       suffixIcon: IconButton(
-                        icon: Icon(_ocultarNueva ? Icons.visibility_off : Icons.visibility),
+                        icon: Icon(
+                          _ocultarNueva ? Icons.visibility_off : Icons.visibility,
+                          color: widget.esContador ? TemaContador.textoTenue : null,
+                        ),
                         onPressed: () => setState(() => _ocultarNueva = !_ocultarNueva),
                       ),
                     ),
@@ -273,20 +303,28 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                   TextField(
                     controller: _confirmarCtrl,
                     obscureText: _ocultarNueva,
-                    decoration: const InputDecoration(
-                      labelText: "Confirmar nueva contraseña",
-                      border: OutlineInputBorder(),
-                    ),
+                    style: widget.esContador ? const TextStyle(color: TemaContador.textoFuerte) : null,
+                    decoration: _decoracionCampo("Confirmar nueva contraseña"),
                   ),
                   const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: _cambiandoPassword ? null : _cambiarPassword,
-                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _colorAcento,
+                        foregroundColor: widget.esContador ? Colors.white : Colors.black,
+                      ),
                       child: _cambiandoPassword
-                          ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                          : const Text("Actualizar Contraseña", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                          ? SizedBox(
+                              height: 18,
+                              width: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: widget.esContador ? Colors.white : Colors.black),
+                            )
+                          : Text(
+                              "Actualizar Contraseña",
+                              style: TextStyle(color: widget.esContador ? Colors.white : Colors.black, fontWeight: FontWeight.bold),
+                            ),
                     ),
                   ),
                 ],
@@ -297,18 +335,18 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: _colorSuperficie,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.border),
+                border: Border.all(color: _colorBorde),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(
+                  Row(
                     children: [
-                      Icon(Icons.chat_outlined, size: 20),
-                      SizedBox(width: 8),
-                      Text("WhatsApp", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      Icon(Icons.chat_outlined, size: 20, color: widget.esContador ? _colorFuerte : null),
+                      const SizedBox(width: 8),
+                      Text("WhatsApp", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: widget.esContador ? _colorFuerte : null)),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -333,7 +371,12 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                       children: [
                         const Icon(Icons.check_circle, color: Colors.green, size: 18),
                         const SizedBox(width: 6),
-                        Expanded(child: Text("Ya vinculado: ${_whatsappResultado!['telefono']}", style: const TextStyle(fontSize: 13))),
+                        Expanded(
+                          child: Text(
+                            "Ya vinculado: ${_whatsappResultado!['telefono']}",
+                            style: TextStyle(fontSize: 13, color: widget.esContador ? _colorFuerte : null),
+                          ),
+                        ),
                       ],
                     ),
                   ] else ...[
@@ -346,14 +389,14 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
-                        color: AppColors.background,
+                        color: _colorFondo,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.border),
+                        border: Border.all(color: _colorBorde),
                       ),
                       child: Text(
                         _whatsappResultado!['codigo'] ?? '',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 2),
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 2, color: widget.esContador ? _colorFuerte : null),
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -361,11 +404,14 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                       width: double.infinity,
                       child: ElevatedButton.icon(
                         onPressed: _abrirCodigoEnWhatsApp,
-                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-                        icon: const Icon(Icons.open_in_new, color: Colors.black),
-                        label: const Text(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _colorAcento,
+                          foregroundColor: widget.esContador ? Colors.white : Colors.black,
+                        ),
+                        icon: Icon(Icons.open_in_new, color: widget.esContador ? Colors.white : Colors.black),
+                        label: Text(
                           "Abrir WhatsApp y enviar código",
-                          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                          style: TextStyle(color: widget.esContador ? Colors.white : Colors.black, fontWeight: FontWeight.bold),
                         ),
                       ),
                     ),

@@ -197,6 +197,9 @@ class _NegociosScreenState extends State<NegociosScreen> {
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
             ElevatedButton(
+              style: widget.puedeCrear
+                  ? ElevatedButton.styleFrom(backgroundColor: _PaletaContador.acento, foregroundColor: Colors.white)
+                  : null,
               onPressed: seleccionado == null ? null : () => Navigator.pop(ctx, seleccionado),
               child: const Text("Reasignar"),
             ),
@@ -328,7 +331,13 @@ class _NegociosScreenState extends State<NegociosScreen> {
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
-            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Guardar")),
+            ElevatedButton(
+              style: widget.puedeCrear
+                  ? ElevatedButton.styleFrom(backgroundColor: _PaletaContador.acento, foregroundColor: Colors.white)
+                  : null,
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text("Guardar"),
+            ),
           ],
         ),
       ),
@@ -372,6 +381,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
             subtitulo: "Contador",
             logoEndpoint: '/socios/$socioId/',
             logoUrlInicial: logoUrl,
+            esContador: widget.puedeCrear,
           ),
         ),
       );
@@ -527,6 +537,9 @@ class _NegociosScreenState extends State<NegociosScreen> {
           actions: [
             TextButton(onPressed: guardando ? null : () => Navigator.pop(ctx), child: const Text("Cancelar")),
             ElevatedButton(
+              style: widget.puedeCrear
+                  ? ElevatedButton.styleFrom(backgroundColor: _PaletaContador.acento, foregroundColor: Colors.white)
+                  : null,
               onPressed: guardando
                   ? null
                   : () async {
@@ -667,7 +680,13 @@ class _NegociosScreenState extends State<NegociosScreen> {
                 },
               ),
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
-            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Guardar")),
+            ElevatedButton(
+              style: widget.puedeCrear
+                  ? ElevatedButton.styleFrom(backgroundColor: _PaletaContador.acento, foregroundColor: Colors.white)
+                  : null,
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text("Guardar"),
+            ),
           ],
         ),
       ),
@@ -751,7 +770,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
                     tooltip: "Reportes",
                     onPressed: () => Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (context) => const ReportesContadorScreen()),
+                      MaterialPageRoute(builder: (context) => const ReportesContadorScreen(esContador: true)),
                     ),
                   )
                 : accionAppBar(
@@ -1006,6 +1025,9 @@ class _NegociosScreenState extends State<NegociosScreen> {
                       if (widget.puedeCrear) ...[
                         const SizedBox(height: 16),
                         ElevatedButton.icon(
+                          style: esContador
+                              ? ElevatedButton.styleFrom(backgroundColor: _PaletaContador.acento, foregroundColor: Colors.white)
+                              : null,
                           onPressed: _mostrarFormularioCrear,
                           icon: const Icon(Icons.add),
                           label: const Text("Crear el primer negocio"),
@@ -1201,7 +1223,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
             item(
               icono: Icons.insert_chart_outlined,
               etiqueta: "Reportes",
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ReportesContadorScreen())),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ReportesContadorScreen(esContador: true))),
             ),
             item(icono: Icons.account_circle_rounded, etiqueta: "Mi Perfil", onTap: _abrirMiPerfil),
             item(
