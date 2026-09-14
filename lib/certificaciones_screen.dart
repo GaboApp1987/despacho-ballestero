@@ -1147,7 +1147,15 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                                 keyboardType: TextInputType.number,
                                 textInputAction: TextInputAction.next,
                                 textAlign: TextAlign.right,
-                                decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
+                                style: const TextStyle(color: TemaContador.textoFuerte),
+                                decoration: InputDecoration(
+                                  isDense: true,
+                                  filled: true,
+                                  fillColor: TemaContador.superficie,
+                                  border: OutlineInputBorder(borderSide: const BorderSide(color: TemaContador.borde)),
+                                  enabledBorder: OutlineInputBorder(borderSide: const BorderSide(color: TemaContador.borde)),
+                                  focusedBorder: OutlineInputBorder(borderSide: const BorderSide(color: TemaContador.acento, width: 1.5)),
+                                ),
                                 onChanged: (v) {
                                   m.ingresosPorActividad[i] = double.tryParse(v.replaceAll(',', '')) ?? 0;
                                   if (_cert.modoEgresos == 'porcentaje') {
@@ -1173,7 +1181,16 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                               keyboardType: TextInputType.number,
                               textInputAction: TextInputAction.next,
                               textAlign: TextAlign.right,
-                              decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
+                              style: const TextStyle(color: TemaContador.textoFuerte),
+                              decoration: InputDecoration(
+                                isDense: true,
+                                filled: true,
+                                fillColor: TemaContador.superficie,
+                                border: OutlineInputBorder(borderSide: const BorderSide(color: TemaContador.borde)),
+                                enabledBorder: OutlineInputBorder(borderSide: const BorderSide(color: TemaContador.borde)),
+                                disabledBorder: OutlineInputBorder(borderSide: const BorderSide(color: TemaContador.borde)),
+                                focusedBorder: OutlineInputBorder(borderSide: const BorderSide(color: TemaContador.acento, width: 1.5)),
+                              ),
                               onChanged: (v) => setState(() => m.egresos = double.tryParse(v.replaceAll(',', '')) ?? 0),
                               onFieldSubmitted: (_) => FocusScope.of(context).nextFocus(),
                             ),
