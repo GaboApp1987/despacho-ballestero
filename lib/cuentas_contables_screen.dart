@@ -22,11 +22,29 @@ class _CuentasContablesScreenState extends State<CuentasContablesScreen> {
   bool _cargando = true;
   bool _sembrando = false;
   List<CuentaContable> _cuentas = [];
+  final _busquedaCtrl = TextEditingController();
+  String _busqueda = '';
+
+  List<CuentaContable> get _cuentasFiltradas {
+    final q = _busqueda.trim().toLowerCase();
+    if (q.isEmpty) return _cuentas;
+    return _cuentas.where((c) {
+      return c.codigo.toLowerCase().contains(q) ||
+          c.nombre.toLowerCase().contains(q) ||
+          (CuentaContable.tiposEtiquetas[c.tipo] ?? '').toLowerCase().contains(q);
+    }).toList();
+  }
 
   @override
   void initState() {
     super.initState();
     _cargar();
+  }
+
+  @override
+  void dispose() {
+    _busquedaCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _cargar() async {
@@ -131,40 +149,77 @@ class _CuentasContablesScreenState extends State<CuentasContablesScreen> {
                     ],
                   ),
                 )
-              : RefreshIndicator(
-                  onRefresh: _cargar,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-                    itemCount: _cuentas.length,
-                    itemBuilder: (context, index) {
-                      final c = _cuentas[index];
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 6),
-                        color: c.esDetalle ? TemaContador.superficie : TemaContador.fondo,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: c.esDetalle ? TemaContador.borde : TemaContador.acento.withOpacity(0.3))),
-                        child: ListTile(
-                          dense: !c.esDetalle,
-                          leading: Icon(c.esDetalle ? Icons.description_outlined : Icons.folder_outlined, color: c.esDetalle ? TemaContador.textoTenue : TemaContador.acento, size: 20),
-                          title: Text(
-                            "${c.codigo} · ${c.nombre}",
-                            style: TextStyle(color: TemaContador.textoFuerte, fontWeight: c.esDetalle ? FontWeight.w500 : FontWeight.w800, fontSize: c.esDetalle ? 14 : 13.5),
-                          ),
-                          subtitle: Text(
-                            "${CuentaContable.tiposEtiquetas[c.tipo] ?? c.tipo} · ${CuentaContable.naturalezaEtiquetas[c.naturaleza] ?? c.naturaleza}",
-                            style: const TextStyle(color: TemaContador.textoTenue, fontSize: 11.5),
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(icon: const Icon(Icons.edit_outlined, size: 19, color: TemaContador.textoTenue), onPressed: () => _abrirFormulario(cuenta: c)),
-                              IconButton(icon: const Icon(Icons.delete_outline, size: 19, color: TemaContador.textoTenue), onPressed: () => _eliminar(c)),
-                            ],
-                          ),
+              : Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      child: TextField(
+                        controller: _busquedaCtrl,
+                        style: const TextStyle(color: TemaContador.textoFuerte),
+                        onChanged: (v) => setState(() => _busqueda = v),
+                        decoration: InputDecoration(
+                          hintText: "Buscar por código, nombre o tipo...",
+                          hintStyle: const TextStyle(color: TemaContador.textoTenue),
+                          prefixIcon: const Icon(Icons.search, color: TemaContador.textoTenue),
+                          suffixIcon: _busqueda.isEmpty
+                              ? null
+                              : IconButton(
+                                  icon: const Icon(Icons.close, color: TemaContador.textoTenue),
+                                  onPressed: () => setState(() {
+                                    _busquedaCtrl.clear();
+                                    _busqueda = '';
+                                  }),
+                                ),
+                          filled: true,
+                          fillColor: TemaContador.superficie,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: TemaContador.borde)),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: TemaContador.borde)),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: TemaContador.acento, width: 1.5)),
                         ),
-                      );
-                    },
-                  ),
+                      ),
+                    ),
+                    Expanded(
+                      child: _cuentasFiltradas.isEmpty
+                          ? Center(
+                              child: Text("Ninguna cuenta coincide con \"$_busqueda\".", style: const TextStyle(color: Colors.grey)),
+                            )
+                          : RefreshIndicator(
+                              onRefresh: _cargar,
+                              child: ListView.builder(
+                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 90),
+                                itemCount: _cuentasFiltradas.length,
+                                itemBuilder: (context, index) {
+                                  final c = _cuentasFiltradas[index];
+                                  return Card(
+                                    margin: const EdgeInsets.only(bottom: 6),
+                                    color: c.esDetalle ? TemaContador.superficie : TemaContador.fondo,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: c.esDetalle ? TemaContador.borde : TemaContador.acento.withOpacity(0.3))),
+                                    child: ListTile(
+                                      dense: !c.esDetalle,
+                                      leading: Icon(c.esDetalle ? Icons.description_outlined : Icons.folder_outlined, color: c.esDetalle ? TemaContador.textoTenue : TemaContador.acento, size: 20),
+                                      title: Text(
+                                        "${c.codigo} · ${c.nombre}",
+                                        style: TextStyle(color: TemaContador.textoFuerte, fontWeight: c.esDetalle ? FontWeight.w500 : FontWeight.w800, fontSize: c.esDetalle ? 14 : 13.5),
+                                      ),
+                                      subtitle: Text(
+                                        "${CuentaContable.tiposEtiquetas[c.tipo] ?? c.tipo} · ${CuentaContable.naturalezaEtiquetas[c.naturaleza] ?? c.naturaleza}",
+                                        style: const TextStyle(color: TemaContador.textoTenue, fontSize: 11.5),
+                                      ),
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          IconButton(icon: const Icon(Icons.edit_outlined, size: 19, color: TemaContador.textoTenue), onPressed: () => _abrirFormulario(cuenta: c)),
+                                          IconButton(icon: const Icon(Icons.delete_outline, size: 19, color: TemaContador.textoTenue), onPressed: () => _eliminar(c)),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                    ),
+                  ],
                 ),
     );
   }
