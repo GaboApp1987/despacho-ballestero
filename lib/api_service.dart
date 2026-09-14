@@ -211,6 +211,34 @@ class ApiService {
     });
   }
 
+  /// Igual que [postMultipartBytes] pero con VARIOS archivos bajo el mismo
+  /// campo (ej. varios estados de cuenta en una Solicitud de Certificación
+  /// pública) -- Django los recibe todos con `request.FILES.getlist(...)`.
+  static Future<http.Response> postMultipartVariosArchivos(
+    String endpoint,
+    Map<String, String> campos,
+    String fieldName,
+    List<({List<int> bytes, String filename, String? contentType})> archivos,
+  ) async {
+    final url = Uri.parse('$baseUrl$endpoint');
+    return _conRenovacion((headers) async {
+      final request = http.MultipartRequest('POST', url);
+      final headersSinContentType = Map<String, String>.from(headers)..remove('Content-Type');
+      request.headers.addAll(headersSinContentType);
+      request.fields.addAll(campos);
+      for (final a in archivos) {
+        request.files.add(http.MultipartFile.fromBytes(
+          fieldName,
+          a.bytes,
+          filename: a.filename,
+          contentType: a.contentType != null ? MediaType.parse(a.contentType!) : null,
+        ));
+      }
+      final streamed = await request.send();
+      return http.Response.fromStream(streamed);
+    });
+  }
+
   /// Obtener las métricas del Dashboard Comercial para un negocio específico
   static Future<Map<String, dynamic>?> getDashboardComercial(int negocioId) async {
     final response = await get('/facturas/dashboard-comercial/?negocio=$negocioId');

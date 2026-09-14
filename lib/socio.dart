@@ -5,6 +5,7 @@ class Socio {
   final bool tieneUsuario;
   final int cantidadNegocios;
   final String? logoUrl;
+  final String codigoPublico;
 
   Socio({
     required this.id,
@@ -13,6 +14,7 @@ class Socio {
     required this.tieneUsuario,
     this.cantidadNegocios = 0,
     this.logoUrl,
+    this.codigoPublico = '',
   });
 
   factory Socio.fromJson(Map<String, dynamic> json) {
@@ -23,6 +25,7 @@ class Socio {
       tieneUsuario: json['tiene_usuario'] ?? false,
       cantidadNegocios: (json['negocios'] as List?)?.length ?? 0,
       logoUrl: json['logo'],
+      codigoPublico: json['codigo_publico'] ?? '',
     );
   }
 }

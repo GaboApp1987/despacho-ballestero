@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'api_service.dart';
 import 'certificaciones_screen.dart';
 import 'atestiguamientos_screen.dart';
 import 'flujo_caja_screen.dart';
+import 'solicitudes_certificacion_screen.dart';
 import 'descarga_navegador_stub.dart' if (dart.library.html) 'descarga_navegador_web.dart';
 
 /// Descarga cualquiera de los documentos del contador (certificación de
@@ -34,8 +36,36 @@ Future<void> descargarDocumento(BuildContext context, String endpointBase, int i
 
 /// Punto de entrada de "Certificaciones" en la sidebar del contador: un
 /// menú con los distintos documentos que puede emitir.
-class DocumentosContadorScreen extends StatelessWidget {
+class DocumentosContadorScreen extends StatefulWidget {
   const DocumentosContadorScreen({super.key});
+
+  @override
+  State<DocumentosContadorScreen> createState() => _DocumentosContadorScreenState();
+}
+
+class _DocumentosContadorScreenState extends State<DocumentosContadorScreen> {
+  int? _pendientes;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarPendientes();
+  }
+
+  Future<void> _cargarPendientes() async {
+    try {
+      final r = await ApiService.get('/solicitudes-certificacion/?estado=pendiente');
+      if (r.statusCode == 200) {
+        final data = json.decode(utf8.decode(r.bodyBytes)) as List;
+        if (mounted) setState(() => _pendientes = data.length);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _abrirSolicitudes() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (context) => const SolicitudesCertificacionScreen()));
+    _cargarPendientes();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +85,15 @@ class DocumentosContadorScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          _opcion(
+            context,
+            icono: Icons.mark_email_unread_outlined,
+            titulo: "Solicitudes de Certificación",
+            subtitulo: "Pedidos que tus clientes te mandaron desde tu link público, sin login.",
+            badge: _pendientes != null && _pendientes! > 0 ? _pendientes.toString() : null,
+            onTap: _abrirSolicitudes,
+          ),
+          const SizedBox(height: 12),
           _opcion(
             context,
             icono: Icons.badge_outlined,
@@ -95,6 +134,7 @@ class DocumentosContadorScreen extends StatelessWidget {
     required String titulo,
     required String subtitulo,
     required VoidCallback onTap,
+    String? badge,
   }) {
     return Card(
       color: TemaContador.superficie,
@@ -105,7 +145,20 @@ class DocumentosContadorScreen extends StatelessWidget {
         leading: CircleAvatar(backgroundColor: TemaContador.acento.withOpacity(0.12), child: Icon(icono, color: TemaContador.acento)),
         title: Text(titulo, style: const TextStyle(fontWeight: FontWeight.w700, color: TemaContador.textoFuerte)),
         subtitle: Text(subtitulo, style: const TextStyle(color: TemaContador.textoTenue, fontSize: 12.5)),
-        trailing: const Icon(Icons.chevron_right, color: TemaContador.acento),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (badge != null) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(color: Colors.orange, borderRadius: BorderRadius.circular(12)),
+                child: Text(badge, style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(width: 8),
+            ],
+            const Icon(Icons.chevron_right, color: TemaContador.acento),
+          ],
+        ),
         onTap: onTap,
       ),
     );
