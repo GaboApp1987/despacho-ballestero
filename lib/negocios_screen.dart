@@ -10,6 +10,7 @@ import 'perfil_usuario_screen.dart';
 import 'plan.dart';
 import 'reportes_contador_screen.dart';
 import 'documentos_contador_screen.dart';
+import 'asientos_contables_screen.dart';
 import 'resumen_fiscal_screen.dart';
 import 'socio.dart';
 import 'login.dart';
@@ -792,6 +793,15 @@ class _NegociosScreenState extends State<NegociosScreen> {
                 MaterialPageRoute(builder: (context) => const DocumentosContadorScreen()),
               ),
             ),
+          if (esContador)
+            _accionAppBarClara(
+              icono: Icons.menu_book_outlined,
+              tooltip: "Asientos Contables",
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const AsientosContablesScreen()),
+              ),
+            ),
           if (widget.puedeCrear)
             esContador
                 ? _accionAppBarClara(icono: Icons.account_circle_rounded, tooltip: "Mi Perfil", onPressed: _abrirMiPerfil)
@@ -1236,6 +1246,11 @@ class _NegociosScreenState extends State<NegociosScreen> {
               icono: Icons.badge_outlined,
               etiqueta: "Certificaciones",
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DocumentosContadorScreen())),
+            ),
+            item(
+              icono: Icons.menu_book_outlined,
+              etiqueta: "Asientos Contables",
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AsientosContablesScreen())),
             ),
             item(icono: Icons.account_circle_rounded, etiqueta: "Mi Perfil", onTap: _abrirMiPerfil),
             item(
