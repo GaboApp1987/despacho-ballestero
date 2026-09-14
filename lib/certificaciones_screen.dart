@@ -1100,13 +1100,17 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
                             style: const TextStyle(color: TemaContador.textoFuerte),
                             decoration: _decoracion("% de egresos sobre los ingresos"),
+                            // Recalcula todos los meses apenas se escribe el
+                            // porcentaje -- no hace falta tocar ningún botón
+                            // aparte, el cálculo es automático.
+                            onChanged: (_) => _aplicarPorcentajeATodos(),
                           ),
                         ),
                         const SizedBox(width: 10),
                         ElevatedButton(
                           style: ElevatedButton.styleFrom(backgroundColor: TemaContador.acento, foregroundColor: Colors.white),
                           onPressed: _aplicarPorcentajeATodos,
-                          child: const Text("Aplicar a todos"),
+                          child: const Text("Recalcular"),
                         ),
                       ],
                     ),
