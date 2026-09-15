@@ -6,6 +6,7 @@ import 'api_service.dart';
 import 'asiento_contable.dart';
 import 'cuenta_contable.dart';
 import 'cuentas_contables_screen.dart';
+import 'estados_financieros_screen.dart';
 import 'negocio.dart';
 
 /// Punto de entrada de "Asientos Contables" en la sidebar del contador:
@@ -196,6 +197,15 @@ class _LibroDiarioState extends State<_LibroDiario> {
             foregroundColor: Colors.white,
             icon: const Icon(Icons.account_tree_outlined),
             label: const Text("Catálogo de cuentas"),
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton.extended(
+            heroTag: 'estados-financieros',
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => EstadosFinancierosScreen(negocioId: widget.negocio.id, negocioNombre: widget.negocio.nombreComercial))),
+            backgroundColor: TemaContador.textoFuerte,
+            foregroundColor: Colors.white,
+            icon: const Icon(Icons.bar_chart_outlined),
+            label: const Text("Estados financieros"),
           ),
           const SizedBox(height: 10),
           FloatingActionButton.extended(
