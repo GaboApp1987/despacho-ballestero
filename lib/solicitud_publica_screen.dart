@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'theme/app_theme.dart';
 
 import 'api_service.dart';
+import 'avatar_logo.dart';
 
 /// Formulario público (SIN login) para que un cliente le pida una
 /// Certificación de Ingresos a su contador -- se llega acá desde un link
@@ -23,6 +24,9 @@ class _SolicitudPublicaScreenState extends State<SolicitudPublicaScreen> {
   final _codigoCtrl = TextEditingController();
   bool _verificando = false;
   String? _nombreContador;
+  String? _logoContador;
+  String? _especialidadContador;
+  String? _carneCpaContador;
   String? _errorCodigo;
 
   bool _enviando = false;
@@ -93,12 +97,22 @@ class _SolicitudPublicaScreenState extends State<SolicitudPublicaScreen> {
       _verificando = true;
       _errorCodigo = null;
       _nombreContador = null;
+      _logoContador = null;
+      _especialidadContador = null;
+      _carneCpaContador = null;
     });
     try {
       final r = await ApiService.get('/solicitudes-certificacion/verificar-codigo/?codigo=$codigo');
       if (r.statusCode == 200) {
         final data = json.decode(utf8.decode(r.bodyBytes));
-        if (mounted) setState(() => _nombreContador = data['nombre']);
+        if (mounted) {
+          setState(() {
+            _nombreContador = data['nombre'];
+            _logoContador = data['logo'];
+            _especialidadContador = data['especialidad'];
+            _carneCpaContador = data['carne_cpa'];
+          });
+        }
       } else if (mounted) {
         setState(() => _errorCodigo = "No encontramos ningún contador con ese código. Revisalo e intentá de nuevo.");
       }
@@ -312,14 +326,49 @@ class _SolicitudPublicaScreenState extends State<SolicitudPublicaScreen> {
                   else ...[
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.all(14),
+                      padding: const EdgeInsets.all(16),
                       margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(color: Colors.green.withOpacity(0.08), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.green)),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [TemaContador.acento.withOpacity(0.08), Colors.green.withOpacity(0.06)],
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: TemaContador.acento.withOpacity(0.35)),
+                      ),
                       child: Row(
                         children: [
-                          const Icon(Icons.check_circle, color: Colors.green, size: 20),
-                          const SizedBox(width: 10),
-                          Expanded(child: Text("Le vas a pedir la certificación a $_nombreContador.", style: const TextStyle(color: TemaContador.textoFuerte, fontWeight: FontWeight.w600))),
+                          avatarConLogo(
+                            logoUrl: _logoContador,
+                            nombre: _nombreContador,
+                            icono: Icons.badge_outlined,
+                            radius: 28,
+                            color: TemaContador.acento,
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(children: [
+                                  const Icon(Icons.check_circle, color: Colors.green, size: 15),
+                                  const SizedBox(width: 6),
+                                  Text("Vas a solicitarle una certificación a", style: TextStyle(color: TemaContador.textoTenue, fontSize: 11.5)),
+                                ]),
+                                const SizedBox(height: 2),
+                                Text(_nombreContador ?? '', style: const TextStyle(color: TemaContador.textoFuerte, fontWeight: FontWeight.bold, fontSize: 17)),
+                                const SizedBox(height: 2),
+                                Text(
+                                  "Contador Público Autorizado"
+                                  "${(_carneCpaContador != null && _carneCpaContador!.isNotEmpty) ? ' · Carné $_carneCpaContador' : ''}",
+                                  style: const TextStyle(color: TemaContador.textoTenue, fontSize: 12),
+                                ),
+                                if (_especialidadContador != null && _especialidadContador!.isNotEmpty)
+                                  Text(_especialidadContador!, style: const TextStyle(color: TemaContador.acento, fontSize: 12, fontWeight: FontWeight.w600)),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                     ),
