@@ -1090,17 +1090,29 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                       side: const BorderSide(color: TemaContador.borde),
                     ),
                   ),
-                  Text(
-                    "DEBUG modo=${_cert.modoEgresos} pct='${_porcentajeCtrl.text}' len=${_porcentajeCtrl.text.length}",
-                    style: const TextStyle(color: Colors.red, fontSize: 11, fontWeight: FontWeight.bold),
-                  ),
                   if (_cert.modoEgresos == 'porcentaje')
                     Padding(
                       padding: const EdgeInsets.only(top: 10),
-                      child: TextField(
-                        controller: _porcentajeCtrl,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        onChanged: (_) => _aplicarPorcentajeATodos(),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 220,
+                            child: TextField(
+                              controller: _porcentajeCtrl,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              decoration: const InputDecoration(labelText: "% de egresos sobre los ingresos"),
+                              onChanged: (_) => _aplicarPorcentajeATodos(),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(backgroundColor: TemaContador.acento, foregroundColor: Colors.white),
+                            onPressed: _aplicarPorcentajeATodos,
+                            child: const Text("Recalcular"),
+                          ),
+                        ],
                       ),
                     ),
                   const SizedBox(height: 12),
