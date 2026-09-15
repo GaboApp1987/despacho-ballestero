@@ -39,6 +39,7 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
   final _emailCtrl = TextEditingController();
   final _usernameCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
+  final _confirmarPasswordCtrl = TextEditingController();
   final _telefonoCtrl = TextEditingController();
   final _cedulaCtrl = TextEditingController();
   final _correoHaciendaCtrl = TextEditingController();
@@ -93,6 +94,7 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
     _emailCtrl.dispose();
     _usernameCtrl.dispose();
     _passwordCtrl.dispose();
+    _confirmarPasswordCtrl.dispose();
     _telefonoCtrl.dispose();
     _cedulaCtrl.dispose();
     _correoHaciendaCtrl.dispose();
@@ -318,6 +320,13 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                       obscureText: true,
                       decoration: const InputDecoration(labelText: "Contraseña", border: OutlineInputBorder()),
                       validator: (v) => (v == null || v.length < 8) ? "Mínimo 8 caracteres" : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _confirmarPasswordCtrl,
+                      obscureText: true,
+                      decoration: const InputDecoration(labelText: "Confirmar contraseña", border: OutlineInputBorder()),
+                      validator: (v) => (v != _passwordCtrl.text) ? "Las contraseñas no coinciden" : null,
                     ),
                     if (_requierePago) ...[
                       const SizedBox(height: 12),
