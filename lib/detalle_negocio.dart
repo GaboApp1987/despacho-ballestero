@@ -58,6 +58,36 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
   int _seccionActiva = 1;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  // Controla el scroll horizontal de la barra de pildoras de escritorio: con
+  // tantas secciones no entran todas en pantalla y antes no había ninguna
+  // señal de que se podía desplazar para ver el resto -- flechas a los
+  // lados que aparecen/desaparecen según cuánto falte por recorrer.
+  final ScrollController _pillTabsScrollController = ScrollController();
+  bool _pillTabsPuedeIzquierda = false;
+  bool _pillTabsPuedeDerecha = false;
+
+  void _actualizarFlechasPillTabs() {
+    if (!_pillTabsScrollController.hasClients) return;
+    final pos = _pillTabsScrollController.position;
+    final puedeIzquierda = pos.pixels > 4;
+    final puedeDerecha = pos.pixels < pos.maxScrollExtent - 4;
+    if (puedeIzquierda != _pillTabsPuedeIzquierda || puedeDerecha != _pillTabsPuedeDerecha) {
+      setState(() {
+        _pillTabsPuedeIzquierda = puedeIzquierda;
+        _pillTabsPuedeDerecha = puedeDerecha;
+      });
+    }
+  }
+
+  void _desplazarPillTabs(double delta) {
+    if (!_pillTabsScrollController.hasClients) return;
+    final destino = (_pillTabsScrollController.offset + delta).clamp(
+      0.0,
+      _pillTabsScrollController.position.maxScrollExtent,
+    );
+    _pillTabsScrollController.animateTo(destino, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+  }
+
   // Por debajo de este ancho la navegacion pasa a un Drawer deslizable (con
   // la lista vertical de siempre) en vez de la barra de pildoras horizontal
   // de escritorio, que en un telefono no entra.
@@ -148,11 +178,18 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     _vencidasFuture = obtenerFacturasVencidas();
     _declaracionIvaFuture = obtenerDeclaracionIva();
     _declaracionRentaFuture = obtenerDeclaracionRenta();
+
+    _pillTabsScrollController.addListener(_actualizarFlechasPillTabs);
+    // Tras el primer frame la barra ya tiene su ancho real: si el contenido
+    // no entra completo, muestra la flecha derecha desde el arranque (antes
+    // había que adivinar que se podía desplazar).
+    WidgetsBinding.instance.addPostFrameCallback((_) => _actualizarFlechasPillTabs());
   }
 
   @override
   void dispose() {
     _busquedaClientesCtrl.dispose();
+    _pillTabsScrollController.dispose();
     super.dispose();
   }
 
@@ -795,19 +832,47 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     );
   }
 
+  Widget _flechaPillTabs({required IconData icono, required VoidCallback onPressed}) {
+    return Container(
+      height: 56,
+      color: AppColors.surface,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          child: SizedBox(
+            width: 28,
+            child: Icon(icono, size: 18, color: AppColors.textMuted),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildPillTabsBar() {
     return Container(
       height: 56,
       color: AppColors.surface,
       alignment: Alignment.centerLeft,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Row(
-          children: _menuItemsVisibles
-              .map((it) => _pildoraNav(id: it.id, icono: it.icono, titulo: it.titulo))
-              .toList(),
-        ),
+      child: Row(
+        children: [
+          if (_pillTabsPuedeIzquierda)
+            _flechaPillTabs(icono: Icons.chevron_left, onPressed: () => _desplazarPillTabs(-220)),
+          Expanded(
+            child: SingleChildScrollView(
+              controller: _pillTabsScrollController,
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: _menuItemsVisibles
+                    .map((it) => _pildoraNav(id: it.id, icono: it.icono, titulo: it.titulo))
+                    .toList(),
+              ),
+            ),
+          ),
+          if (_pillTabsPuedeDerecha)
+            _flechaPillTabs(icono: Icons.chevron_right, onPressed: () => _desplazarPillTabs(220)),
+        ],
       ),
     );
   }

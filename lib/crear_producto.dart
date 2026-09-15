@@ -41,6 +41,7 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
   int? _categoriaSeleccionada;
   Impuesto? _impuestoSeleccionado;
   String _unidadSeleccionada = 'Unid';
+  String _tipoSeleccionado = 'mercancia';
   bool _cargandoInicial = true;
   bool _guardando = false;
 
@@ -62,6 +63,7 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
     _stockCtrl = TextEditingController(text: p != null ? p.stock.toString() : '0');
     _categoriaSeleccionada = p?.categoriaId;
     _unidadSeleccionada = unidadesMedidaHacienda.containsKey(p?.unidadMedida) ? p!.unidadMedida : 'Unid';
+    _tipoSeleccionado = tiposProducto.containsKey(p?.tipo) ? p!.tipo : 'mercancia';
     _imagenUrlActual = p?.imagenUrl;
     _presentaciones = List.of(p?.presentaciones ?? []);
 
@@ -289,6 +291,7 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
       'nombre': _nombreCtrl.text.trim(),
       'codigo_cabys': _cabysCtrl.text.trim(),
       'unidad_medida': _unidadSeleccionada,
+      'tipo': _tipoSeleccionado,
       'precio_unitario': double.parse(_precioCtrl.text.trim()),
       'costo': double.tryParse(_costoCtrl.text.replaceAll(',', '.').trim()) ?? 0,
       'margen_ganancia': double.tryParse(_margenCtrl.text.replaceAll(',', '.').trim()) ?? 30,
@@ -503,6 +506,20 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
                     .map((e) => DropdownMenuItem(value: e.key, child: Text("${e.key} - ${e.value}")))
                     .toList(),
                 onChanged: (val) => setState(() => _unidadSeleccionada = val!),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: _tipoSeleccionado,
+                decoration: const InputDecoration(
+                  labelText: "Tipo *",
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.category_outlined),
+                  helperText: "Hacienda lo reporta distinto en la factura según sea bien o servicio",
+                ),
+                items: tiposProducto.entries
+                    .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                    .toList(),
+                onChanged: (val) => setState(() => _tipoSeleccionado = val!),
               ),
               const SizedBox(height: 16),
               _buildSeccionPresentaciones(esEdicion),

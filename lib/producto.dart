@@ -61,6 +61,9 @@ class Producto {
   final Impuesto? impuesto; // Usa la clase del archivo importado
   final String? imagenUrl;
   final List<PresentacionProducto> presentaciones;
+  // "mercancia" (bien físico) o "servicio" -- Hacienda exige reportarlos por
+  // separado en el resumen de cada factura (ver Producto.tipo en el backend).
+  final String tipo;
 
   Producto({
     required this.id,
@@ -76,6 +79,7 @@ class Producto {
     this.impuesto,
     this.imagenUrl,
     this.presentaciones = const [],
+    this.tipo = 'mercancia',
   });
 
   factory Producto.fromJson(Map<String, dynamic> json) {
@@ -98,6 +102,7 @@ class Producto {
       presentaciones: (json['presentaciones'] as List? ?? [])
           .map((p) => PresentacionProducto.fromJson(p))
           .toList(),
+      tipo: json['tipo'] ?? 'mercancia',
     );
   }
 
@@ -113,10 +118,17 @@ class Producto {
       'margen_ganancia': margenGanancia,
       'categoria': categoriaId,
       'stock': stock,
+      'tipo': tipo,
       if (impuesto != null) 'impuesto': impuesto!.id, // Si Impuesto tiene un campo 'id'
     };
   }
 }
+
+/// "mercancia" (bien físico) o "servicio" -- ver Producto.tipo.
+const Map<String, String> tiposProducto = {
+  'mercancia': 'Mercancía',
+  'servicio': 'Servicio',
+};
 
 /// Catálogo (curado, no exhaustivo) de unidades de medida oficiales de
 /// Hacienda para la facturación electrónica v4.3. Los códigos y mayúsculas
