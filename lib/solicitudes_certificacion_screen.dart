@@ -65,7 +65,8 @@ class _SolicitudesCertificacionScreenState extends State<SolicitudesCertificacio
         "Desde ahora podés pedirme una Certificación de Ingresos directo desde este link, sin crear cuenta ni contraseña:\n\n"
         "$link\n\n"
         "Completás tus datos (2 minutos) y, si querés, adjuntás tus estados de cuenta. Yo reviso la solicitud y te la resuelvo enseguida.\n\n"
-        "Guardá este link, te sirve cada vez que necesités una certificación.";
+        "Guardá este link, te sirve cada vez que necesités una certificación.\n\n"
+        "— Powered by Equilibra · equilibracr.com";
   }
 
   Future<void> _compartirPorWhatsApp() async {

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'theme/app_theme.dart';
 
 import 'api_service.dart';
@@ -465,7 +466,24 @@ class _SolicitudPublicaScreenState extends State<SolicitudPublicaScreen> {
                       child: _enviando ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text("Enviar solicitud"),
                     ),
                   ],
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 28),
+                  Center(
+                    child: InkWell(
+                      onTap: () => launchUrl(Uri.parse('https://equilibracr.com'), mode: LaunchMode.externalApplication),
+                      child: RichText(
+                        textAlign: TextAlign.center,
+                        text: const TextSpan(
+                          style: TextStyle(fontSize: 11.5, color: TemaContador.textoTenue),
+                          children: [
+                            TextSpan(text: "Powered by "),
+                            TextSpan(text: "Equilibra", style: TextStyle(fontWeight: FontWeight.bold, color: TemaContador.acento)),
+                            TextSpan(text: " · equilibracr.com"),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                 ],
               ),
             ),
