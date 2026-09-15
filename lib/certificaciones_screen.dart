@@ -1090,37 +1090,17 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                       side: const BorderSide(color: TemaContador.borde),
                     ),
                   ),
+                  Text(
+                    "DEBUG modo=${_cert.modoEgresos} pct='${_porcentajeCtrl.text}' len=${_porcentajeCtrl.text.length}",
+                    style: const TextStyle(color: Colors.red, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
                   if (_cert.modoEgresos == 'porcentaje')
-                    Container(
-                      width: double.infinity,
-                      margin: const EdgeInsets.only(top: 10),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: TemaContador.acento.withOpacity(0.06),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: TemaContador.acento.withOpacity(0.4)),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _porcentajeCtrl,
-                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                              style: const TextStyle(color: TemaContador.textoFuerte, fontWeight: FontWeight.bold),
-                              decoration: _decoracion("% de egresos sobre los ingresos"),
-                              // Recalcula todos los meses apenas se escribe el
-                              // porcentaje -- no hace falta tocar ningún botón
-                              // aparte, el cálculo es automático.
-                              onChanged: (_) => _aplicarPorcentajeATodos(),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(backgroundColor: TemaContador.acento, foregroundColor: Colors.white),
-                            onPressed: _aplicarPorcentajeATodos,
-                            child: const Text("Recalcular"),
-                          ),
-                        ],
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: TextField(
+                        controller: _porcentajeCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        onChanged: (_) => _aplicarPorcentajeATodos(),
                       ),
                     ),
                   const SizedBox(height: 12),
