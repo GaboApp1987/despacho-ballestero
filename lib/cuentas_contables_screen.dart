@@ -307,6 +307,16 @@ class _FormularioCuentaDialogState extends State<_FormularioCuentaDialog> {
     if (mounted) setState(() => _guardando = false);
   }
 
+  InputDecoration _decoracion(String label) => InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: TemaContador.textoTenue),
+        filled: true,
+        fillColor: TemaContador.superficie,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: TemaContador.borde)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: TemaContador.borde)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: TemaContador.acento, width: 1.5)),
+      );
+
   @override
   Widget build(BuildContext context) {
     final padres = widget.cuentasDisponibles.where((c) => !c.esDetalle && c.id != widget.cuenta?.id).toList();
@@ -322,18 +332,18 @@ class _FormularioCuentaDialogState extends State<_FormularioCuentaDialog> {
               Row(children: [
                 Expanded(
                   flex: 2,
-                  child: TextField(controller: _codigoCtrl, style: const TextStyle(color: TemaContador.textoFuerte), decoration: const InputDecoration(labelText: "Código")),
+                  child: TextField(controller: _codigoCtrl, style: const TextStyle(color: TemaContador.textoFuerte), decoration: _decoracion("Código")),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   flex: 3,
-                  child: TextField(controller: _nombreCtrl, style: const TextStyle(color: TemaContador.textoFuerte), decoration: const InputDecoration(labelText: "Nombre")),
+                  child: TextField(controller: _nombreCtrl, style: const TextStyle(color: TemaContador.textoFuerte), decoration: _decoracion("Nombre")),
                 ),
               ]),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 initialValue: _tipo,
-                decoration: const InputDecoration(labelText: "Tipo"),
+                decoration: _decoracion("Tipo"),
                 style: const TextStyle(color: TemaContador.textoFuerte),
                 dropdownColor: TemaContador.fondo,
                 items: CuentaContable.tiposEtiquetas.entries
@@ -347,7 +357,7 @@ class _FormularioCuentaDialogState extends State<_FormularioCuentaDialog> {
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 initialValue: _naturaleza,
-                decoration: const InputDecoration(labelText: "Naturaleza"),
+                decoration: _decoracion("Naturaleza"),
                 style: const TextStyle(color: TemaContador.textoFuerte),
                 dropdownColor: TemaContador.fondo,
                 items: CuentaContable.naturalezaEtiquetas.entries
@@ -358,7 +368,7 @@ class _FormularioCuentaDialogState extends State<_FormularioCuentaDialog> {
               const SizedBox(height: 12),
               DropdownButtonFormField<int?>(
                 initialValue: _cuentaPadre,
-                decoration: const InputDecoration(labelText: "Cuenta de mayor (opcional)"),
+                decoration: _decoracion("Cuenta de mayor (opcional)"),
                 style: const TextStyle(color: TemaContador.textoFuerte),
                 dropdownColor: TemaContador.fondo,
                 items: [

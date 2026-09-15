@@ -405,6 +405,16 @@ class _AsientoContableFormScreenState extends State<AsientoContableFormScreen> {
     }
   }
 
+  InputDecoration _decoracion(String label) => InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: TemaContador.textoTenue),
+        filled: true,
+        fillColor: TemaContador.fondo,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: TemaContador.borde)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: TemaContador.borde)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: TemaContador.acento, width: 1.5)),
+      );
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -449,16 +459,16 @@ class _AsientoContableFormScreenState extends State<AsientoContableFormScreen> {
                                 child: InkWell(
                                   onTap: _elegirFecha,
                                   child: InputDecorator(
-                                    decoration: const InputDecoration(labelText: "Fecha", labelStyle: TextStyle(color: TemaContador.textoTenue)),
+                                    decoration: _decoracion("Fecha"),
                                     child: Text("${_asiento.fecha.day}/${_asiento.fecha.month}/${_asiento.fecha.year}", style: const TextStyle(color: TemaContador.textoFuerte)),
                                   ),
                                 ),
                               ),
                               const SizedBox(width: 10),
-                              Expanded(child: TextField(controller: _referenciaCtrl, style: const TextStyle(color: TemaContador.textoFuerte), decoration: const InputDecoration(labelText: "Referencia (opcional)"))),
+                              Expanded(child: TextField(controller: _referenciaCtrl, style: const TextStyle(color: TemaContador.textoFuerte), decoration: _decoracion("Referencia (opcional)"))),
                             ]),
                             const SizedBox(height: 10),
-                            TextField(controller: _conceptoCtrl, style: const TextStyle(color: TemaContador.textoFuerte), decoration: const InputDecoration(labelText: "Concepto del asiento *")),
+                            TextField(controller: _conceptoCtrl, style: const TextStyle(color: TemaContador.textoFuerte), decoration: _decoracion("Concepto del asiento *")),
                           ],
                         ),
                       ),
@@ -478,7 +488,7 @@ class _AsientoContableFormScreenState extends State<AsientoContableFormScreen> {
                                   child: DropdownButtonFormField<int>(
                                     initialValue: d.cuenta,
                                     isExpanded: true,
-                                    decoration: const InputDecoration(labelText: "Cuenta", labelStyle: TextStyle(color: TemaContador.textoTenue)),
+                                    decoration: _decoracion("Cuenta"),
                                     style: const TextStyle(color: TemaContador.textoFuerte),
                                     dropdownColor: TemaContador.fondo,
                                     items: _cuentas.map((c) => DropdownMenuItem(value: c.id, child: Text("${c.codigo} - ${c.nombre}", overflow: TextOverflow.ellipsis, style: const TextStyle(color: TemaContador.textoFuerte)))).toList(),
@@ -491,7 +501,7 @@ class _AsientoContableFormScreenState extends State<AsientoContableFormScreen> {
                                 ),
                               ]),
                               const SizedBox(height: 8),
-                              TextField(controller: _detalleCtrls[i], style: const TextStyle(color: TemaContador.textoFuerte), decoration: const InputDecoration(labelText: "Glosa de la línea (opcional)", labelStyle: TextStyle(color: TemaContador.textoTenue))),
+                              TextField(controller: _detalleCtrls[i], style: const TextStyle(color: TemaContador.textoFuerte), decoration: _decoracion("Glosa de la línea (opcional)")),
                               const SizedBox(height: 8),
                               Row(children: [
                                 Expanded(
@@ -499,7 +509,7 @@ class _AsientoContableFormScreenState extends State<AsientoContableFormScreen> {
                                     controller: _debeCtrls[i],
                                     keyboardType: TextInputType.number,
                                     style: const TextStyle(color: TemaContador.textoFuerte),
-                                    decoration: const InputDecoration(labelText: "Debe", labelStyle: TextStyle(color: TemaContador.textoTenue)),
+                                    decoration: _decoracion("Debe"),
                                     onChanged: (v) {
                                       if (v.isNotEmpty) _haberCtrls[i].clear();
                                       setState(() {});
@@ -512,7 +522,7 @@ class _AsientoContableFormScreenState extends State<AsientoContableFormScreen> {
                                     controller: _haberCtrls[i],
                                     keyboardType: TextInputType.number,
                                     style: const TextStyle(color: TemaContador.textoFuerte),
-                                    decoration: const InputDecoration(labelText: "Haber", labelStyle: TextStyle(color: TemaContador.textoTenue)),
+                                    decoration: _decoracion("Haber"),
                                     onChanged: (v) {
                                       if (v.isNotEmpty) _debeCtrls[i].clear();
                                       setState(() {});
