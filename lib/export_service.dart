@@ -22,6 +22,39 @@ import 'negocio.dart';
 class ExportService {
   static pw.ThemeData? _temaCache;
 
+  /// Tarifa de IVA de una línea, redondeada al entero más cercano (0, 1, 2,
+  /// 4, 13) -- mismo criterio que usa el backend para tarifa_pct
+  /// (monto_iva / subtotal * 100), calculado acá porque el listado de
+  /// facturas de este reporte no trae el desglose por tarifa ya armado.
+  static int _tarifaLinea(DetalleFacturaItem d) => d.subtotal > 0 ? (d.montoIva / d.subtotal * 100).round() : 0;
+
+  /// Tarifa de una factura completa para mostrarla en una sola columna:
+  /// el porcentaje si todas sus líneas comparten la misma tarifa, o
+  /// "Mixta" si combina varias (ej. productos exentos y gravados juntos).
+  static String _tarifaFactura(Factura f) {
+    final tarifas = f.detalles.map(_tarifaLinea).toSet();
+    if (tarifas.isEmpty) return '-';
+    if (tarifas.length > 1) return 'Mixta';
+    return '${tarifas.first}%';
+  }
+
+  /// Agrupa las líneas de todas las facturas por tarifa de IVA y suma la
+  /// base (subtotal) y el IVA de cada una -- mismo desglose que "Detalle
+  /// por tarifa de IVA" en la Declaración de IVA, calculado del lado del
+  /// cliente a partir de los detalles de cada factura.
+  static ({Map<int, double> base, Map<int, double> iva}) _agruparPorTarifa(List<Factura> facturas) {
+    final base = <int, double>{};
+    final iva = <int, double>{};
+    for (final f in facturas) {
+      for (final d in f.detalles) {
+        final t = _tarifaLinea(d);
+        base[t] = (base[t] ?? 0) + d.subtotal;
+        iva[t] = (iva[t] ?? 0) + d.montoIva;
+      }
+    }
+    return (base: base, iva: iva);
+  }
+
   /// Guarda un archivo Excel ya armado, pidiéndole al usuario dónde. En Web
   /// no existe un sistema de archivos real: hay que pasarle los bytes
   /// directo a saveFile() para que dispare la descarga del navegador. En
@@ -132,25 +165,12 @@ class ExportService {
             ],
           ),
         ),
-        pw.SizedBox(height: 20),
-        pw.TableHelper.fromTextArray(
-          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-          headers: const ['Fecha', 'Doc #', 'Cliente', 'Condición', 'Subtotal', 'IVA', 'Total'],
-          data: facturas.map((f) => [
-            f.fechaEmision.split('T')[0],
-            'F-${f.consecutivo}',
-            f.receptorNombre,
-            f.condicionVenta == "02" ? 'Crédito' : 'Contado',
-            formatearColones(f.totalFactura - f.totalIva),
-            formatearColones(f.totalIva),
-            formatearColones(f.totalFactura),
-          ]).toList(),
-        ),
-        pw.SizedBox(height: 20),
-        pw.Align(
-          alignment: pw.Alignment.centerRight,
-          child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.end,
+        pw.SizedBox(height: 16),
+        pw.Container(
+          padding: const pw.EdgeInsets.all(10),
+          decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey400), borderRadius: pw.BorderRadius.circular(6)),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
               pw.Text(
                 'Subtotal: ${formatearColones(facturas.fold<double>(0.0, (sum, f) => sum + (f.totalFactura - f.totalIva)))}',
@@ -160,36 +180,81 @@ class ExportService {
                 'IVA: ${formatearColones(facturas.fold<double>(0.0, (sum, f) => sum + f.totalIva))}',
                 style: const pw.TextStyle(fontSize: 12),
               ),
-              pw.SizedBox(height: 4),
               pw.Text(
-                'Total Facturado: ${formatearColones(facturas.fold<double>(0.0, (sum, f) => sum + f.totalFactura))}',
-                style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16),
+                'Total: ${formatearColones(facturas.fold<double>(0.0, (sum, f) => sum + f.totalFactura))}',
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 13),
               ),
             ],
           ),
         ),
+        pw.SizedBox(height: 20),
+        pw.TableHelper.fromTextArray(
+          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+          headers: const ['Fecha', 'Doc #', 'Cliente', 'Condición', 'Subtotal', 'Tarifa', 'IVA', 'Total'],
+          data: facturas.map((f) => [
+            f.fechaEmision.split('T')[0],
+            'F-${f.consecutivo}',
+            f.receptorNombre,
+            f.condicionVenta == "02" ? 'Crédito' : 'Contado',
+            formatearColones(f.totalFactura - f.totalIva),
+            _tarifaFactura(f),
+            formatearColones(f.totalIva),
+            formatearColones(f.totalFactura),
+          ]).toList(),
+        ),
+        pw.SizedBox(height: 24),
+        pw.Text('Detalle por tarifa de IVA', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 8),
+        pw.Builder(builder: (context) {
+          final porTarifa = _agruparPorTarifa(facturas);
+          final tarifas = porTarifa.base.keys.toList()..sort();
+          return pw.TableHelper.fromTextArray(
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            headers: const ['Tarifa', 'Base', 'IVA', 'Total'],
+            data: tarifas.map((t) {
+              final base = porTarifa.base[t] ?? 0;
+              final iva = porTarifa.iva[t] ?? 0;
+              return ['$t%', formatearColones(base), formatearColones(iva), formatearColones(base + iva)];
+            }).toList(),
+          );
+        }),
       ],
     ));
     await Printing.layoutPdf(onLayout: (format) async => pdf.save(), name: 'Facturacion.pdf');
   }
 
-  /// Exporta el listado de facturas a Excel
+  /// Exporta el listado de facturas a Excel: fila 1-2 el resumen de sumas
+  /// (Subtotal/IVA/Total de todo el periodo), fila 4 el encabezado de la
+  /// tabla y desde la fila 5 el detalle línea por línea -- y una hoja
+  /// aparte con el desglose agrupado por tarifa de IVA.
   static Future<void> exportFacturasToExcel(List<Factura> facturas) async {
     var excel = Excel.createExcel();
     Sheet sheetObject = excel['Facturas'];
 
-    sheetObject.appendRow([
+    final sumaSubtotal = facturas.fold<double>(0.0, (s, f) => s + (f.totalFactura - f.totalIva));
+    final sumaIva = facturas.fold<double>(0.0, (s, f) => s + f.totalIva);
+    final sumaTotal = facturas.fold<double>(0.0, (s, f) => s + f.totalFactura);
+
+    sheetObject.appendRow([TextCellValue('Reporte de Facturación')]); // fila 1
+    sheetObject.appendRow([                                          // fila 2: sumas del periodo
+      TextCellValue('Subtotal:'), DoubleCellValue(sumaSubtotal),
+      TextCellValue('IVA:'), DoubleCellValue(sumaIva),
+      TextCellValue('Total:'), DoubleCellValue(sumaTotal),
+    ]);
+    sheetObject.appendRow([]); // fila 3: separador
+    sheetObject.appendRow([    // fila 4: encabezado de la tabla
       TextCellValue('Fecha'),
       TextCellValue('Consecutivo'),
       TextCellValue('Cliente'),
       TextCellValue('Cédula'),
       TextCellValue('Condición'),
       TextCellValue('Subtotal'),
+      TextCellValue('Tarifa'),
       TextCellValue('IVA'),
       TextCellValue('Total'),
     ]);
 
-    for (var f in facturas) {
+    for (var f in facturas) { // fila 5 en adelante: una por factura
       sheetObject.appendRow([
         TextCellValue(f.fechaEmision.split('T')[0]),
         TextCellValue(f.consecutivo),
@@ -197,10 +262,37 @@ class ExportService {
         TextCellValue(f.receptorCedula ?? ''),
         TextCellValue(f.condicionVenta == "02" ? 'Crédito' : 'Contado'),
         DoubleCellValue(f.totalFactura - f.totalIva),
+        TextCellValue(_tarifaFactura(f)),
         DoubleCellValue(f.totalIva),
         DoubleCellValue(f.totalFactura),
       ]);
     }
+
+    final hojaTarifas = excel['Detalle por Tarifa'];
+    hojaTarifas.appendRow([TextCellValue('Detalle por Tarifa de IVA')]);
+    hojaTarifas.appendRow([]);
+    hojaTarifas.appendRow([TextCellValue('Tarifa'), TextCellValue('Base'), TextCellValue('IVA'), TextCellValue('Total')]);
+    final porTarifa = _agruparPorTarifa(facturas);
+    final tarifasOrdenadas = porTarifa.base.keys.toList()..sort();
+    for (final t in tarifasOrdenadas) {
+      final base = porTarifa.base[t] ?? 0;
+      final iva = porTarifa.iva[t] ?? 0;
+      hojaTarifas.appendRow([
+        TextCellValue('$t%'),
+        DoubleCellValue(base),
+        DoubleCellValue(iva),
+        DoubleCellValue(base + iva),
+      ]);
+    }
+    hojaTarifas.appendRow([]);
+    hojaTarifas.appendRow([
+      TextCellValue('TOTAL'),
+      DoubleCellValue(porTarifa.base.values.fold(0.0, (s, v) => s + v)),
+      DoubleCellValue(porTarifa.iva.values.fold(0.0, (s, v) => s + v)),
+      DoubleCellValue(
+        porTarifa.base.values.fold(0.0, (s, v) => s + v) + porTarifa.iva.values.fold(0.0, (s, v) => s + v),
+      ),
+    ]);
 
     await _guardarExcel(excel, dialogTitle: 'Guardar Reporte de Facturación', fileName: 'reporte_facturacion.xlsx');
   }
