@@ -135,21 +135,37 @@ class ExportService {
         pw.SizedBox(height: 20),
         pw.TableHelper.fromTextArray(
           headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-          headers: const ['Fecha', 'Doc #', 'Cliente', 'Condición', 'Monto'],
+          headers: const ['Fecha', 'Doc #', 'Cliente', 'Condición', 'Subtotal', 'IVA', 'Total'],
           data: facturas.map((f) => [
             f.fechaEmision.split('T')[0],
             'F-${f.consecutivo}',
             f.receptorNombre,
             f.condicionVenta == "02" ? 'Crédito' : 'Contado',
+            formatearColones(f.totalFactura - f.totalIva),
+            formatearColones(f.totalIva),
             formatearColones(f.totalFactura),
           ]).toList(),
         ),
         pw.SizedBox(height: 20),
         pw.Align(
           alignment: pw.Alignment.centerRight,
-          child: pw.Text(
-            'Total Facturado: ${formatearColones(facturas.fold<double>(0.0, (sum, f) => sum + f.totalFactura))}',
-            style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.end,
+            children: [
+              pw.Text(
+                'Subtotal: ${formatearColones(facturas.fold<double>(0.0, (sum, f) => sum + (f.totalFactura - f.totalIva)))}',
+                style: const pw.TextStyle(fontSize: 12),
+              ),
+              pw.Text(
+                'IVA: ${formatearColones(facturas.fold<double>(0.0, (sum, f) => sum + f.totalIva))}',
+                style: const pw.TextStyle(fontSize: 12),
+              ),
+              pw.SizedBox(height: 4),
+              pw.Text(
+                'Total Facturado: ${formatearColones(facturas.fold<double>(0.0, (sum, f) => sum + f.totalFactura))}',
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16),
+              ),
+            ],
           ),
         ),
       ],
@@ -168,6 +184,7 @@ class ExportService {
       TextCellValue('Cliente'),
       TextCellValue('Cédula'),
       TextCellValue('Condición'),
+      TextCellValue('Subtotal'),
       TextCellValue('IVA'),
       TextCellValue('Total'),
     ]);
@@ -179,6 +196,7 @@ class ExportService {
         TextCellValue(f.receptorNombre),
         TextCellValue(f.receptorCedula ?? ''),
         TextCellValue(f.condicionVenta == "02" ? 'Crédito' : 'Contado'),
+        DoubleCellValue(f.totalFactura - f.totalIva),
         DoubleCellValue(f.totalIva),
         DoubleCellValue(f.totalFactura),
       ]);
