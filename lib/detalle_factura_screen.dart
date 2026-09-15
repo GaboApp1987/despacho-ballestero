@@ -343,6 +343,35 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (factura.motivoRechazo != null && factura.motivoRechazo!.isNotEmpty) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.red.withOpacity(0.3)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(Icons.error_outline, color: Colors.red, size: 18),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      factura.estadoHacienda == '5' ? "Motivo del error" : "Motivo del rechazo",
+                                      style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 13),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Text(factura.motivoRechazo!, style: const TextStyle(fontSize: 13, color: Colors.black87)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                        ],
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [

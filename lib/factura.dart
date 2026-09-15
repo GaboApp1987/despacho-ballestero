@@ -63,6 +63,10 @@ class Factura {
   final String nombreNegocio;
   final String? logoNegocioUrl;
   final NegocioInfo? negocioInfo;
+  // Motivo legible del rechazo/error técnico de Hacienda -- solo viene
+  // lleno cuando estadoHacienda es '4' (Rechazada) o '5' (Error Técnico),
+  // ver Factura.get_motivo_rechazo en el backend.
+  final String? motivoRechazo;
 
   bool get esTiquete => tipoDocumento == '04';
 
@@ -88,6 +92,7 @@ class Factura {
     this.nombreNegocio = '',
     this.logoNegocioUrl,
     this.negocioInfo,
+    this.motivoRechazo,
   });
 
   factory Factura.fromJson(Map<String, dynamic> json) {
@@ -117,6 +122,7 @@ class Factura {
       nombreNegocio: json['nombre_negocio'] ?? '',
       logoNegocioUrl: json['logo_negocio'],
       negocioInfo: json['negocio_info'] != null ? NegocioInfo.fromJson(json['negocio_info']) : null,
+      motivoRechazo: json['motivo_rechazo'],
     );
   }
 }
