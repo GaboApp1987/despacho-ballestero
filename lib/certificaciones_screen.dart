@@ -10,13 +10,11 @@ import 'certificacion_ingreso.dart';
 import 'descarga_navegador_stub.dart' if (dart.library.html) 'descarga_navegador_web.dart';
 import 'negocio.dart';
 
-/// Nombre de archivo legible para una certificación: "CPA <contador> -
-/// <solicitante>.pdf/.docx" en vez de un id suelto.
+/// Nombre de archivo legible para una certificación: el nombre del
+/// solicitante en vez de un id suelto.
 String _nombreArchivoCertificacion(CertificacionIngreso cert, String formato) {
-  final cpa = (cert.socioNombre ?? '').trim();
   final solicitante = cert.nombreSolicitante.trim();
-  final partes = [if (cpa.isNotEmpty) 'CPA $cpa', if (solicitante.isNotEmpty) solicitante];
-  var nombre = partes.isEmpty ? 'certificacion_ingresos_${cert.id}' : partes.join(' - ');
+  var nombre = solicitante.isEmpty ? 'certificacion_ingresos_${cert.id}' : solicitante;
   nombre = nombre.replaceAll(RegExp(r'[\\/*?:"<>|]'), '');
   return '$nombre.${formato == 'pdf' ? 'pdf' : 'docx'}';
 }
