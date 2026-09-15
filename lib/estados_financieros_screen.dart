@@ -131,6 +131,85 @@ class _EstadosFinancierosScreenState extends State<EstadosFinancierosScreen> {
     );
   }
 
+  Widget _alertaBanner({required String nivel, required String mensaje}) {
+    final Color color = switch (nivel) {
+      'alerta' => Colors.red,
+      'aviso' => Colors.orange,
+      _ => TemaContador.acento,
+    };
+    final IconData icono = switch (nivel) {
+      'alerta' => Icons.error_outline,
+      'aviso' => Icons.warning_amber_rounded,
+      _ => Icons.info_outline,
+    };
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(10), border: Border.all(color: color)),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icono, color: color, size: 18),
+          const SizedBox(width: 10),
+          Expanded(child: Text(mensaje, style: const TextStyle(color: TemaContador.textoFuerte, fontSize: 12.5))),
+        ],
+      ),
+    );
+  }
+
+  Widget _indicador(String etiqueta, dynamic valor, {bool esPorcentaje = false}) {
+    final n = valor == null ? null : _num(valor);
+    final texto = n == null ? '—' : (esPorcentaje ? '${(n * 100).toStringAsFixed(1)}%' : n.toStringAsFixed(2));
+    return SizedBox(
+      width: 140,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(etiqueta, style: const TextStyle(color: TemaContador.textoTenue, fontSize: 11.5)),
+          const SizedBox(height: 2),
+          Text(texto, style: const TextStyle(color: TemaContador.textoFuerte, fontWeight: FontWeight.bold, fontSize: 16)),
+        ],
+      ),
+    );
+  }
+
+  String _fechaCorta(dynamic iso) {
+    final f = DateTime.tryParse(iso?.toString() ?? '');
+    if (f == null) return '—';
+    return "${f.day}/${f.month}/${f.year}";
+  }
+
+  Widget _filaComparacion(String etiqueta, dynamic actual, dynamic anterior, dynamic variacionPct) {
+    final variacion = variacionPct == null ? null : _num(variacionPct);
+    final subiendo = variacion != null && variacion >= 0;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(flex: 2, child: Text(etiqueta, style: const TextStyle(color: TemaContador.textoFuerte, fontSize: 13))),
+          Expanded(flex: 2, child: Text(_monto(actual), style: const TextStyle(color: TemaContador.textoFuerte, fontSize: 13), textAlign: TextAlign.right)),
+          Expanded(
+            flex: 3,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text("vs. ${_monto(anterior)}", style: const TextStyle(color: TemaContador.textoTenue, fontSize: 11.5)),
+                const SizedBox(width: 6),
+                if (variacion != null) ...[
+                  Icon(subiendo ? Icons.arrow_upward : Icons.arrow_downward, size: 13, color: subiendo ? Colors.green : Colors.red),
+                  Text("${variacion.abs().toStringAsFixed(1)}%", style: TextStyle(color: subiendo ? Colors.green.shade800 : Colors.red, fontSize: 12, fontWeight: FontWeight.w600)),
+                ] else
+                  const Text("n/d", style: TextStyle(color: TemaContador.textoTenue, fontSize: 11.5)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _tarjeta({required String titulo, required Widget child}) => Container(
         width: double.infinity,
         margin: const EdgeInsets.only(bottom: 16),
@@ -187,6 +266,9 @@ class _EstadosFinancierosScreenState extends State<EstadosFinancierosScreen> {
   Widget build(BuildContext context) {
     final bg = _datos?['balance_general'] as Map<String, dynamic>?;
     final er = _datos?['estado_resultados'] as Map<String, dynamic>?;
+    final ratios = _datos?['ratios'] as Map<String, dynamic>?;
+    final alertas = (_datos?['alertas'] as List?) ?? [];
+    final comparacion = _datos?['comparacion_periodo_anterior'] as Map<String, dynamic>?;
 
     return Scaffold(
       backgroundColor: TemaContador.fondo,
@@ -216,6 +298,10 @@ class _EstadosFinancierosScreenState extends State<EstadosFinancierosScreen> {
                           _fechaChip(etiqueta: "Corte", fecha: _fechaCorte, onTap: () => _elegirFecha(esInicio: false)),
                         ],
                       ),
+                      if (alertas.isNotEmpty) ...[
+                        const SizedBox(height: 14),
+                        ...alertas.map((a) => _alertaBanner(nivel: a['nivel'], mensaje: a['mensaje'])),
+                      ],
                       const SizedBox(height: 16),
                       SizedBox(
                         width: double.infinity,
@@ -260,6 +346,40 @@ class _EstadosFinancierosScreenState extends State<EstadosFinancierosScreen> {
                               ),
                               const SizedBox(height: 10),
                               Text(_analisis!, style: const TextStyle(color: TemaContador.textoFuerte, fontSize: 13.5, height: 1.4)),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(height: 16),
+                      if (ratios != null)
+                        _tarjeta(
+                          titulo: "Indicadores financieros",
+                          child: Wrap(
+                            spacing: 24,
+                            runSpacing: 14,
+                            children: [
+                              _indicador("Endeudamiento", ratios['endeudamiento'], esPorcentaje: true),
+                              _indicador("Apalancamiento", ratios['apalancamiento'], esPorcentaje: true),
+                              _indicador("Margen bruto", ratios['margen_bruto'], esPorcentaje: true),
+                              _indicador("Margen neto", ratios['margen_neto'], esPorcentaje: true),
+                              _indicador("ROA", ratios['roa'], esPorcentaje: true),
+                              _indicador("ROE", ratios['roe'], esPorcentaje: true),
+                            ],
+                          ),
+                        ),
+                      if (comparacion != null)
+                        _tarjeta(
+                          titulo: "Comparación con el periodo anterior",
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Periodo anterior: ${_fechaCorta(comparacion['fecha_inicio_anterior'])} - ${_fechaCorta(comparacion['fecha_corte_anterior'])}",
+                                style: const TextStyle(color: TemaContador.textoTenue, fontSize: 12),
+                              ),
+                              const SizedBox(height: 10),
+                              _filaComparacion("Ingresos", er?['total_ingresos'], comparacion['total_ingresos_anterior'], comparacion['variacion_ingresos_pct']),
+                              _filaComparacion("Utilidad neta", er?['utilidad_neta'], comparacion['utilidad_neta_anterior'], comparacion['variacion_utilidad_pct']),
+                              _filaComparacion("Activo total", bg?['total_activo'], comparacion['total_activo_anterior'], comparacion['variacion_activo_pct']),
                             ],
                           ),
                         ),
