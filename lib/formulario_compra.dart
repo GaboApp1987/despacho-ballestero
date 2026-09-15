@@ -59,14 +59,24 @@ class _FormularioCompraState extends State<FormularioCompra> {
       _bytesComprobante = bytes;
       _nombreComprobante = nombre;
     });
-    if (nombre.toLowerCase().endsWith('.xml')) {
+    // XML: se lee exacto, sin IA. PDF/foto: la mayoría de proveedores
+    // pequeños no facturan electrónicamente y solo dan un recibo en PDF o
+    // una foto -- se le pide a Claude que lo lea (ver leer_xml en el
+    // backend, que ahora acepta ambos formatos y decide según el archivo).
+    final esLeible = nombre.toLowerCase().endsWith('.xml') ||
+        nombre.toLowerCase().endsWith('.pdf') ||
+        nombre.toLowerCase().endsWith('.jpg') ||
+        nombre.toLowerCase().endsWith('.jpeg') ||
+        nombre.toLowerCase().endsWith('.png');
+    if (esLeible) {
       await _leerXmlProveedor(bytes, nombre);
     }
   }
 
-  /// Lee el XML de la factura electrónica del proveedor (el mismo formato
-  /// que emite Hacienda) y precarga proveedor, número de factura y las
-  /// líneas de producto — así lo hacen los demás programas de CR.
+  /// Lee el comprobante del proveedor y precarga proveedor, número de
+  /// factura y las líneas de producto -- un XML de Hacienda se lee exacto;
+  /// un PDF o foto de un recibo común se lee con IA (ver leer_xml en el
+  /// backend).
   Future<void> _leerXmlProveedor(Uint8List bytes, String nombreArchivo) async {
     setState(() => _procesandoXml = true);
     try {
@@ -578,7 +588,7 @@ class _FormularioCompraState extends State<FormularioCompra> {
                       : const Icon(Icons.attach_file),
                   label: Text(
                     _procesandoXml
-                        ? "Leyendo XML..."
+                        ? "Leyendo comprobante..."
                         : _nombreComprobante ?? "Adjuntar comprobante (PDF, imagen o XML de Hacienda)",
                     overflow: TextOverflow.ellipsis,
                   ),
