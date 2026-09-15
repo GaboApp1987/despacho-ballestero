@@ -66,23 +66,21 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
   // Cada seccion de la app, compartida entre la barra de pildoras de
   // escritorio (_buildPillTabsBar) y la lista vertical del Drawer movil
   // (_itemsMenu) -- un solo lugar para agregar/quitar secciones.
-  // Orden agrupado por función y frecuencia de uso (antes era una lista sin
-  // criterio claro): Dashboard primero, luego todo el ciclo de Ventas
-  // (facturar -> cobrar), Inventario, el ciclo de Compras (comprar ->
-  // pagar), Contabilidad/Reportes, y por último Administración (lo que se
-  // toca con menos frecuencia).
+  // Orden agrupado por función y frecuencia de uso: Dashboard primero,
+  // Clientes e Inventario antes de Facturas (se necesitan para armar una
+  // factura), el resto del ciclo de Ventas, Compras, Contabilidad/Reportes,
+  // y por último Administración (lo que se toca con menos frecuencia).
   static const List<({int id, IconData icono, String titulo})> _menuItems = [
     (id: 1, icono: Icons.pie_chart_outline, titulo: "Dashboard"),
+    (id: 2, icono: Icons.people_outline, titulo: "Clientes"),
+    (id: 3, icono: Icons.inventory_2_outlined, titulo: "Inventario"),
     // -- Ventas --
     (id: 0, icono: Icons.receipt_long_outlined, titulo: "Facturas"),
     (id: 4, icono: Icons.request_quote_outlined, titulo: "Cotizaciones"),
-    (id: 2, icono: Icons.people_outline, titulo: "Clientes"),
     (id: 6, icono: Icons.monetization_on_outlined, titulo: "Cuentas por Cobrar"),
     (id: 16, icono: Icons.receipt_outlined, titulo: "Recibos de Pago"),
     (id: 15, icono: Icons.assignment_return_outlined, titulo: "Notas de Crédito/Débito"),
     (id: 11, icono: Icons.loyalty_outlined, titulo: "Tarjeta de Lealtad"),
-    // -- Inventario --
-    (id: 3, icono: Icons.inventory_2_outlined, titulo: "Inventario"),
     // -- Compras --
     (id: 8, icono: Icons.shopping_cart_outlined, titulo: "Compras"),
     (id: 17, icono: Icons.mark_email_read_outlined, titulo: "Correos de Compra"),
