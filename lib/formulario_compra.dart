@@ -41,6 +41,10 @@ class _FormularioCompraState extends State<FormularioCompra> {
   bool _procesandoXml = false;
   Uint8List? _bytesComprobante;
   String? _nombreComprobante;
+  // Clave de 50 dígitos del comprobante electrónico del proveedor (solo
+  // presente si esta compra vino de un XML real): se guarda para poder
+  // mandarle después a Hacienda el Mensaje Receptor de esta compra.
+  String? _claveHacienda;
 
   Future<void> _elegirComprobante() async {
     final resultado = await FilePicker.platform.pickFiles(
@@ -95,6 +99,9 @@ class _FormularioCompraState extends State<FormularioCompra> {
   Future<void> _aplicarDatosParseados(Map datos) async {
     try {
       _facturaProveedorController.text = datos['numero_factura'] ?? datos['clave'] ?? '';
+      if ((datos['clave'] as String?)?.isNotEmpty == true) {
+        _claveHacienda = datos['clave'] as String;
+      }
 
       // Proveedor: si ya existe (por cédula) se selecciona; si no, se crea
       // automáticamente con los datos del XML.
@@ -468,6 +475,7 @@ class _FormularioCompraState extends State<FormularioCompra> {
           'cantidad': item.cantidad,
           'precio_costo': redondear2(item.precioCosto),
         }).toList(),
+        if (_claveHacienda != null) 'clave_hacienda': _claveHacienda,
       };
 
       final res = await ApiService.post('/compras/', body);

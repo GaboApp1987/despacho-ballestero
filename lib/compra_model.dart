@@ -89,6 +89,13 @@ class Compra {
   final String? comprobanteUrl;
   final List<DetalleCompraItem> detalles;
   final List<NotaDebitoCompraItem> notasDebito;
+  // Clave del comprobante del proveedor (solo si la compra vino de un XML
+  // real) y estado del Mensaje Receptor que este negocio le mandó a
+  // Hacienda sobre esa compra -- ver Compra.mensaje_receptor_* en el backend.
+  final String? claveHacienda;
+  final String? mensajeReceptorTipo;
+  final String? mensajeReceptorEstado;
+  final String? mensajeReceptorFecha;
 
   Compra({
     required this.id,
@@ -102,6 +109,10 @@ class Compra {
     this.comprobanteUrl,
     required this.detalles,
     this.notasDebito = const [],
+    this.claveHacienda,
+    this.mensajeReceptorTipo,
+    this.mensajeReceptorEstado,
+    this.mensajeReceptorFecha,
   });
 
   factory Compra.fromJson(Map<String, dynamic> json) {
@@ -121,6 +132,10 @@ class Compra {
       notasDebito: ((json['notas_debito'] ?? []) as List)
           .map((n) => NotaDebitoCompraItem.fromJson(n))
           .toList(),
+      claveHacienda: (json['clave_hacienda'] as String?)?.isNotEmpty == true ? json['clave_hacienda'] : null,
+      mensajeReceptorTipo: (json['mensaje_receptor_tipo'] as String?)?.isNotEmpty == true ? json['mensaje_receptor_tipo'] : null,
+      mensajeReceptorEstado: (json['mensaje_receptor_estado'] as String?)?.isNotEmpty == true ? json['mensaje_receptor_estado'] : null,
+      mensajeReceptorFecha: json['mensaje_receptor_fecha'],
     );
   }
 }

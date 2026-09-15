@@ -662,6 +662,134 @@ class _ComprasScreenState extends State<ComprasScreen> {
     );
   }
 
+  String _textoEstadoMensajeReceptor(Compra c) {
+    switch (c.mensajeReceptorEstado) {
+      case 'ENVIADO':
+        return "Mensaje Receptor enviado a Hacienda";
+      case 'ACEPTADO':
+        return "Aceptado por Hacienda";
+      case 'RECHAZADO':
+        return "Rechazado por Hacienda";
+      case 'ERROR':
+        return "Error al enviar el Mensaje Receptor";
+      default:
+        return "Pendiente de responder a Hacienda";
+    }
+  }
+
+  /// Abre el diálogo para mandarle a Hacienda el Mensaje Receptor de esta
+  /// compra -- la confirmación OFICIAL de aceptación/rechazo del
+  /// comprobante del proveedor, separada de simplemente tenerla registrada
+  /// en la contabilidad. Solo aparece si la compra vino de un XML real
+  /// (c.claveHacienda != null, ver FormularioCompra/CorreoCompraRecibido).
+  Future<void> _abrirMensajeReceptor(Compra c) async {
+    String tipo = '1';
+    final detalleCtrl = TextEditingController();
+    bool enviando = false;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setStateDialog) => AlertDialog(
+          title: const Text("Mensaje Receptor a Hacienda"),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Es la respuesta OFICIAL ante Hacienda sobre la factura de ${c.nombreProveedor ?? 'este proveedor'} "
+                    "(${formatearColones(c.totalCompra)}) -- una vez enviada, queda registrada como una declaración tributaria real. "
+                    "No se puede deshacer.",
+                    style: const TextStyle(fontSize: 12.5, color: Colors.grey),
+                  ),
+                  if (c.mensajeReceptorEstado != null) ...[
+                    const SizedBox(height: 10),
+                    Text("Estado actual: ${_textoEstadoMensajeReceptor(c)}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ],
+                  const SizedBox(height: 14),
+                  RadioListTile<String>(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text("Aceptar"),
+                    value: '1',
+                    groupValue: tipo,
+                    onChanged: enviando ? null : (v) => setStateDialog(() => tipo = v!),
+                  ),
+                  RadioListTile<String>(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text("Aceptar parcialmente"),
+                    value: '2',
+                    groupValue: tipo,
+                    onChanged: enviando ? null : (v) => setStateDialog(() => tipo = v!),
+                  ),
+                  RadioListTile<String>(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text("Rechazar"),
+                    value: '3',
+                    groupValue: tipo,
+                    onChanged: enviando ? null : (v) => setStateDialog(() => tipo = v!),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: detalleCtrl,
+                    enabled: !enviando,
+                    maxLength: 160,
+                    decoration: const InputDecoration(labelText: "Detalle (opcional)", border: OutlineInputBorder()),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: enviando ? null : () => Navigator.pop(ctx), child: const Text("Cancelar")),
+            ElevatedButton(
+              onPressed: enviando
+                  ? null
+                  : () async {
+                      setStateDialog(() => enviando = true);
+                      try {
+                        final res = await ApiService.post('/compras/${c.id}/mensaje-receptor/', {
+                          'tipo': tipo,
+                          'detalle': detalleCtrl.text.trim(),
+                        });
+                        if (res.statusCode == 200) {
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          _cargarDatos();
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("Mensaje Receptor enviado a Hacienda.")),
+                            );
+                          }
+                        } else {
+                          final error = json.decode(utf8.decode(res.bodyBytes))['detail'] ?? 'Error desconocido';
+                          setStateDialog(() => enviando = false);
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(error.toString())));
+                          }
+                        }
+                      } catch (e) {
+                        setStateDialog(() => enviando = false);
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Error: $e")));
+                        }
+                      }
+                    },
+              child: enviando
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text("Mandar a Hacienda"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildHistorial() {
     if (_compras.isEmpty && _correosPendientes.isEmpty) {
       return const Center(
@@ -701,6 +829,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
               [
                 if (c.numeroFacturaProveedor.isNotEmpty) "Factura: ${c.numeroFacturaProveedor}",
                 "Total: ${formatearColones(c.totalCompra)}",
+                if (c.claveHacienda != null) _textoEstadoMensajeReceptor(c),
               ].join(" · "),
             ),
             trailing: _modoSeleccion
@@ -713,11 +842,17 @@ class _ComprasScreenState extends State<ComprasScreen> {
                       PopupMenuButton<String>(
                         onSelected: (opcion) {
                           if (opcion == 'nota_debito') mostrarDialogoNotaDebito(context, c, onCreada: _cargarDatos);
+                          if (opcion == 'mensaje_receptor') _abrirMensajeReceptor(c);
                           if (opcion == 'borrar') _eliminarCompra(c);
                         },
-                        itemBuilder: (context) => const [
-                          PopupMenuItem(value: 'nota_debito', child: Text("Agregar Nota de Débito")),
-                          PopupMenuItem(value: 'borrar', child: Text("Borrar compra")),
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(value: 'nota_debito', child: Text("Agregar Nota de Débito")),
+                          if (c.claveHacienda != null)
+                            PopupMenuItem(
+                              value: 'mensaje_receptor',
+                              child: Text(c.mensajeReceptorEstado == null ? "Responder a Hacienda" : "Ver / reenviar respuesta a Hacienda"),
+                            ),
+                          const PopupMenuItem(value: 'borrar', child: Text("Borrar compra")),
                         ],
                       ),
                     ],
