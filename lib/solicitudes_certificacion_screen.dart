@@ -286,6 +286,24 @@ class _DetalleSolicitudScreenState extends State<_DetalleSolicitudScreen> {
     }
   }
 
+  IconData _iconoPorArchivo(String nombre) {
+    final ext = nombre.toLowerCase().split('.').last;
+    switch (ext) {
+      case 'pdf':
+        return Icons.picture_as_pdf_outlined;
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'webp':
+        return Icons.image_outlined;
+      case 'xlsx':
+      case 'xls':
+        return Icons.table_chart_outlined;
+      default:
+        return Icons.attach_file;
+    }
+  }
+
   Future<void> _completar() async {
     setState(() => _procesando = true);
     try {
@@ -430,28 +448,36 @@ class _DetalleSolicitudScreenState extends State<_DetalleSolicitudScreen> {
                 decoration: BoxDecoration(color: TemaContador.superficie, borderRadius: BorderRadius.circular(14), border: Border.all(color: TemaContador.borde)),
                 child: _campo("Comentario del cliente", s.mensajeCliente),
               ),
-            if (s.archivosAdjuntos.isNotEmpty)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(color: TemaContador.superficie, borderRadius: BorderRadius.circular(14), border: Border.all(color: TemaContador.borde)),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text("Estados de cuenta adjuntos", style: TextStyle(color: TemaContador.textoTenue, fontSize: 11.5, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 6),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(color: TemaContador.superficie, borderRadius: BorderRadius.circular(14), border: Border.all(color: TemaContador.borde)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Estados de cuenta adjuntos (${s.archivosAdjuntos.length})",
+                    style: const TextStyle(color: TemaContador.textoTenue, fontSize: 11.5, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 6),
+                  if (s.archivosAdjuntos.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 6),
+                      child: Text("El cliente no adjuntó ningún archivo con esta solicitud.", style: TextStyle(color: TemaContador.textoTenue, fontSize: 13)),
+                    )
+                  else
                     ...s.archivosAdjuntos.map((a) => ListTile(
                           dense: true,
                           contentPadding: EdgeInsets.zero,
-                          leading: const Icon(Icons.attach_file, size: 18, color: TemaContador.acento),
+                          leading: Icon(_iconoPorArchivo(a.nombreOriginal), size: 20, color: TemaContador.acento),
                           title: Text(a.nombreOriginal, style: const TextStyle(color: TemaContador.textoFuerte, fontSize: 13.5), overflow: TextOverflow.ellipsis),
                           trailing: const Icon(Icons.open_in_new, size: 16, color: TemaContador.textoTenue),
                           onTap: () => _abrirArchivo(a),
                         )),
-                  ],
-                ),
+                ],
               ),
+            ),
           ],
         ),
       ),
