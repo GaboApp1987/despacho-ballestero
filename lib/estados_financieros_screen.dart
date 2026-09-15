@@ -25,6 +25,10 @@ class _EstadosFinancierosScreenState extends State<EstadosFinancierosScreen> {
   late DateTime _fechaInicio;
   late DateTime _fechaCorte;
 
+  bool _analizando = false;
+  String? _analisis;
+  String? _errorAnalisis;
+
   @override
   void initState() {
     super.initState();
@@ -34,15 +38,23 @@ class _EstadosFinancierosScreenState extends State<EstadosFinancierosScreen> {
     _cargar();
   }
 
+  String get _queryPeriodo {
+    final fi = _fechaInicio.toIso8601String().split('T').first;
+    final fc = _fechaCorte.toIso8601String().split('T').first;
+    return 'negocio=${widget.negocioId}&fecha_inicio=$fi&fecha_corte=$fc';
+  }
+
   Future<void> _cargar() async {
     setState(() {
       _cargando = true;
       _error = null;
+      // Un análisis viejo corresponde a un periodo distinto una vez que se
+      // cambian las fechas -- se descarta para no confundir al contador.
+      _analisis = null;
+      _errorAnalisis = null;
     });
     try {
-      final fi = _fechaInicio.toIso8601String().split('T').first;
-      final fc = _fechaCorte.toIso8601String().split('T').first;
-      final r = await ApiService.get('/estados-financieros/?negocio=${widget.negocioId}&fecha_inicio=$fi&fecha_corte=$fc');
+      final r = await ApiService.get('/estados-financieros/?$_queryPeriodo');
       if (r.statusCode == 200) {
         if (mounted) setState(() => _datos = json.decode(utf8.decode(r.bodyBytes)));
       } else if (mounted) {
@@ -52,6 +64,26 @@ class _EstadosFinancierosScreenState extends State<EstadosFinancierosScreen> {
       if (mounted) setState(() => _error = "Error: $e");
     }
     if (mounted) setState(() => _cargando = false);
+  }
+
+  Future<void> _analizarConIA() async {
+    setState(() {
+      _analizando = true;
+      _errorAnalisis = null;
+    });
+    try {
+      final r = await ApiService.post('/estados-financieros/?$_queryPeriodo', {});
+      if (r.statusCode == 200) {
+        final data = json.decode(utf8.decode(r.bodyBytes));
+        if (mounted) setState(() => _analisis = data['analisis'] ?? '');
+      } else {
+        final data = json.decode(utf8.decode(r.bodyBytes));
+        if (mounted) setState(() => _errorAnalisis = data['detail']?.toString() ?? "No se pudo generar el análisis (HTTP ${r.statusCode}).");
+      }
+    } catch (e) {
+      if (mounted) setState(() => _errorAnalisis = "No se pudo generar el análisis: $e");
+    }
+    if (mounted) setState(() => _analizando = false);
   }
 
   Future<void> _elegirFecha({required bool esInicio}) async {
@@ -184,6 +216,53 @@ class _EstadosFinancierosScreenState extends State<EstadosFinancierosScreen> {
                           _fechaChip(etiqueta: "Corte", fecha: _fechaCorte, onTap: () => _elegirFecha(esInicio: false)),
                         ],
                       ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _analizando ? null : _analizarConIA,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: TemaContador.acento,
+                            disabledForegroundColor: TemaContador.textoTenue,
+                            side: const BorderSide(color: TemaContador.acento),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          icon: _analizando
+                              ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.auto_awesome_outlined),
+                          label: Text(_analizando ? "Analizando con IA..." : "Analizar con IA"),
+                        ),
+                      ),
+                      if (_errorAnalisis != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(_errorAnalisis!, style: const TextStyle(color: Colors.red, fontSize: 12.5)),
+                        ),
+                      if (_analisis != null && _analisis!.isNotEmpty)
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(top: 16),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: TemaContador.acento.withOpacity(0.06),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: TemaContador.acento.withOpacity(0.35)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: const [
+                                  Icon(Icons.auto_awesome_outlined, color: TemaContador.acento, size: 18),
+                                  SizedBox(width: 8),
+                                  Text("Análisis con IA", style: TextStyle(color: TemaContador.acento, fontWeight: FontWeight.bold, fontSize: 13)),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Text(_analisis!, style: const TextStyle(color: TemaContador.textoFuerte, fontSize: 13.5, height: 1.4)),
+                            ],
+                          ),
+                        ),
                       const SizedBox(height: 16),
                       if (er != null)
                         _tarjeta(
