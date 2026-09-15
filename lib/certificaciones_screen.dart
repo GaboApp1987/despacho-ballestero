@@ -1102,7 +1102,17 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                             child: TextField(
                               controller: _porcentajeCtrl,
                               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                              decoration: const InputDecoration(labelText: "% de egresos sobre los ingresos"),
+                              style: const TextStyle(color: TemaContador.textoFuerte, fontWeight: FontWeight.bold),
+                              decoration: InputDecoration(
+                                labelText: "% de egresos sobre ingresos",
+                                labelStyle: const TextStyle(color: TemaContador.textoTenue),
+                                floatingLabelStyle: const TextStyle(color: TemaContador.acento, fontWeight: FontWeight.w600),
+                                filled: true,
+                                fillColor: TemaContador.superficie,
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: TemaContador.borde)),
+                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: TemaContador.borde)),
+                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: TemaContador.acento, width: 1.5)),
+                              ),
                               onChanged: (_) => _aplicarPorcentajeATodos(),
                             ),
                           ),

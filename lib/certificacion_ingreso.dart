@@ -116,7 +116,10 @@ class CertificacionIngreso {
       fechaFin: DateTime.parse(json['fecha_fin']),
       moneda: json['moneda'] ?? 'CRC',
       modoEgresos: json['modo_egresos'] ?? 'manual',
-      porcentajeEgresos: (json['porcentaje_egresos'] as num?)?.toDouble(),
+      // Django manda un DecimalField como STRING en el JSON (ej. "25.00"),
+      // no como num -- un "as num?" directo tira TypeError apenas se guarda
+      // un porcentaje real. double.tryParse acepta String o num.toString().
+      porcentajeEgresos: json['porcentaje_egresos'] != null ? double.tryParse(json['porcentaje_egresos'].toString()) : null,
       datosMensuales: ((json['datos_mensuales'] as List?) ?? [])
           .map((m) => MesCertificacion.fromJson(m as Map<String, dynamic>))
           .toList(),
