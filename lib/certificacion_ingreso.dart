@@ -37,6 +37,7 @@ class CertificacionIngreso {
   final int? id;
   final int? negocio;
   final String? negocioNombre;
+  final String? socioNombre;
   String nombreSolicitante;
   String cedula;
   String tipoCedulaTexto;
@@ -73,6 +74,7 @@ class CertificacionIngreso {
     this.id,
     this.negocio,
     this.negocioNombre,
+    this.socioNombre,
     this.nombreSolicitante = '',
     this.cedula = '',
     this.tipoCedulaTexto = '',
@@ -101,6 +103,7 @@ class CertificacionIngreso {
       id: json['id'],
       negocio: json['negocio'],
       negocioNombre: json['negocio_nombre'],
+      socioNombre: json['socio_nombre'],
       nombreSolicitante: json['nombre_solicitante'] ?? '',
       cedula: json['cedula'] ?? '',
       tipoCedulaTexto: json['tipo_cedula_texto'] ?? '',

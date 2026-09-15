@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 import 'theme/app_theme.dart';
 
 import 'api_service.dart';
@@ -9,14 +10,25 @@ import 'certificacion_ingreso.dart';
 import 'descarga_navegador_stub.dart' if (dart.library.html) 'descarga_navegador_web.dart';
 import 'negocio.dart';
 
+/// Nombre de archivo legible para una certificación: "CPA <contador> -
+/// <solicitante>.pdf/.docx" en vez de un id suelto.
+String _nombreArchivoCertificacion(CertificacionIngreso cert, String formato) {
+  final cpa = (cert.socioNombre ?? '').trim();
+  final solicitante = cert.nombreSolicitante.trim();
+  final partes = [if (cpa.isNotEmpty) 'CPA $cpa', if (solicitante.isNotEmpty) solicitante];
+  var nombre = partes.isEmpty ? 'certificacion_ingresos_${cert.id}' : partes.join(' - ');
+  nombre = nombre.replaceAll(RegExp(r'[\\/*?:"<>|]'), '');
+  return '$nombre.${formato == 'pdf' ? 'pdf' : 'docx'}';
+}
+
 /// Descarga una certificación ya guardada en PDF o Word -- compartida entre
 /// la lista (descarga rápida sin abrir el formulario) y el formulario
 /// (botones "Guardar y PDF"/"Guardar y Word").
-Future<void> descargarCertificacion(BuildContext context, int certId, String formato) async {
+Future<void> descargarCertificacion(BuildContext context, CertificacionIngreso cert, String formato) async {
   try {
-    final response = await ApiService.get('/certificaciones-ingreso/$certId/$formato/');
+    final response = await ApiService.get('/certificaciones-ingreso/${cert.id}/$formato/');
     if (response.statusCode == 200) {
-      final nombreArchivo = "certificacion_ingresos_$certId.${formato == 'pdf' ? 'pdf' : 'docx'}";
+      final nombreArchivo = _nombreArchivoCertificacion(cert, formato);
       if (kIsWeb) {
         descargarBytesEnNavegador(response.bodyBytes, nombreArchivo);
       } else {
@@ -28,6 +40,53 @@ Future<void> descargarCertificacion(BuildContext context, int certId, String for
   } catch (e) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo descargar: $e")));
+    }
+  }
+}
+
+/// Pregunta PDF o Word y comparte esa certificación por el selector nativo
+/// (WhatsApp, correo, etc.) en vez de solo descargarla.
+Future<void> compartirCertificacion(BuildContext context, CertificacionIngreso cert) async {
+  final formato = await showDialog<String>(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: TemaContador.fondo,
+      title: const Text("¿En qué formato?", style: TextStyle(color: TemaContador.textoFuerte, fontSize: 16)),
+      content: const Text("Elegí cómo querés compartir esta certificación.", style: TextStyle(color: TemaContador.textoTenue)),
+      actions: [
+        TextButton.icon(
+          style: TextButton.styleFrom(foregroundColor: TemaContador.acento),
+          onPressed: () => Navigator.pop(context, 'pdf'),
+          icon: const Icon(Icons.picture_as_pdf_outlined),
+          label: const Text("PDF"),
+        ),
+        TextButton.icon(
+          style: TextButton.styleFrom(foregroundColor: TemaContador.acento),
+          onPressed: () => Navigator.pop(context, 'word'),
+          icon: const Icon(Icons.description_outlined),
+          label: const Text("Word"),
+        ),
+      ],
+    ),
+  );
+  if (formato == null || !context.mounted) return;
+  try {
+    final response = await ApiService.get('/certificaciones-ingreso/${cert.id}/$formato/');
+    if (response.statusCode == 200) {
+      final nombreArchivo = _nombreArchivoCertificacion(cert, formato);
+      final mimeType = formato == 'pdf'
+          ? 'application/pdf'
+          : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      await Share.shareXFiles(
+        [XFile.fromData(response.bodyBytes, name: nombreArchivo, mimeType: mimeType)],
+        text: 'Certificación de ingresos de ${cert.nombreSolicitante}.',
+      );
+    } else if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo compartir (HTTP ${response.statusCode}).")));
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo compartir: $e")));
     }
   }
 }
@@ -148,12 +207,17 @@ class _CertificacionesScreenState extends State<CertificacionesScreen> {
                               IconButton(
                                 icon: const Icon(Icons.picture_as_pdf_outlined, color: TemaContador.textoTenue),
                                 tooltip: "Descargar PDF",
-                                onPressed: () => descargarCertificacion(context, c.id!, 'pdf'),
+                                onPressed: () => descargarCertificacion(context, c, 'pdf'),
                               ),
                               IconButton(
                                 icon: const Icon(Icons.description_outlined, color: TemaContador.textoTenue),
                                 tooltip: "Descargar Word",
-                                onPressed: () => descargarCertificacion(context, c.id!, 'word'),
+                                onPressed: () => descargarCertificacion(context, c, 'word'),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.share_outlined, color: TemaContador.textoTenue),
+                                tooltip: "Compartir",
+                                onPressed: () => compartirCertificacion(context, c),
                               ),
                               const Icon(Icons.chevron_right, color: TemaContador.acento),
                             ],
@@ -539,7 +603,7 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
 
   Future<void> _descargar(String formato) async {
     if (_cert.id == null) return;
-    await descargarCertificacion(context, _cert.id!, formato);
+    await descargarCertificacion(context, _cert, formato);
   }
 
   /// Aplica lo que devolvió Claude a los controladores del formulario --
