@@ -81,9 +81,23 @@ class _SolicitudesCertificacionScreenState extends State<SolicitudesCertificacio
               const SizedBox(height: 14),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(color: TemaContador.superficie, borderRadius: BorderRadius.circular(10), border: Border.all(color: TemaContador.borde)),
-                child: SelectableText(link, style: const TextStyle(color: TemaContador.textoFuerte, fontSize: 13)),
+                child: Row(
+                  children: [
+                    Expanded(child: SelectableText(link, style: const TextStyle(color: TemaContador.textoFuerte, fontSize: 13))),
+                    IconButton(
+                      icon: const Icon(Icons.copy, size: 18, color: TemaContador.acento),
+                      tooltip: "Copiar link",
+                      onPressed: () async {
+                        await Clipboard.setData(ClipboardData(text: link));
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Link copiado"), backgroundColor: Colors.green));
+                        }
+                      },
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 6),
               Text("Tu código: $codigo", style: const TextStyle(color: TemaContador.textoTenue, fontSize: 12)),
