@@ -36,14 +36,29 @@ class DetalleCompraItem {
   final String nombreProducto;
   final int cantidad;
   final double precioCosto;
+  // IVA estimado de esta línea y la tarifa usada (según el impuesto
+  // asignado al producto) -- null si el producto no tiene impuesto
+  // asignado, no se puede estimar. Ver DetalleCompraSerializer.
+  final double? montoIva;
+  final double? tarifa;
 
-  DetalleCompraItem({required this.nombreProducto, required this.cantidad, required this.precioCosto});
+  DetalleCompraItem({
+    required this.nombreProducto,
+    required this.cantidad,
+    required this.precioCosto,
+    this.montoIva,
+    this.tarifa,
+  });
+
+  double get subtotal => cantidad * precioCosto;
 
   factory DetalleCompraItem.fromJson(Map<String, dynamic> json) {
     return DetalleCompraItem(
       nombreProducto: json['nombre_producto'] ?? '',
       cantidad: json['cantidad'] ?? 0,
       precioCosto: double.tryParse(json['precio_costo'].toString()) ?? 0,
+      montoIva: json['monto_iva'] != null ? double.tryParse(json['monto_iva'].toString()) : null,
+      tarifa: json['tarifa'] != null ? double.tryParse(json['tarifa'].toString()) : null,
     );
   }
 }

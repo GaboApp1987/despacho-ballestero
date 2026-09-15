@@ -2150,7 +2150,45 @@ class ExportService {
   }
 
   /// Exporta el listado de compras (Reportes) a PDF
+  /// IVA estimado de una compra: no se guarda un IVA propio por compra,
+  /// se suma el de cada línea (estimado con la tarifa del producto, ver
+  /// DetalleCompraSerializer) -- 0 si ninguna línea tiene impuesto asignado.
+  static double _ivaEstimadoCompra(Compra c) => c.detalles.fold(0.0, (s, d) => s + (d.montoIva ?? 0));
+
+  /// Tarifa de una compra para la columna del reporte: el porcentaje si
+  /// todas sus líneas con impuesto asignado comparten la misma tarifa,
+  /// "Mixta" si combinan varias, "-" si ninguna línea tiene impuesto
+  /// asignado (no se puede estimar).
+  static String _tarifaCompra(Compra c) {
+    final tarifas = c.detalles.map((d) => d.tarifa).whereType<double>().toSet();
+    if (tarifas.isEmpty) return '-';
+    if (tarifas.length > 1) return 'Mixta';
+    return '${tarifas.first.toStringAsFixed(0)}%';
+  }
+
+  /// Mismo agrupado por tarifa que _agruparPorTarifa (facturas), para compras.
+  static ({Map<int, double> base, Map<int, double> iva}) _agruparPorTarifaCompra(List<Compra> compras) {
+    final base = <int, double>{};
+    final iva = <int, double>{};
+    for (final c in compras) {
+      for (final d in c.detalles) {
+        if (d.tarifa == null) continue;
+        final t = d.tarifa!.round();
+        base[t] = (base[t] ?? 0) + d.subtotal;
+        iva[t] = (iva[t] ?? 0) + (d.montoIva ?? 0);
+      }
+    }
+    return (base: base, iva: iva);
+  }
+
+  /// Exporta el listado de compras a PDF -- mismo formato que el Reporte de
+  /// Facturación: resumen de sumas arriba, columna Tarifa, y detalle por
+  /// tarifa de IVA (estimado) debajo.
   static Future<void> exportComprasToPdf(List<Compra> compras, String negocioNombre, String periodo) async {
+    final sumaSubtotal = compras.fold<double>(0.0, (s, c) => s + c.totalCompra);
+    final sumaIva = compras.fold<double>(0.0, (s, c) => s + _ivaEstimadoCompra(c));
+    final sumaTotal = sumaSubtotal + sumaIva;
+
     final pdf = pw.Document(theme: await _cargarTema());
     pdf.addPage(pw.MultiPage(
       pageFormat: PdfPageFormat.a4,
@@ -2171,48 +2209,127 @@ class ExportService {
             ],
           ),
         ),
+        pw.SizedBox(height: 16),
+        pw.Container(
+          padding: const pw.EdgeInsets.all(10),
+          decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey400), borderRadius: pw.BorderRadius.circular(6)),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text('Subtotal: ${formatearColones(sumaSubtotal)}', style: const pw.TextStyle(fontSize: 12)),
+              pw.Text('IVA (est.): ${formatearColones(sumaIva)}', style: const pw.TextStyle(fontSize: 12)),
+              pw.Text('Total: ${formatearColones(sumaTotal)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 13)),
+            ],
+          ),
+        ),
         pw.SizedBox(height: 20),
         pw.TableHelper.fromTextArray(
           headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-          headers: const ['Fecha', 'Proveedor', 'Factura Prov.', 'Total'],
-          data: compras.map((c) => [
-            c.fechaCompra.split('T')[0],
-            c.nombreProveedor ?? 'Sin especificar',
-            c.numeroFacturaProveedor,
-            formatearColones(c.totalCompra),
-          ]).toList(),
+          headers: const ['Fecha', 'Proveedor', 'Factura Prov.', 'Subtotal', 'Tarifa', 'IVA', 'Total'],
+          data: compras.map((c) {
+            final iva = _ivaEstimadoCompra(c);
+            return [
+              c.fechaCompra.split('T')[0],
+              c.nombreProveedor ?? 'Sin especificar',
+              c.numeroFacturaProveedor,
+              formatearColones(c.totalCompra),
+              _tarifaCompra(c),
+              formatearColones(iva),
+              formatearColones(c.totalCompra + iva),
+            ];
+          }).toList(),
         ),
-        pw.SizedBox(height: 20),
-        pw.Align(
-          alignment: pw.Alignment.centerRight,
-          child: pw.Text(
-            'Total Comprado: ${formatearColones(compras.fold<double>(0.0, (sum, c) => sum + c.totalCompra))}',
-            style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16),
-          ),
-        ),
+        pw.SizedBox(height: 24),
+        pw.Text('Detalle por tarifa de IVA (estimado)', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 8),
+        pw.Builder(builder: (context) {
+          final porTarifa = _agruparPorTarifaCompra(compras);
+          final tarifas = porTarifa.base.keys.toList()..sort();
+          return pw.TableHelper.fromTextArray(
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            headers: const ['Tarifa', 'Base', 'IVA', 'Total'],
+            data: tarifas.map((t) {
+              final base = porTarifa.base[t] ?? 0;
+              final iva = porTarifa.iva[t] ?? 0;
+              return ['$t%', formatearColones(base), formatearColones(iva), formatearColones(base + iva)];
+            }).toList(),
+          );
+        }),
       ],
     ));
     await Printing.layoutPdf(onLayout: (format) async => pdf.save(), name: 'Reporte_Compras.pdf');
   }
 
-  /// Exporta el listado de compras (Reportes) a Excel
+  /// Exporta el listado de compras a Excel -- mismo formato que el Reporte
+  /// de Facturación: fila 1-2 el resumen de sumas, fila 4 el encabezado,
+  /// desde la fila 5 el detalle, y el Detalle por Tarifa a la par (columna L).
   static Future<void> exportComprasToExcel(List<Compra> compras) async {
     var excel = Excel.createExcel();
     Sheet sheet = excel['Compras'];
-    sheet.appendRow([
+
+    final sumaSubtotal = compras.fold<double>(0.0, (s, c) => s + c.totalCompra);
+    final sumaIva = compras.fold<double>(0.0, (s, c) => s + _ivaEstimadoCompra(c));
+    final sumaTotal = sumaSubtotal + sumaIva;
+
+    sheet.appendRow([TextCellValue('Reporte de Compras')]); // fila 1
+    sheet.appendRow([                                       // fila 2: sumas del periodo
+      TextCellValue('Subtotal:'), DoubleCellValue(sumaSubtotal),
+      TextCellValue('IVA (est.):'), DoubleCellValue(sumaIva),
+      TextCellValue('Total:'), DoubleCellValue(sumaTotal),
+    ]);
+    sheet.appendRow([]); // fila 3: separador
+    sheet.appendRow([    // fila 4: encabezado
       TextCellValue('Fecha'),
       TextCellValue('Proveedor'),
       TextCellValue('Factura Proveedor'),
+      TextCellValue('Subtotal'),
+      TextCellValue('Tarifa'),
+      TextCellValue('IVA'),
       TextCellValue('Total'),
     ]);
-    for (var c in compras) {
+    for (var c in compras) { // fila 5 en adelante
+      final iva = _ivaEstimadoCompra(c);
       sheet.appendRow([
         TextCellValue(c.fechaCompra.split('T')[0]),
         TextCellValue(c.nombreProveedor ?? 'Sin especificar'),
         TextCellValue(c.numeroFacturaProveedor),
         DoubleCellValue(c.totalCompra),
+        TextCellValue(_tarifaCompra(c)),
+        DoubleCellValue(iva),
+        DoubleCellValue(c.totalCompra + iva),
       ]);
     }
+
+    const colTarifas = 11; // L
+    void celda(int col, int fila, CellValue valor) {
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: fila)).value = valor;
+    }
+
+    celda(colTarifas, 0, TextCellValue('Detalle por Tarifa de IVA (estimado)'));
+    celda(colTarifas, 1, TextCellValue('Tarifa'));
+    celda(colTarifas + 1, 1, TextCellValue('Base'));
+    celda(colTarifas + 2, 1, TextCellValue('IVA'));
+    celda(colTarifas + 3, 1, TextCellValue('Total'));
+
+    final porTarifa = _agruparPorTarifaCompra(compras);
+    final tarifasOrdenadas = porTarifa.base.keys.toList()..sort();
+    var filaTarifa = 2;
+    for (final t in tarifasOrdenadas) {
+      final base = porTarifa.base[t] ?? 0;
+      final iva = porTarifa.iva[t] ?? 0;
+      celda(colTarifas, filaTarifa, TextCellValue('$t%'));
+      celda(colTarifas + 1, filaTarifa, DoubleCellValue(base));
+      celda(colTarifas + 2, filaTarifa, DoubleCellValue(iva));
+      celda(colTarifas + 3, filaTarifa, DoubleCellValue(base + iva));
+      filaTarifa++;
+    }
+    final baseTotal = porTarifa.base.values.fold(0.0, (s, v) => s + v);
+    final ivaTotal = porTarifa.iva.values.fold(0.0, (s, v) => s + v);
+    celda(colTarifas, filaTarifa, TextCellValue('TOTAL'));
+    celda(colTarifas + 1, filaTarifa, DoubleCellValue(baseTotal));
+    celda(colTarifas + 2, filaTarifa, DoubleCellValue(ivaTotal));
+    celda(colTarifas + 3, filaTarifa, DoubleCellValue(baseTotal + ivaTotal));
+
     await _guardarExcel(excel, dialogTitle: 'Guardar Reporte de Compras', fileName: 'reporte_compras.xlsx');
   }
 
