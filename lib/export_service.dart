@@ -268,31 +268,38 @@ class ExportService {
       ]);
     }
 
-    final hojaTarifas = excel['Detalle por Tarifa'];
-    hojaTarifas.appendRow([TextCellValue('Detalle por Tarifa de IVA')]);
-    hojaTarifas.appendRow([]);
-    hojaTarifas.appendRow([TextCellValue('Tarifa'), TextCellValue('Base'), TextCellValue('IVA'), TextCellValue('Total')]);
+    // Detalle por Tarifa: a la par de la tabla principal (no en otra hoja),
+    // arrancando en la columna L (deja J y K de separación) y alineado con
+    // las primeras filas del resumen.
+    const colTarifas = 11; // L (0-indexed: A=0 ... I=8, J=9, K=10, L=11)
+    void celda(int col, int fila, CellValue valor) {
+      sheetObject.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: fila)).value = valor;
+    }
+
+    celda(colTarifas, 0, TextCellValue('Detalle por Tarifa de IVA'));
+    celda(colTarifas, 1, TextCellValue('Tarifa'));
+    celda(colTarifas + 1, 1, TextCellValue('Base'));
+    celda(colTarifas + 2, 1, TextCellValue('IVA'));
+    celda(colTarifas + 3, 1, TextCellValue('Total'));
+
     final porTarifa = _agruparPorTarifa(facturas);
     final tarifasOrdenadas = porTarifa.base.keys.toList()..sort();
+    var filaTarifa = 2;
     for (final t in tarifasOrdenadas) {
       final base = porTarifa.base[t] ?? 0;
       final iva = porTarifa.iva[t] ?? 0;
-      hojaTarifas.appendRow([
-        TextCellValue('$t%'),
-        DoubleCellValue(base),
-        DoubleCellValue(iva),
-        DoubleCellValue(base + iva),
-      ]);
+      celda(colTarifas, filaTarifa, TextCellValue('$t%'));
+      celda(colTarifas + 1, filaTarifa, DoubleCellValue(base));
+      celda(colTarifas + 2, filaTarifa, DoubleCellValue(iva));
+      celda(colTarifas + 3, filaTarifa, DoubleCellValue(base + iva));
+      filaTarifa++;
     }
-    hojaTarifas.appendRow([]);
-    hojaTarifas.appendRow([
-      TextCellValue('TOTAL'),
-      DoubleCellValue(porTarifa.base.values.fold(0.0, (s, v) => s + v)),
-      DoubleCellValue(porTarifa.iva.values.fold(0.0, (s, v) => s + v)),
-      DoubleCellValue(
-        porTarifa.base.values.fold(0.0, (s, v) => s + v) + porTarifa.iva.values.fold(0.0, (s, v) => s + v),
-      ),
-    ]);
+    final baseTotal = porTarifa.base.values.fold(0.0, (s, v) => s + v);
+    final ivaTotal = porTarifa.iva.values.fold(0.0, (s, v) => s + v);
+    celda(colTarifas, filaTarifa, TextCellValue('TOTAL'));
+    celda(colTarifas + 1, filaTarifa, DoubleCellValue(baseTotal));
+    celda(colTarifas + 2, filaTarifa, DoubleCellValue(ivaTotal));
+    celda(colTarifas + 3, filaTarifa, DoubleCellValue(baseTotal + ivaTotal));
 
     await _guardarExcel(excel, dialogTitle: 'Guardar Reporte de Facturación', fileName: 'reporte_facturacion.xlsx');
   }
