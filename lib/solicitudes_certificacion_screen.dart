@@ -56,6 +56,31 @@ class _SolicitudesCertificacionScreenState extends State<SolicitudesCertificacio
     if (mounted) setState(() => _cargando = false);
   }
 
+  /// Mensaje corto de WhatsApp: quién es el contador, para qué sirve el
+  /// link y qué tiene que hacer el cliente -- pensado para que a la gente
+  /// no le dé pereza abrirlo (nada de leer un párrafo largo primero).
+  String _mensajePresentacion(String link) {
+    final nombre = _miSocio?.nombre ?? 'tu contador';
+    return "Hola, soy $nombre, Contador Público Autorizado.\n\n"
+        "Desde ahora podés pedirme una Certificación de Ingresos directo desde este link, sin crear cuenta ni contraseña:\n\n"
+        "$link\n\n"
+        "Completás tus datos (2 minutos) y, si querés, adjuntás tus estados de cuenta. Yo reviso la solicitud y te la resuelvo enseguida.\n\n"
+        "Guardá este link, te sirve cada vez que necesités una certificación.";
+  }
+
+  Future<void> _compartirPorWhatsApp() async {
+    final codigo = _miSocio?.codigoPublico;
+    if (codigo == null || codigo.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Todavía no se generó tu código. Intentá de nuevo en un momento.")));
+      return;
+    }
+    final link = 'https://equilibracr.com/app/?solicitud=$codigo';
+    final uri = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(_mensajePresentacion(link))}');
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No se pudo abrir WhatsApp.")));
+    }
+  }
+
   Future<void> _compartirLink() async {
     final codigo = _miSocio?.codigoPublico;
     if (codigo == null || codigo.isEmpty) {
@@ -106,6 +131,15 @@ class _SolicitudesCertificacionScreenState extends State<SolicitudesCertificacio
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cerrar")),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+            onPressed: () {
+              Navigator.pop(context);
+              _compartirPorWhatsApp();
+            },
+            icon: const Icon(Icons.chat_outlined, size: 16),
+            label: const Text("WhatsApp"),
+          ),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(backgroundColor: TemaContador.acento, foregroundColor: Colors.white),
             onPressed: () async {
