@@ -13,6 +13,7 @@ import 'crear_cliente.dart';
 import 'detalle_factura_screen.dart';
 import 'factura.dart';
 import 'compras_screen.dart';
+import 'correos_compra_screen.dart';
 import 'gastos_screen.dart';
 import 'declaracion_fiscal_widgets.dart';
 import 'formulario_factura.dart';
@@ -84,6 +85,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     (id: 3, icono: Icons.inventory_2_outlined, titulo: "Inventario"),
     // -- Compras --
     (id: 8, icono: Icons.shopping_cart_outlined, titulo: "Compras"),
+    (id: 17, icono: Icons.mark_email_read_outlined, titulo: "Correos de Compra"),
     (id: 13, icono: Icons.local_shipping_outlined, titulo: "Cuentas por Pagar"),
     (id: 9, icono: Icons.receipt_long_outlined, titulo: "Gastos"),
     // -- Contabilidad --
@@ -99,7 +101,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
   // bloquea la escritura/lectura correspondiente de todas formas (ver
   // BloqueaCajeroMixin y los chequeos de es_cajero en views.py), esto es
   // solo para no mostrar botones que van a fallar. 'completo' ve todo esto.
-  static const Set<int> _idsOcultosParaCajero = {6, 8, 13, 9, 7, 10, 11, 12, 5, 15, 16};
+  static const Set<int> _idsOcultosParaCajero = {6, 8, 13, 9, 7, 10, 11, 12, 5, 15, 16, 17};
 
   List<({int id, IconData icono, String titulo})> get _menuItemsVisibles {
     // "Empleados" (id 14) es exclusivo del dueño real -- ni 'cajero' ni
@@ -330,6 +332,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         return "Impuestos";
       case 8:
         return "Compras";
+      case 17:
+        return "Correos de Compra";
       case 13:
         return "Cuentas por Pagar";
       case 14:
@@ -453,6 +457,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         return const ImpuestosScreen();
       case 8:
         return ComprasScreen(negocio: widget.negocio);
+      case 17:
+        return CorreosCompraScreen(negocio: widget.negocio);
       case 9:
         return GastosScreen(negocio: widget.negocio);
       case 10:
