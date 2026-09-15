@@ -108,14 +108,6 @@ class _SolicitudPublicaScreenState extends State<SolicitudPublicaScreen> {
     if (mounted) setState(() => _verificando = false);
   }
 
-  void _cambiarCodigo() {
-    setState(() {
-      _nombreContador = null;
-      _errorCodigo = null;
-      _codigoCtrl.clear();
-    });
-  }
-
   Future<void> _elegirArchivos() async {
     final resultado = await FilePicker.platform.pickFiles(
       allowMultiple: true,
@@ -328,7 +320,6 @@ class _SolicitudPublicaScreenState extends State<SolicitudPublicaScreen> {
                           const Icon(Icons.check_circle, color: Colors.green, size: 20),
                           const SizedBox(width: 10),
                           Expanded(child: Text("Le vas a pedir la certificación a $_nombreContador.", style: const TextStyle(color: TemaContador.textoFuerte, fontWeight: FontWeight.w600))),
-                          TextButton(onPressed: _cambiarCodigo, child: const Text("Cambiar")),
                         ],
                       ),
                     ),
