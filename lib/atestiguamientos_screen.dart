@@ -4,7 +4,10 @@ import 'theme/app_theme.dart';
 
 import 'api_service.dart';
 import 'documentos_contador_screen.dart';
+import 'firmante_contador.dart';
+import 'firmante_selector.dart';
 import 'negocio.dart';
+import 'socio.dart';
 
 /// Informe de certificación GENÉRICO (Circular 02-2022 del Colegio de
 /// Contadores Públicos de Costa Rica) -- a diferencia de la certificación
@@ -15,6 +18,8 @@ class Atestiguamiento {
   final int? id;
   final int? negocio;
   final String? negocioNombre;
+  int? firmante;
+  final String? firmanteNombre;
   String nombreSolicitante;
   String cedula;
   String calidades;
@@ -35,6 +40,8 @@ class Atestiguamiento {
     this.id,
     this.negocio,
     this.negocioNombre,
+    this.firmante,
+    this.firmanteNombre,
     this.nombreSolicitante = '',
     this.cedula = '',
     this.calidades = '',
@@ -56,6 +63,8 @@ class Atestiguamiento {
         id: json['id'],
         negocio: json['negocio'],
         negocioNombre: json['negocio_nombre'],
+        firmante: json['firmante'],
+        firmanteNombre: json['firmante_nombre'],
         nombreSolicitante: json['nombre_solicitante'] ?? '',
         cedula: json['cedula'] ?? '',
         calidades: json['calidades'] ?? '',
@@ -75,6 +84,7 @@ class Atestiguamiento {
 
   Map<String, dynamic> toJson() => {
         if (negocio != null) 'negocio': negocio,
+        if (firmante != null) 'firmante': firmante,
         'nombre_solicitante': nombreSolicitante,
         'cedula': cedula,
         'calidades': calidades,
@@ -222,6 +232,8 @@ class _AtestiguamientoFormScreenState extends State<AtestiguamientoFormScreen> {
   bool _guardando = false;
   List<Negocio> _negocios = [];
   Negocio? _negocioSeleccionado;
+  bool _firmarConNombreRegistrado = true;
+  List<FirmanteContador> _firmantes = [];
 
   final _nombreCtrl = TextEditingController();
   final _cedulaCtrl = TextEditingController();
@@ -259,6 +271,23 @@ class _AtestiguamientoFormScreenState extends State<AtestiguamientoFormScreen> {
     }
     if (_procedimientoCtrls.isEmpty) _procedimientoCtrls.add(TextEditingController());
     _cargarNegocios();
+    _cargarMiSocio();
+  }
+
+  Future<void> _cargarMiSocio() async {
+    try {
+      final r = await ApiService.get('/socios/');
+      if (r.statusCode == 200) {
+        final data = json.decode(utf8.decode(r.bodyBytes)) as List;
+        if (mounted && data.isNotEmpty) {
+          final socio = Socio.fromJson(data.first);
+          setState(() {
+            _firmarConNombreRegistrado = socio.firmarConNombreRegistrado;
+            _firmantes = socio.firmantes;
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   @override
@@ -316,6 +345,10 @@ class _AtestiguamientoFormScreenState extends State<AtestiguamientoFormScreen> {
   bool _validar() {
     if (_nombreCtrl.text.trim().isEmpty || _materiaCtrl.text.trim().isEmpty || _dirigidoACtrl.text.trim().isEmpty || _certificacionCtrl.text.trim().isEmpty || _propositoCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Completá al menos nombre, materia a certificar, dirigido a, texto de certificación y propósito.")));
+      return false;
+    }
+    if (!_firmarConNombreRegistrado && _firmantes.isNotEmpty && _at.firmante == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Elegí quién firma este documento.")));
       return false;
     }
     return true;
@@ -467,6 +500,12 @@ class _AtestiguamientoFormScreenState extends State<AtestiguamientoFormScreen> {
                   ]),
                   const SizedBox(height: 10),
                   TextField(controller: _circularCtrl, style: campo(''), decoration: _decoracion("Circular específica (opcional, ej: 16-2022R)")),
+                  selectorFirmante(
+                    firmarConNombreRegistrado: _firmarConNombreRegistrado,
+                    firmantes: _firmantes,
+                    firmanteSeleccionado: _at.firmante,
+                    onChanged: (v) => setState(() => _at.firmante = v),
+                  ),
                   const SizedBox(height: 10),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,

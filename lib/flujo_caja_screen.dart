@@ -4,7 +4,10 @@ import 'theme/app_theme.dart';
 
 import 'api_service.dart';
 import 'documentos_contador_screen.dart';
+import 'firmante_contador.dart';
+import 'firmante_selector.dart';
 import 'negocio.dart';
+import 'socio.dart';
 
 class MesFlujoCaja {
   final String mes;
@@ -30,6 +33,8 @@ class FlujoCajaProyectado {
   final int? id;
   final int? negocio;
   final String? negocioNombre;
+  int? firmante;
+  final String? firmanteNombre;
   String nombreSolicitante;
   String cedula;
   String dirigidoA;
@@ -46,6 +51,8 @@ class FlujoCajaProyectado {
     this.id,
     this.negocio,
     this.negocioNombre,
+    this.firmante,
+    this.firmanteNombre,
     this.nombreSolicitante = '',
     this.cedula = '',
     this.dirigidoA = '',
@@ -64,6 +71,8 @@ class FlujoCajaProyectado {
         id: json['id'],
         negocio: json['negocio'],
         negocioNombre: json['negocio_nombre'],
+        firmante: json['firmante'],
+        firmanteNombre: json['firmante_nombre'],
         nombreSolicitante: json['nombre_solicitante'] ?? '',
         cedula: json['cedula'] ?? '',
         dirigidoA: json['dirigido_a'] ?? '',
@@ -79,6 +88,7 @@ class FlujoCajaProyectado {
 
   Map<String, dynamic> toJson() => {
         if (negocio != null) 'negocio': negocio,
+        if (firmante != null) 'firmante': firmante,
         'nombre_solicitante': nombreSolicitante,
         'cedula': cedula,
         'dirigido_a': dirigidoA,
@@ -222,6 +232,8 @@ class _FlujoCajaFormScreenState extends State<FlujoCajaFormScreen> {
   bool _guardando = false;
   List<Negocio> _negocios = [];
   Negocio? _negocioSeleccionado;
+  bool _firmarConNombreRegistrado = true;
+  List<FirmanteContador> _firmantes = [];
 
   final _nombreCtrl = TextEditingController();
   final _cedulaCtrl = TextEditingController();
@@ -271,6 +283,23 @@ class _FlujoCajaFormScreenState extends State<FlujoCajaFormScreen> {
       _egresoCtrls[clave] = TextEditingController(text: m.egresos == 0 ? '' : m.egresos.toStringAsFixed(2));
     }
     _cargarNegocios();
+    _cargarMiSocio();
+  }
+
+  Future<void> _cargarMiSocio() async {
+    try {
+      final r = await ApiService.get('/socios/');
+      if (r.statusCode == 200) {
+        final data = json.decode(utf8.decode(r.bodyBytes)) as List;
+        if (mounted && data.isNotEmpty) {
+          final socio = Socio.fromJson(data.first);
+          setState(() {
+            _firmarConNombreRegistrado = socio.firmarConNombreRegistrado;
+            _firmantes = socio.firmantes;
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   @override
@@ -332,6 +361,10 @@ class _FlujoCajaFormScreenState extends State<FlujoCajaFormScreen> {
   bool _validar() {
     if (_nombreCtrl.text.trim().isEmpty || _dirigidoACtrl.text.trim().isEmpty || _propositoCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Completá al menos nombre, dirigido a y propósito.")));
+      return false;
+    }
+    if (!_firmarConNombreRegistrado && _firmantes.isNotEmpty && _flujo.firmante == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Elegí quién firma este documento.")));
       return false;
     }
     return true;
@@ -495,6 +528,12 @@ class _FlujoCajaFormScreenState extends State<FlujoCajaFormScreen> {
                     const SizedBox(width: 10),
                     Expanded(child: TextField(controller: _lugarCtrl, style: campo, decoration: _decoracion("Lugar de emisión"))),
                   ]),
+                  selectorFirmante(
+                    firmarConNombreRegistrado: _firmarConNombreRegistrado,
+                    firmantes: _firmantes,
+                    firmanteSeleccionado: _flujo.firmante,
+                    onChanged: (v) => setState(() => _flujo.firmante = v),
+                  ),
                   const SizedBox(height: 10),
                   Row(children: [
                     Expanded(

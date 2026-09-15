@@ -5,6 +5,7 @@ import 'theme/app_theme.dart';
 
 import 'api_service.dart';
 import 'avatar_logo.dart';
+import 'firmante_contador.dart';
 import 'login.dart';
 import 'logo_screen.dart';
 
@@ -49,6 +50,9 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
   DateTime? _polizaVencimiento;
   bool _cargandoDatosCpa = true;
   bool _guardandoDatosCpa = false;
+  bool _firmarConNombreRegistrado = true;
+  List<FirmanteContador> _firmantes = [];
+  bool _guardandoFirmantes = false;
 
   Color get _colorFondo => widget.esContador ? TemaContador.fondo : AppColors.background;
   Color get _colorSuperficie => widget.esContador ? TemaContador.superficie : AppColors.surface;
@@ -106,6 +110,8 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
           _direccionProfesionalCtrl.text = data['direccion_profesional'] ?? '';
           _polizaCtrl.text = data['poliza_fidelidad'] ?? '';
           _polizaVencimiento = data['poliza_vencimiento'] != null ? DateTime.tryParse(data['poliza_vencimiento']) : null;
+          _firmarConNombreRegistrado = data['firmar_con_nombre_registrado'] ?? true;
+          _firmantes = ((data['firmantes'] as List?) ?? []).map((f) => FirmanteContador.fromJson(f)).toList();
         });
       }
     } catch (_) {
@@ -133,6 +139,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
         'direccion_profesional': _direccionProfesionalCtrl.text.trim(),
         'poliza_fidelidad': _polizaCtrl.text.trim(),
         if (_polizaVencimiento != null) 'poliza_vencimiento': _polizaVencimiento!.toIso8601String().split('T').first,
+        'firmar_con_nombre_registrado': _firmarConNombreRegistrado,
       });
       if (response.statusCode == 200) {
         if (mounted) {
@@ -150,6 +157,71 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
     } finally {
       if (mounted) setState(() => _guardandoDatosCpa = false);
     }
+  }
+
+  Future<void> _abrirFormularioFirmante({FirmanteContador? firmante}) async {
+    final nombreCtrl = TextEditingController(text: firmante?.nombre ?? '');
+    final carneCtrl = TextEditingController(text: firmante?.carneCpa ?? '');
+    final guardado = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: _colorFondo,
+        title: Text(firmante == null ? "Nuevo firmante" : "Editar firmante", style: TextStyle(color: _colorFuerte, fontSize: 17)),
+        content: SizedBox(
+          width: 380,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: nombreCtrl, style: TextStyle(color: _colorFuerte), decoration: _decoracionCampo("Nombre completo")),
+              const SizedBox(height: 12),
+              TextField(controller: carneCtrl, style: TextStyle(color: _colorFuerte), decoration: _decoracionCampo("Carné C.P.A.")),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text("Cancelar")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: _colorAcento, foregroundColor: Colors.white),
+            onPressed: () async {
+              if (nombreCtrl.text.trim().isEmpty) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(const SnackBar(content: Text("Ingresá el nombre.")));
+                return;
+              }
+              final body = {'nombre': nombreCtrl.text.trim(), 'carne_cpa': carneCtrl.text.trim()};
+              final response = firmante == null
+                  ? await ApiService.post('/firmantes-contador/', body)
+                  : await ApiService.patch('/firmantes-contador/${firmante.id}/', body);
+              if (dialogContext.mounted) Navigator.pop(dialogContext, response.statusCode == 200 || response.statusCode == 201);
+            },
+            child: const Text("Guardar"),
+          ),
+        ],
+      ),
+    );
+    nombreCtrl.dispose();
+    carneCtrl.dispose();
+    if (guardado == true) _cargarDatosCpa();
+  }
+
+  Future<void> _eliminarFirmante(FirmanteContador firmante) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text("¿Eliminar firmante?"),
+        content: Text("Se eliminará a ${firmante.nombre} de tu lista de firmantes."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text("Cancelar")),
+          TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text("Eliminar", style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirmar != true) return;
+    setState(() => _guardandoFirmantes = true);
+    try {
+      final r = await ApiService.delete('/firmantes-contador/${firmante.id}/');
+      if (r.statusCode == 204) _cargarDatosCpa();
+    } catch (_) {}
+    if (mounted) setState(() => _guardandoFirmantes = false);
   }
 
   Future<void> _abrirCambiarLogo() async {
@@ -543,6 +615,57 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                           ),
                         ),
                       ),
+                      const Divider(height: 32),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text("Firmar documentos con mi nombre registrado", style: TextStyle(color: _colorFuerte, fontSize: 13.5, fontWeight: FontWeight.w600)),
+                        subtitle: Text(
+                          _firmarConNombreRegistrado
+                              ? "Certificaciones, atestiguamientos y flujos de caja se firman con tu nombre y carné de arriba."
+                              : "Vas a poder elegir, documento por documento, con cuál de tus firmantes se firma.",
+                          style: TextStyle(fontSize: 12, color: widget.esContador ? TemaContador.textoTenue : Colors.grey),
+                        ),
+                        value: _firmarConNombreRegistrado,
+                        activeColor: _colorAcento,
+                        onChanged: (v) => setState(() => _firmarConNombreRegistrado = v),
+                      ),
+                      if (!_firmarConNombreRegistrado) ...[
+                        const SizedBox(height: 8),
+                        Text("Tus firmantes", style: TextStyle(color: _colorFuerte, fontWeight: FontWeight.w700, fontSize: 13.5)),
+                        const SizedBox(height: 8),
+                        if (_firmantes.isEmpty)
+                          Text(
+                            "Todavía no agregaste ningún firmante. Agregá al menos uno para poder elegirlo en tus documentos.",
+                            style: TextStyle(fontSize: 12.5, color: widget.esContador ? TemaContador.textoTenue : Colors.grey),
+                          )
+                        else
+                          ..._firmantes.map((f) => Container(
+                                margin: const EdgeInsets.only(bottom: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                decoration: BoxDecoration(color: _colorFondo, borderRadius: BorderRadius.circular(10), border: Border.all(color: _colorBorde)),
+                                child: ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  dense: true,
+                                  leading: Icon(Icons.badge_outlined, color: _colorAcento, size: 20),
+                                  title: Text(f.nombre, style: TextStyle(color: _colorFuerte, fontWeight: FontWeight.w600, fontSize: 13.5)),
+                                  subtitle: f.carneCpa.isNotEmpty ? Text("Carné ${f.carneCpa}", style: TextStyle(color: widget.esContador ? TemaContador.textoTenue : Colors.grey, fontSize: 12)) : null,
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(icon: Icon(Icons.edit_outlined, size: 18, color: widget.esContador ? TemaContador.textoTenue : Colors.grey), onPressed: _guardandoFirmantes ? null : () => _abrirFormularioFirmante(firmante: f)),
+                                      IconButton(icon: Icon(Icons.delete_outline, size: 18, color: widget.esContador ? TemaContador.textoTenue : Colors.grey), onPressed: _guardandoFirmantes ? null : () => _eliminarFirmante(f)),
+                                    ],
+                                  ),
+                                ),
+                              )),
+                        const SizedBox(height: 4),
+                        TextButton.icon(
+                          onPressed: () => _abrirFormularioFirmante(),
+                          style: TextButton.styleFrom(foregroundColor: _colorAcento),
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text("Agregar firmante"),
+                        ),
+                      ],
                       const SizedBox(height: 16),
                       SizedBox(
                         width: double.infinity,

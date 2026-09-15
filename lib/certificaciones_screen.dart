@@ -8,7 +8,10 @@ import 'theme/app_theme.dart';
 import 'api_service.dart';
 import 'certificacion_ingreso.dart';
 import 'descarga_navegador_stub.dart' if (dart.library.html) 'descarga_navegador_web.dart';
+import 'firmante_contador.dart';
+import 'firmante_selector.dart';
 import 'negocio.dart';
+import 'socio.dart';
 
 /// Nombre de archivo legible para una certificación: el nombre del
 /// solicitante en vez de un id suelto.
@@ -261,6 +264,8 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
   String _progresoEstadosCuenta = '';
   List<Negocio> _negocios = [];
   Negocio? _negocioSeleccionado;
+  bool _firmarConNombreRegistrado = true;
+  List<FirmanteContador> _firmantes = [];
 
   // Un controlador/focus estable POR CELDA (clave = "mes#índice de
   // actividad", nunca el monto) para la tabla de 12 meses -- usar el
@@ -317,6 +322,23 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
     _porcentajeCtrl.text = _cert.porcentajeEgresos?.toString() ?? '';
     if (_cert.datosMensuales.isEmpty) _regenerarTabla();
     _cargarNegocios();
+    _cargarMiSocio();
+  }
+
+  Future<void> _cargarMiSocio() async {
+    try {
+      final r = await ApiService.get('/socios/');
+      if (r.statusCode == 200) {
+        final data = json.decode(utf8.decode(r.bodyBytes)) as List;
+        if (mounted && data.isNotEmpty) {
+          final socio = Socio.fromJson(data.first);
+          setState(() {
+            _firmarConNombreRegistrado = socio.firmarConNombreRegistrado;
+            _firmantes = socio.firmantes;
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   @override
@@ -539,6 +561,12 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
         _dirigidoACtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Completá al menos nombre, cédula, actividad, propósito y a quién va dirigida.")),
+      );
+      return false;
+    }
+    if (!_firmarConNombreRegistrado && _firmantes.isNotEmpty && _cert.firmante == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Elegí quién firma este documento.")),
       );
       return false;
     }
@@ -1065,6 +1093,12 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                   TextField(controller: _dirigidoACtrl, style: const TextStyle(color: TemaContador.textoFuerte), decoration: _decoracion("Dirigido a (ej: Banco Nacional) *")),
                   const SizedBox(height: 10),
                   TextField(controller: _lugarCtrl, style: const TextStyle(color: TemaContador.textoFuerte), decoration: _decoracion("Lugar de emisión")),
+                  selectorFirmante(
+                    firmarConNombreRegistrado: _firmarConNombreRegistrado,
+                    firmantes: _firmantes,
+                    firmanteSeleccionado: _cert.firmante,
+                    onChanged: (v) => setState(() => _cert.firmante = v),
+                  ),
                 ],
               ),
             ),

@@ -38,6 +38,8 @@ class CertificacionIngreso {
   final int? negocio;
   final String? negocioNombre;
   final String? socioNombre;
+  int? firmante;
+  final String? firmanteNombre;
   String nombreSolicitante;
   String cedula;
   String tipoCedulaTexto;
@@ -75,6 +77,8 @@ class CertificacionIngreso {
     this.negocio,
     this.negocioNombre,
     this.socioNombre,
+    this.firmante,
+    this.firmanteNombre,
     this.nombreSolicitante = '',
     this.cedula = '',
     this.tipoCedulaTexto = '',
@@ -104,6 +108,8 @@ class CertificacionIngreso {
       negocio: json['negocio'],
       negocioNombre: json['negocio_nombre'],
       socioNombre: json['socio_nombre'],
+      firmante: json['firmante'],
+      firmanteNombre: json['firmante_nombre'],
       nombreSolicitante: json['nombre_solicitante'] ?? '',
       cedula: json['cedula'] ?? '',
       tipoCedulaTexto: json['tipo_cedula_texto'] ?? '',
@@ -134,6 +140,7 @@ class CertificacionIngreso {
 
   Map<String, dynamic> toJson() => {
         if (negocio != null) 'negocio': negocio,
+        if (firmante != null) 'firmante': firmante,
         'nombre_solicitante': nombreSolicitante,
         'cedula': cedula,
         'tipo_cedula_texto': tipoCedulaTexto,
