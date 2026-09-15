@@ -158,6 +158,107 @@ class _LibroDiarioState extends State<_LibroDiario> {
     if (editado == true) _cargar();
   }
 
+  Future<void> _generarAutomaticos() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: TemaContador.fondo,
+        title: const Text("Generar asientos automáticos", style: TextStyle(color: TemaContador.textoFuerte, fontSize: 16)),
+        content: const Text(
+          "Va a crear un asiento por cada Factura, Compra y Gasto Operativo de este negocio que todavía no tenga uno, usando el catálogo de cuentas estándar. No duplica los que ya se generaron antes.",
+          style: TextStyle(color: TemaContador.textoTenue),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancelar")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: TemaContador.acento, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Generar"),
+          ),
+        ],
+      ),
+    );
+    if (confirmar != true) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        backgroundColor: TemaContador.fondo,
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Expanded(child: Text("Generando asientos...", style: TextStyle(color: TemaContador.textoFuerte))),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final r = await ApiService.post('/asientos-contables/generar-automaticos/?negocio=${widget.negocio.id}', {});
+      if (mounted) Navigator.pop(context); // cierra el diálogo de "Generando..."
+      if (r.statusCode == 200) {
+        final data = json.decode(utf8.decode(r.bodyBytes));
+        final creados = data['creados'] ?? 0;
+        final omitidos = (data['omitidos'] as List?) ?? [];
+        if (mounted) {
+          await showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              backgroundColor: TemaContador.fondo,
+              title: Text(creados > 0 ? "¡Listo!" : "Nada para generar", style: const TextStyle(color: TemaContador.textoFuerte, fontSize: 16)),
+              content: SizedBox(
+                width: 400,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      creados > 0 ? "Se crearon $creados asiento(s) nuevo(s)." : "No había documentos pendientes de convertir en asiento.",
+                      style: const TextStyle(color: TemaContador.textoFuerte),
+                    ),
+                    if (omitidos.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Text("Se omitieron ${omitidos.length}:", style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 6),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 200),
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: omitidos
+                                .map((o) => Padding(
+                                      padding: const EdgeInsets.only(bottom: 6),
+                                      child: Text(
+                                        "${o['tipo']} #${o['id']}${o['referencia'] != null && o['referencia'].toString().isNotEmpty ? ' (${o['referencia']})' : ''}: ${o['motivo']}",
+                                        style: const TextStyle(color: TemaContador.textoTenue, fontSize: 12),
+                                      ),
+                                    ))
+                                .toList(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cerrar"))],
+            ),
+          );
+          if (creados > 0) _cargar();
+        }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No se pudo generar los asientos.")));
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      }
+    }
+  }
+
   Future<void> _eliminar(AsientoContable a) async {
     final confirmar = await showDialog<bool>(
       context: context,
@@ -206,6 +307,15 @@ class _LibroDiarioState extends State<_LibroDiario> {
             foregroundColor: Colors.white,
             icon: const Icon(Icons.bar_chart_outlined),
             label: const Text("Estados financieros"),
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton.extended(
+            heroTag: 'generar-automaticos',
+            onPressed: _generarAutomaticos,
+            backgroundColor: TemaContador.textoFuerte,
+            foregroundColor: Colors.white,
+            icon: const Icon(Icons.auto_awesome_outlined),
+            label: const Text("Generar automáticos"),
           ),
           const SizedBox(height: 10),
           FloatingActionButton.extended(
