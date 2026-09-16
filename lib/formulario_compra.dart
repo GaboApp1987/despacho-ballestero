@@ -50,6 +50,11 @@ class _FormularioCompraState extends State<FormularioCompra> {
   // presente si esta compra vino de un XML real): se guarda para poder
   // mandarle después a Hacienda el Mensaje Receptor de esta compra.
   String? _claveHacienda;
+  // Si lo que suman las líneas leídas no cuadra con el total del
+  // comprobante (ver verificar_cuadre_lineas en el backend), probablemente
+  // la IA leyó mal un precio en el PDF/foto -- se avisa acá para que se
+  // revise ANTES de guardar, en vez de notarlo después en los reportes.
+  Map<String, dynamic>? _avisoCuadre;
 
   Future<void> _elegirComprobante() async {
     final resultado = await FilePicker.platform.pickFiles(
@@ -117,6 +122,8 @@ class _FormularioCompraState extends State<FormularioCompra> {
       if ((datos['clave'] as String?)?.isNotEmpty == true) {
         _claveHacienda = datos['clave'] as String;
       }
+      final cuadre = datos['cuadre'] as Map?;
+      setState(() => _avisoCuadre = (cuadre != null && cuadre['cuadra'] != true) ? Map<String, dynamic>.from(cuadre) : null);
       final fechaLeida = datos['fecha'] as String?;
       if (fechaLeida != null && fechaLeida.isNotEmpty) {
         final parseada = DateTime.tryParse(fechaLeida);
@@ -637,6 +644,37 @@ class _FormularioCompraState extends State<FormularioCompra> {
                     alignment: Alignment.centerLeft,
                   ),
                 ),
+                if (_avisoCuadre != null) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Builder(builder: (context) {
+                            final totalLineas = (_avisoCuadre!['total_calculado'] as num).toDouble();
+                            final diferencia = (_avisoCuadre!['diferencia'] as num).toDouble();
+                            final totalComprobante = totalLineas + diferencia;
+                            return Text(
+                              "El comprobante dice ${formatearColones(totalComprobante)} pero las líneas de abajo suman "
+                              "${formatearColones(totalLineas)} -- revisá los precios contra el comprobante antes de confirmar.",
+                              style: const TextStyle(fontSize: 12, color: Colors.orange),
+                            );
+                          }),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 10),
                 DropdownButtonFormField<Producto>(
                   value: _productoSeleccionado,

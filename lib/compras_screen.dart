@@ -280,6 +280,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
     final archivos = resultado.files.where((f) => f.bytes != null).toList();
     final List<String> exitosos = [];
     final List<String> fallidos = [];
+    final List<String> conAdvertencia = [];
     // Estos viven FUERA del builder del diálogo a propósito: si estuvieran
     // declarados dentro de StatefulBuilder.builder, cada setState los
     // reiniciaría a su valor inicial (por eso el contador se quedaba en 0).
@@ -290,8 +291,16 @@ class _ComprasScreenState extends State<ComprasScreen> {
     Future<void> procesarTodos() async {
       for (final archivo in archivos) {
         try {
-          await _importarUnXml(archivo.bytes!, archivo.name, impuestos);
+          final cuadre = await _importarUnXml(archivo.bytes!, archivo.name, impuestos);
           exitosos.add(archivo.name);
+          if (cuadre != null) {
+            final totalLineas = (cuadre['total_calculado'] as num).toDouble();
+            final diferencia = (cuadre['diferencia'] as num).toDouble();
+            conAdvertencia.add(
+              "${archivo.name}: el comprobante dice ${formatearColones(totalLineas + diferencia)} pero las "
+              "líneas suman ${formatearColones(totalLineas)}",
+            );
+          }
         } catch (e) {
           fallidos.add("${archivo.name}: $e");
         }
@@ -334,8 +343,37 @@ class _ComprasScreenState extends State<ComprasScreen> {
 
     await _cargarDatos();
     if (mounted) {
-      final resumen = "Importadas: ${exitosos.length}${fallidos.isNotEmpty ? ' · Con error: ${fallidos.length}' : ''}";
+      final resumen = "Importadas: ${exitosos.length}"
+          "${conAdvertencia.isNotEmpty ? ' · Con advertencia: ${conAdvertencia.length}' : ''}"
+          "${fallidos.isNotEmpty ? ' · Con error: ${fallidos.length}' : ''}";
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(resumen)));
+      if (conAdvertencia.isNotEmpty) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text("Facturas con el total descuadrado"),
+            content: SizedBox(
+              width: 420,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Se cargaron igual, pero conviene revisar los precios de estas líneas contra el "
+                      "comprobante original -- probablemente la IA leyó mal un precio:",
+                      style: TextStyle(fontSize: 13),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(conAdvertencia.join("\n\n"), style: const TextStyle(fontSize: 12, color: Colors.orange)),
+                  ],
+                ),
+              ),
+            ),
+            actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cerrar"))],
+          ),
+        );
+      }
       if (fallidos.isNotEmpty) {
         showDialog(
           context: context,
@@ -351,7 +389,12 @@ class _ComprasScreenState extends State<ComprasScreen> {
 
   /// Lee un XML de proveedor, resuelve/crea el proveedor y los productos por
   /// CABYS (sin preguntar, ya que es un proceso masivo), y crea la compra.
-  Future<void> _importarUnXml(Uint8List bytes, String nombreArchivo, List<Impuesto> impuestos) async {
+  /// Devuelve el aviso de cuadre si el total de las líneas no coincide con
+  /// el del comprobante (ver verificar_cuadre_lineas en el backend) -- como
+  /// este flujo no muestra las líneas para revisar antes de guardar (a
+  /// diferencia de Nueva Compra), es la única forma de que el descuadre no
+  /// pase desapercibido.
+  Future<Map?> _importarUnXml(Uint8List bytes, String nombreArchivo, List<Impuesto> impuestos) async {
     final response = await ApiService.postMultipartBytes(
       '/compras/leer-xml/',
       {'negocio': widget.negocio.id.toString()},
@@ -426,6 +469,9 @@ class _ComprasScreenState extends State<ComprasScreen> {
 
     final compraId = json.decode(utf8.decode(resCompra.bodyBytes))['id'];
     await ApiService.uploadBytes('/compras/$compraId/', 'comprobante', bytes, nombreArchivo);
+
+    final cuadre = datos['cuadre'] as Map?;
+    return (cuadre != null && cuadre['cuadra'] != true) ? cuadre : null;
   }
 
   Future<void> _abrirComprobante(String url) async {
