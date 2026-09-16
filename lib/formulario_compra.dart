@@ -35,6 +35,11 @@ class _FormularioCompraState extends State<FormularioCompra> {
   Proveedor? _proveedorSeleccionado;
   Producto? _productoSeleccionado;
   String _condicionCompra = "01"; // "01" = Contado, "02" = Crédito
+  // Antes esta compra siempre se guardaba con la fecha de HOY, sin importar
+  // que el XML/foto/factura del proveedor fuera de otro día -- ahora se
+  // precarga con la fecha real leída (ver _aplicarDatosParseados) y queda
+  // editable, con hoy como default cuando no se pudo leer ninguna.
+  DateTime _fecha = DateTime.now();
   List<Impuesto> _listaImpuestos = [];
   bool _isLoading = true;
   bool _isSaving = false;
@@ -111,6 +116,11 @@ class _FormularioCompraState extends State<FormularioCompra> {
       _facturaProveedorController.text = datos['numero_factura'] ?? datos['clave'] ?? '';
       if ((datos['clave'] as String?)?.isNotEmpty == true) {
         _claveHacienda = datos['clave'] as String;
+      }
+      final fechaLeida = datos['fecha'] as String?;
+      if (fechaLeida != null && fechaLeida.isNotEmpty) {
+        final parseada = DateTime.tryParse(fechaLeida);
+        if (parseada != null) setState(() => _fecha = parseada);
       }
 
       // Proveedor: si ya existe (por cédula) se selecciona; si no, se crea
@@ -479,6 +489,7 @@ class _FormularioCompraState extends State<FormularioCompra> {
         'proveedor': _proveedorSeleccionado!.id,
         'numero_factura_proveedor': _facturaProveedorController.text.trim(),
         'condicion_compra': _condicionCompra,
+        'fecha_compra': "${_fecha.year}-${_fecha.month.toString().padLeft(2, '0')}-${_fecha.day.toString().padLeft(2, '0')}",
         'total_compra': redondear2(_carritoCompra.fold(0.0, (sum, item) => sum + item.subtotal)),
         'detalles_compra': _carritoCompra.map((item) => {
           'producto': item.producto.id,
@@ -556,6 +567,26 @@ class _FormularioCompraState extends State<FormularioCompra> {
                       style: IconButton.styleFrom(backgroundColor: AppColors.primary),
                     ),
                   ],
+                ),
+                const SizedBox(height: 10),
+                InkWell(
+                  onTap: () async {
+                    final elegida = await showDatePicker(
+                      context: context,
+                      initialDate: _fecha,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(DateTime.now().year + 1, 12, 31),
+                    );
+                    if (elegida != null) setState(() => _fecha = elegida);
+                  },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: "Fecha de la factura",
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.calendar_today),
+                    ),
+                    child: Text("${_fecha.day.toString().padLeft(2, '0')}/${_fecha.month.toString().padLeft(2, '0')}/${_fecha.year}"),
+                  ),
                 ),
                 const SizedBox(height: 10),
                 TextField(
