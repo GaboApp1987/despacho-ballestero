@@ -404,7 +404,8 @@ class _NegociosScreenState extends State<NegociosScreen> {
         final List data = json.decode(utf8.decode(response.bodyBytes));
         if (mounted) {
           setState(() {
-            _negocios = data.map((j) => Negocio.fromJson(j)).toList();
+            _negocios = data.map((j) => Negocio.fromJson(j)).toList()
+              ..sort((a, b) => a.nombreComercial.toLowerCase().compareTo(b.nombreComercial.toLowerCase()));
             _isLoading = false;
           });
         }
