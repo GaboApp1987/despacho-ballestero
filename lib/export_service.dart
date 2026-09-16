@@ -16,6 +16,7 @@ import 'factura.dart';
 import 'nota_credito.dart';
 import 'compra_model.dart';
 import 'gasto_operativo.dart';
+import 'ingreso_operativo.dart';
 import 'formato.dart';
 import 'negocio.dart';
 
@@ -2331,6 +2332,173 @@ class ExportService {
     celda(colTarifas + 3, filaTarifa, DoubleCellValue(baseTotal + ivaTotal));
 
     await _guardarExcel(excel, dialogTitle: 'Guardar Reporte de Compras', fileName: 'reporte_compras.xlsx');
+  }
+
+  /// Tarifa de un ingreso operativo: a diferencia de Compra, sí guarda su
+  /// propio monto_iva, así que se calcula igual que declaracion_iva en el
+  /// backend (IVA/subtotal), no se estima desde un producto.
+  static String _tarifaIngreso(IngresoOperativo i) {
+    if (i.monto == 0) return '-';
+    return '${(i.montoIva / i.monto * 100).round()}%';
+  }
+
+  static ({Map<int, double> base, Map<int, double> iva}) _agruparPorTarifaIngreso(List<IngresoOperativo> ingresos) {
+    final base = <int, double>{};
+    final iva = <int, double>{};
+    for (final i in ingresos) {
+      if (i.monto == 0) continue;
+      final t = (i.montoIva / i.monto * 100).round();
+      base[t] = (base[t] ?? 0) + i.monto;
+      iva[t] = (iva[t] ?? 0) + i.montoIva;
+    }
+    return (base: base, iva: iva);
+  }
+
+  /// Exporta el listado de ingresos operativos (ventas de negocios que no
+  /// facturan con Equilibra) a PDF -- mismo formato que el Reporte de Compras.
+  static Future<void> exportIngresosToPdf(List<IngresoOperativo> ingresos, String negocioNombre, String periodo) async {
+    final sumaSubtotal = ingresos.fold<double>(0.0, (s, i) => s + i.monto);
+    final sumaIva = ingresos.fold<double>(0.0, (s, i) => s + i.montoIva);
+    final sumaTotal = sumaSubtotal + sumaIva;
+
+    final pdf = pw.Document(theme: await _cargarTema());
+    pdf.addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      build: (pw.Context context) => [
+        pw.Header(
+          level: 0,
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text('Reporte de Ingresos', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('Periodo: $periodo', style: const pw.TextStyle(fontSize: 12)),
+                ],
+              ),
+              pw.Text(negocioNombre, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+            ],
+          ),
+        ),
+        pw.SizedBox(height: 16),
+        pw.Container(
+          padding: const pw.EdgeInsets.all(10),
+          decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey400), borderRadius: pw.BorderRadius.circular(6)),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text('Subtotal: ${formatearColones(sumaSubtotal)}', style: const pw.TextStyle(fontSize: 12)),
+              pw.Text('IVA: ${formatearColones(sumaIva)}', style: const pw.TextStyle(fontSize: 12)),
+              pw.Text('Total: ${formatearColones(sumaTotal)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 13)),
+            ],
+          ),
+        ),
+        pw.SizedBox(height: 20),
+        pw.TableHelper.fromTextArray(
+          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+          headers: const ['Fecha', 'Cliente', 'Referencia', 'Subtotal', 'Tarifa', 'IVA', 'Total'],
+          data: ingresos.map((i) => [
+            i.fecha,
+            i.clienteNombre.isNotEmpty ? i.clienteNombre : 'Sin especificar',
+            i.referencia,
+            formatearColones(i.monto),
+            _tarifaIngreso(i),
+            formatearColones(i.montoIva),
+            formatearColones(i.total),
+          ]).toList(),
+        ),
+        pw.SizedBox(height: 24),
+        pw.Text('Detalle por tarifa de IVA', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 8),
+        pw.Builder(builder: (context) {
+          final porTarifa = _agruparPorTarifaIngreso(ingresos);
+          final tarifas = porTarifa.base.keys.toList()..sort();
+          return pw.TableHelper.fromTextArray(
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            headers: const ['Tarifa', 'Base', 'IVA', 'Total'],
+            data: tarifas.map((t) {
+              final base = porTarifa.base[t] ?? 0;
+              final iva = porTarifa.iva[t] ?? 0;
+              return ['$t%', formatearColones(base), formatearColones(iva), formatearColones(base + iva)];
+            }).toList(),
+          );
+        }),
+      ],
+    ));
+    await Printing.layoutPdf(onLayout: (format) async => pdf.save(), name: 'Reporte_Ingresos.pdf');
+  }
+
+  /// Exporta el listado de ingresos operativos a Excel -- mismo formato que
+  /// el Reporte de Compras: resumen arriba, detalle desde la fila 5, y el
+  /// Detalle por Tarifa a la par (columna L).
+  static Future<void> exportIngresosToExcel(List<IngresoOperativo> ingresos) async {
+    var excel = Excel.createExcel();
+    Sheet sheet = excel['Ingresos'];
+
+    final sumaSubtotal = ingresos.fold<double>(0.0, (s, i) => s + i.monto);
+    final sumaIva = ingresos.fold<double>(0.0, (s, i) => s + i.montoIva);
+    final sumaTotal = sumaSubtotal + sumaIva;
+
+    sheet.appendRow([TextCellValue('Reporte de Ingresos')]); // fila 1
+    sheet.appendRow([                                        // fila 2: sumas del periodo
+      TextCellValue('Subtotal:'), DoubleCellValue(sumaSubtotal),
+      TextCellValue('IVA:'), DoubleCellValue(sumaIva),
+      TextCellValue('Total:'), DoubleCellValue(sumaTotal),
+    ]);
+    sheet.appendRow([]); // fila 3: separador
+    sheet.appendRow([    // fila 4: encabezado
+      TextCellValue('Fecha'),
+      TextCellValue('Cliente'),
+      TextCellValue('Referencia'),
+      TextCellValue('Subtotal'),
+      TextCellValue('Tarifa'),
+      TextCellValue('IVA'),
+      TextCellValue('Total'),
+    ]);
+    for (var i in ingresos) { // fila 5 en adelante
+      sheet.appendRow([
+        TextCellValue(i.fecha),
+        TextCellValue(i.clienteNombre.isNotEmpty ? i.clienteNombre : 'Sin especificar'),
+        TextCellValue(i.referencia),
+        DoubleCellValue(i.monto),
+        TextCellValue(_tarifaIngreso(i)),
+        DoubleCellValue(i.montoIva),
+        DoubleCellValue(i.total),
+      ]);
+    }
+
+    const colTarifas = 11; // L
+    void celda(int col, int fila, CellValue valor) {
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: fila)).value = valor;
+    }
+
+    celda(colTarifas, 0, TextCellValue('Detalle por Tarifa de IVA'));
+    celda(colTarifas, 1, TextCellValue('Tarifa'));
+    celda(colTarifas + 1, 1, TextCellValue('Base'));
+    celda(colTarifas + 2, 1, TextCellValue('IVA'));
+    celda(colTarifas + 3, 1, TextCellValue('Total'));
+
+    final porTarifa = _agruparPorTarifaIngreso(ingresos);
+    final tarifasOrdenadas = porTarifa.base.keys.toList()..sort();
+    var filaTarifa = 2;
+    for (final t in tarifasOrdenadas) {
+      final base = porTarifa.base[t] ?? 0;
+      final iva = porTarifa.iva[t] ?? 0;
+      celda(colTarifas, filaTarifa, TextCellValue('$t%'));
+      celda(colTarifas + 1, filaTarifa, DoubleCellValue(base));
+      celda(colTarifas + 2, filaTarifa, DoubleCellValue(iva));
+      celda(colTarifas + 3, filaTarifa, DoubleCellValue(base + iva));
+      filaTarifa++;
+    }
+    final baseTotal = porTarifa.base.values.fold(0.0, (s, v) => s + v);
+    final ivaTotal = porTarifa.iva.values.fold(0.0, (s, v) => s + v);
+    celda(colTarifas, filaTarifa, TextCellValue('TOTAL'));
+    celda(colTarifas + 1, filaTarifa, DoubleCellValue(baseTotal));
+    celda(colTarifas + 2, filaTarifa, DoubleCellValue(ivaTotal));
+    celda(colTarifas + 3, filaTarifa, DoubleCellValue(baseTotal + ivaTotal));
+
+    await _guardarExcel(excel, dialogTitle: 'Guardar Reporte de Ingresos', fileName: 'reporte_ingresos.xlsx');
   }
 
   /// Exporta el listado de gastos operativos (Reportes) a PDF

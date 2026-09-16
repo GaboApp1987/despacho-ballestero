@@ -8,10 +8,11 @@ import 'export_service.dart';
 import 'factura.dart';
 import 'formato.dart';
 import 'gasto_operativo.dart';
+import 'ingreso_operativo.dart';
 import 'negocio.dart';
 import 'nota_credito.dart';
 
-enum _TipoReporte { ventas, compras, gastos, notasCredito }
+enum _TipoReporte { ventas, ingresos, compras, gastos, notasCredito }
 
 /// Pantalla de Reportes del negocio: permite filtrar por rango de fechas y
 /// por tipo de documento (ventas, compras, gastos, notas de crédito) y
@@ -31,6 +32,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
   bool _cargando = true;
 
   List<Factura> _facturas = [];
+  List<IngresoOperativo> _ingresos = [];
   List<Compra> _compras = [];
   List<GastoOperativo> _gastos = [];
   List<NotaCredito> _notasCredito = [];
@@ -89,6 +91,13 @@ class _ReportesScreenState extends State<ReportesScreen> {
           if (r.statusCode == 200) {
             final data = json.decode(utf8.decode(r.bodyBytes)) as List;
             _facturas = data.map((j) => Factura.fromJson(j)).toList();
+          }
+          break;
+        case _TipoReporte.ingresos:
+          final r = await ApiService.get('/ingresos-operativos/?negocio=${widget.negocio.id}&fecha_inicio=$inicioStr&fecha_fin=$finStr');
+          if (r.statusCode == 200) {
+            final data = json.decode(utf8.decode(r.bodyBytes)) as List;
+            _ingresos = data.map((j) => IngresoOperativo.fromJson(j)).toList();
           }
           break;
         case _TipoReporte.compras:
@@ -173,6 +182,8 @@ class _ReportesScreenState extends State<ReportesScreen> {
     switch (_tipo) {
       case _TipoReporte.ventas:
         return _facturas.fold(0.0, (s, f) => s + f.totalFactura);
+      case _TipoReporte.ingresos:
+        return _ingresos.fold(0.0, (s, i) => s + i.total);
       case _TipoReporte.compras:
         return _compras.fold(0.0, (s, c) => s + c.totalCompra);
       case _TipoReporte.gastos:
@@ -186,6 +197,8 @@ class _ReportesScreenState extends State<ReportesScreen> {
     switch (_tipo) {
       case _TipoReporte.ventas:
         return _facturas.length;
+      case _TipoReporte.ingresos:
+        return _ingresos.length;
       case _TipoReporte.compras:
         return _compras.length;
       case _TipoReporte.gastos:
@@ -199,6 +212,9 @@ class _ReportesScreenState extends State<ReportesScreen> {
     switch (_tipo) {
       case _TipoReporte.ventas:
         ExportService.exportFacturasToPdf(_facturas, widget.negocio.nombreComercial, _periodoTexto);
+        break;
+      case _TipoReporte.ingresos:
+        ExportService.exportIngresosToPdf(_ingresos, widget.negocio.nombreComercial, _periodoTexto);
         break;
       case _TipoReporte.compras:
         ExportService.exportComprasToPdf(_compras, widget.negocio.nombreComercial, _periodoTexto);
@@ -216,6 +232,9 @@ class _ReportesScreenState extends State<ReportesScreen> {
     switch (_tipo) {
       case _TipoReporte.ventas:
         ExportService.exportFacturasToExcel(_facturas);
+        break;
+      case _TipoReporte.ingresos:
+        ExportService.exportIngresosToExcel(_ingresos);
         break;
       case _TipoReporte.compras:
         ExportService.exportComprasToExcel(_compras);
@@ -290,6 +309,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
               spacing: 10,
               children: [
                 _chipTipo(_TipoReporte.ventas, "Ventas", Icons.receipt_long_outlined),
+                _chipTipo(_TipoReporte.ingresos, "Ingresos", Icons.trending_up),
                 _chipTipo(_TipoReporte.compras, "Compras", Icons.shopping_cart_outlined),
                 _chipTipo(_TipoReporte.gastos, "Gastos", Icons.payments_outlined),
                 _chipTipo(_TipoReporte.notasCredito, "Notas de Crédito", Icons.assignment_return_outlined),
@@ -382,6 +402,22 @@ class _ReportesScreenState extends State<ReportesScreen> {
               titulo: f.receptorNombre,
               subtitulo: "F-${f.consecutivo} • ${f.fechaEmision.split('T')[0]} • ${f.condicionVenta == "02" ? 'Crédito' : 'Contado'}",
               monto: f.totalFactura,
+            );
+          },
+        );
+      case _TipoReporte.ingresos:
+        if (_ingresos.isEmpty) return _vacio("No hay ingresos en este periodo.");
+        return ListView.separated(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          itemCount: _ingresos.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 10),
+          itemBuilder: (context, i) {
+            final ing = _ingresos[i];
+            return _filaReporte(
+              icono: Icons.trending_up,
+              titulo: ing.clienteNombre.isNotEmpty ? ing.clienteNombre : "Cliente sin especificar",
+              subtitulo: "${ing.fecha}${ing.referencia.isNotEmpty ? ' • ${ing.referencia}' : ''} • ${ing.condicionVenta == '02' ? 'Crédito' : 'Contado'}",
+              monto: ing.total,
             );
           },
         );

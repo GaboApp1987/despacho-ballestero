@@ -4,6 +4,7 @@ import 'theme/app_theme.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'api_service.dart';
+import 'export_service.dart';
 import 'ingreso_operativo.dart';
 import 'importar_externo_dialog.dart';
 import 'negocio.dart';
@@ -24,13 +25,61 @@ class IngresosScreen extends StatefulWidget {
 class _IngresosScreenState extends State<IngresosScreen> {
   bool _cargando = true;
   List<IngresoOperativo> _ingresos = [];
-  late int _anioFiltro;
+  late DateTime _fechaInicio;
+  late DateTime _fechaFin;
 
   @override
   void initState() {
     super.initState();
-    _anioFiltro = DateTime.now().year;
+    final ahora = DateTime.now();
+    _fechaInicio = DateTime(ahora.year, ahora.month, 1);
+    _fechaFin = DateTime(ahora.year, ahora.month + 1, 0);
     _cargarDatos();
+  }
+
+  static const List<String> _nombresMes = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+  ];
+
+  String _fmtFecha(DateTime d) => "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
+
+  String get _periodoTexto =>
+      "${_fechaInicio.day}/${_fechaInicio.month}/${_fechaInicio.year} - ${_fechaFin.day}/${_fechaFin.month}/${_fechaFin.year}";
+
+  /// Igual que en Reportes: true si el rango actual es exactamente un mes
+  /// calendario completo, para mostrar el nombre del mes en vez del rango.
+  bool get _esMesCompleto {
+    final primerDia = DateTime(_fechaInicio.year, _fechaInicio.month, 1);
+    final ultimoDia = DateTime(_fechaInicio.year, _fechaInicio.month + 1, 0);
+    return _fechaInicio.isAtSameMomentAs(primerDia) && _fechaFin.isAtSameMomentAs(ultimoDia);
+  }
+
+  String get _mesAnioTexto => '${_nombresMes[_fechaInicio.month - 1]} ${_fechaInicio.year}';
+
+  void _irAMes(int deltaMeses) {
+    final base = DateTime(_fechaInicio.year, _fechaInicio.month + deltaMeses, 1);
+    setState(() {
+      _fechaInicio = DateTime(base.year, base.month, 1);
+      _fechaFin = DateTime(base.year, base.month + 1, 0);
+    });
+    _cargarDatos();
+  }
+
+  Future<void> _elegirRangoFechas() async {
+    final rango = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2023),
+      lastDate: DateTime(2030),
+      initialDateRange: DateTimeRange(start: _fechaInicio, end: _fechaFin),
+    );
+    if (rango != null) {
+      setState(() {
+        _fechaInicio = rango.start;
+        _fechaFin = rango.end;
+      });
+      _cargarDatos();
+    }
   }
 
   Future<void> _cargarDatos() async {
@@ -38,7 +87,7 @@ class _IngresosScreenState extends State<IngresosScreen> {
     setState(() => _cargando = true);
     try {
       final res = await ApiService.get(
-        '/ingresos-operativos/?negocio=${widget.negocio.id}&fecha_inicio=$_anioFiltro-01-01&fecha_fin=$_anioFiltro-12-31',
+        '/ingresos-operativos/?negocio=${widget.negocio.id}&fecha_inicio=${_fmtFecha(_fechaInicio)}&fecha_fin=${_fmtFecha(_fechaFin)}',
       );
       if (!mounted) return;
       if (res.statusCode == 200) {
@@ -59,6 +108,28 @@ class _IngresosScreenState extends State<IngresosScreen> {
 
   double get _totalSubtotal => _ingresos.fold(0.0, (s, i) => s + i.monto);
   double get _totalIva => _ingresos.fold(0.0, (s, i) => s + i.montoIva);
+
+  // Igual que _tarifa_de en CompraViewSet.declaracion_iva (backend): la
+  // tarifa no se guarda por ingreso, se calcula a partir de lo que
+  // realmente se cobró (IVA/subtotal) para que coincida con el desglose
+  // que ya usa la Declaración de IVA.
+  String _tarifaDe(double subtotal, double iva) {
+    if (subtotal == 0) return "0.00";
+    return (iva / subtotal * 100).toStringAsFixed(2);
+  }
+
+  List<MapEntry<String, List<double>>> get _sumaPorTarifa {
+    final mapa = <String, List<double>>{};
+    for (final i in _ingresos) {
+      final tarifa = _tarifaDe(i.monto, i.montoIva);
+      final acumulado = mapa.putIfAbsent(tarifa, () => [0, 0]);
+      acumulado[0] += i.monto;
+      acumulado[1] += i.montoIva;
+    }
+    final entradas = mapa.entries.toList()
+      ..sort((a, b) => double.parse(b.key).compareTo(double.parse(a.key)));
+    return entradas;
+  }
 
   Future<void> _abrirComprobante(String url) async {
     final uri = Uri.parse(url);
@@ -239,30 +310,38 @@ class _IngresosScreenState extends State<IngresosScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final anioActual = DateTime.now().year;
     return Scaffold(
       appBar: AppBar(
         title: const Text("Ingresos"),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
         actions: [
-          DropdownButtonHideUnderline(
-            child: DropdownButton<int>(
-              value: _anioFiltro,
-              dropdownColor: AppColors.surface,
-              style: TextStyle(color: AppColors.textStrong, fontWeight: FontWeight.bold),
-              iconEnabledColor: AppColors.textStrong,
-              items: List.generate(5, (i) => anioActual - i)
-                  .map((a) => DropdownMenuItem(value: a, child: Text("$a")))
-                  .toList(),
-              onChanged: (v) {
-                if (v == null) return;
-                setState(() => _anioFiltro = v);
-                _cargarDatos();
-              },
+          IconButton(
+            icon: const Icon(Icons.chevron_left),
+            tooltip: "Mes anterior",
+            onPressed: () => _irAMes(-1),
+          ),
+          InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => _irAMes(0),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+              child: Text(
+                _esMesCompleto ? _mesAnioTexto : _periodoTexto,
+                style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textStrong),
+              ),
             ),
           ),
-          const SizedBox(width: 12),
+          IconButton(
+            icon: const Icon(Icons.chevron_right),
+            tooltip: "Mes siguiente",
+            onPressed: () => _irAMes(1),
+          ),
+          IconButton(
+            icon: const Icon(Icons.date_range, size: 20),
+            tooltip: "Elegir un rango de fechas personalizado",
+            onPressed: _elegirRangoFechas,
+          ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _cargarDatos),
         ],
       ),
@@ -280,7 +359,7 @@ class _IngresosScreenState extends State<IngresosScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text("Subtotal del año", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            const Text("Subtotal del periodo", style: TextStyle(fontSize: 12, color: Colors.grey)),
                             Text(formatearColones(_totalSubtotal), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primary)),
                           ],
                         ),
@@ -289,17 +368,63 @@ class _IngresosScreenState extends State<IngresosScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text("IVA del año", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            const Text("IVA del periodo", style: TextStyle(fontSize: 12, color: Colors.grey)),
                             Text(formatearColones(_totalIva), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                           ],
                         ),
                       ),
+                      IconButton(
+                        icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent),
+                        tooltip: "Exportar PDF",
+                        onPressed: _ingresos.isEmpty
+                            ? null
+                            : () => ExportService.exportIngresosToPdf(_ingresos, widget.negocio.nombreComercial, _periodoTexto),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.table_chart, color: Colors.green),
+                        tooltip: "Exportar Excel",
+                        onPressed: _ingresos.isEmpty ? null : () => ExportService.exportIngresosToExcel(_ingresos),
+                      ),
                     ],
                   ),
                 ),
+                if (_sumaPorTarifa.isNotEmpty)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    color: AppColors.surfaceSubtle,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("Desglose por tarifa", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey[700])),
+                        const SizedBox(height: 6),
+                        Table(
+                          columnWidths: const {0: FlexColumnWidth(1), 1: FlexColumnWidth(2), 2: FlexColumnWidth(2), 3: FlexColumnWidth(2)},
+                          children: [
+                            TableRow(children: [
+                              Text("Tarifa", style: TextStyle(color: Colors.grey[500], fontSize: 11, fontWeight: FontWeight.bold)),
+                              Text("Subtotal", textAlign: TextAlign.right, style: TextStyle(color: Colors.grey[500], fontSize: 11, fontWeight: FontWeight.bold)),
+                              Text("IVA", textAlign: TextAlign.right, style: TextStyle(color: Colors.grey[500], fontSize: 11, fontWeight: FontWeight.bold)),
+                              Text("Total", textAlign: TextAlign.right, style: TextStyle(color: Colors.grey[500], fontSize: 11, fontWeight: FontWeight.bold)),
+                            ]),
+                            ..._sumaPorTarifa.map((e) {
+                              final subtotal = e.value[0];
+                              final iva = e.value[1];
+                              return TableRow(children: [
+                                Padding(padding: const EdgeInsets.only(top: 4), child: Text("${e.key}%", style: const TextStyle(fontSize: 12))),
+                                Padding(padding: const EdgeInsets.only(top: 4), child: Text(formatearColones(subtotal, decimales: 0), textAlign: TextAlign.right, style: const TextStyle(fontSize: 12))),
+                                Padding(padding: const EdgeInsets.only(top: 4), child: Text(formatearColones(iva, decimales: 0), textAlign: TextAlign.right, style: const TextStyle(fontSize: 12))),
+                                Padding(padding: const EdgeInsets.only(top: 4), child: Text(formatearColones(subtotal + iva, decimales: 0), textAlign: TextAlign.right, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
+                              ]);
+                            }),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
                 Expanded(
                   child: _ingresos.isEmpty
-                      ? const Center(child: Text("No hay ingresos registrados en este año.", style: TextStyle(color: Colors.grey)))
+                      ? const Center(child: Text("No hay ingresos registrados en este periodo.", style: TextStyle(color: Colors.grey)))
                       : ListView.builder(
                           padding: const EdgeInsets.all(16),
                           itemCount: _ingresos.length,
