@@ -80,6 +80,35 @@ class _ResumenFiscalNegocioScreenState extends State<ResumenFiscalNegocioScreen>
     });
   }
 
+  static const List<String> _nombresMes = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+  ];
+
+  /// True si el rango actual es exactamente un mes calendario completo --
+  /// para mostrar el nombre del mes en vez del rango de fechas, igual que
+  /// en Reportes/Ingresos.
+  bool get _esMesCompletoIva {
+    final primerDia = DateTime(_fechaInicio.year, _fechaInicio.month, 1);
+    final ultimoDia = DateTime(_fechaInicio.year, _fechaInicio.month + 1, 0);
+    return _fechaInicio.isAtSameMomentAs(primerDia) && _fechaFin.isAtSameMomentAs(ultimoDia);
+  }
+
+  String get _mesAnioIvaTexto => '${_nombresMes[_fechaInicio.month - 1]} ${_fechaInicio.year}';
+
+  /// Salta directo a un mes calendario completo -- antes la única forma de
+  /// cambiar de periodo era el selector de rango manual (elegir día de
+  /// inicio y de fin uno por uno), lento para el caso normal de "ver el
+  /// mes pasado".
+  void _irAMesIva(int deltaMeses) {
+    final base = DateTime(_fechaInicio.year, _fechaInicio.month + deltaMeses, 1);
+    setState(() {
+      _fechaInicio = DateTime(base.year, base.month, 1);
+      _fechaFin = DateTime(base.year, base.month + 1, 0);
+      _declaracionIvaFuture = _obtenerDeclaracionIva();
+    });
+  }
+
   void _cambiarAnioRenta(int nuevoAnio) {
     setState(() {
       _anioRenta = nuevoAnio;
@@ -308,11 +337,42 @@ class _ResumenFiscalNegocioScreenState extends State<ResumenFiscalNegocioScreen>
                     icon: const Icon(Icons.table_chart_outlined, color: Colors.green),
                   ),
                 ],
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  onPressed: _cambiarPeriodoIva,
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.chevron_left),
+                  tooltip: "Mes anterior",
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => _irAMesIva(-1),
+                ),
+                InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () => _irAMesIva(0),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    child: Text(
+                      _esMesCompletoIva
+                          ? _mesAnioIvaTexto
+                          : "${_fechaInicio.day}/${_fechaInicio.month}/${_fechaInicio.year} - ${_fechaFin.day}/${_fechaFin.month}/${_fechaFin.year}",
+                      style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.chevron_right),
+                  tooltip: "Mes siguiente",
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => _irAMesIva(1),
+                ),
+                IconButton(
                   icon: const Icon(Icons.date_range, size: 18),
-                  label: Text("${_fechaInicio.day}/${_fechaInicio.month}/${_fechaInicio.year} - ${_fechaFin.day}/${_fechaFin.month}/${_fechaFin.year}"),
+                  tooltip: "Elegir un rango de fechas personalizado",
+                  visualDensity: VisualDensity.compact,
+                  onPressed: _cambiarPeriodoIva,
                 ),
               ],
             ),
