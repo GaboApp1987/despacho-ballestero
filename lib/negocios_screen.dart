@@ -434,6 +434,11 @@ class _NegociosScreenState extends State<NegociosScreen> {
     String entorno = 'STAGING';
     int? planSeleccionado;
     bool guardando = false;
+    // Un negocio que solo lleva su contabilidad con el contador (Ingresos,
+    // Compras, Reportes) pero no factura electrónicamente por acá no
+    // necesita correo/usuario/clave de Hacienda -- eso trababa la creación
+    // de este tipo de cliente pidiendo datos que nunca va a usar.
+    bool facturaConEquilibra = true;
 
     // Para que el negocio no se le olvide su usuario, se precarga con el
     // Correo Hacienda mientras el contador no escriba uno distinto a mano.
@@ -488,36 +493,46 @@ class _NegociosScreenState extends State<NegociosScreen> {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  TextField(
-                    controller: correoHaciendaCtrl,
-                    decoration: const InputDecoration(labelText: "Correo Hacienda *", border: OutlineInputBorder()),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: facturaConEquilibra,
+                    title: const Text("Factura electrónicamente con Equilibra"),
+                    subtitle: const Text("Desactivalo si es solo cliente contable del contador (Ingresos/Compras/Reportes)."),
+                    onChanged: (v) => setStateDialog(() => facturaConEquilibra = v),
                   ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: codigoActividadCtrl,
-                    decoration: const InputDecoration(labelText: "Código Actividad (6 dígitos) *", border: OutlineInputBorder()),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: usuarioApiCtrl,
-                    decoration: const InputDecoration(labelText: "Usuario API Hacienda", border: OutlineInputBorder()),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: claveApiCtrl,
-                    obscureText: true,
-                    decoration: const InputDecoration(labelText: "Clave API Hacienda", border: OutlineInputBorder()),
-                  ),
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<String>(
-                    value: entorno,
-                    decoration: const InputDecoration(labelText: "Entorno Hacienda", border: OutlineInputBorder()),
-                    items: const [
-                      DropdownMenuItem(value: 'STAGING', child: Text("Pruebas / Sandbox")),
-                      DropdownMenuItem(value: 'PRODUCTION', child: Text("Producción / Real")),
-                    ],
-                    onChanged: (v) => setStateDialog(() => entorno = v!),
-                  ),
+                  if (facturaConEquilibra) ...[
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: correoHaciendaCtrl,
+                      decoration: const InputDecoration(labelText: "Correo Hacienda *", border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: codigoActividadCtrl,
+                      decoration: const InputDecoration(labelText: "Código Actividad (6 dígitos) *", border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: usuarioApiCtrl,
+                      decoration: const InputDecoration(labelText: "Usuario API Hacienda", border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: claveApiCtrl,
+                      obscureText: true,
+                      decoration: const InputDecoration(labelText: "Clave API Hacienda", border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      value: entorno,
+                      decoration: const InputDecoration(labelText: "Entorno Hacienda", border: OutlineInputBorder()),
+                      items: const [
+                        DropdownMenuItem(value: 'STAGING', child: Text("Pruebas / Sandbox")),
+                        DropdownMenuItem(value: 'PRODUCTION', child: Text("Producción / Real")),
+                      ],
+                      onChanged: (v) => setStateDialog(() => entorno = v!),
+                    ),
+                  ],
                   const SizedBox(height: 10),
                   DropdownButtonFormField<int?>(
                     value: planSeleccionado,
@@ -559,10 +574,11 @@ class _NegociosScreenState extends State<NegociosScreen> {
                   : () async {
                       if (nombreCtrl.text.trim().isEmpty ||
                           cedulaCtrl.text.trim().isEmpty ||
-                          correoHaciendaCtrl.text.trim().isEmpty ||
-                          codigoActividadCtrl.text.trim().isEmpty ||
                           usernameCtrl.text.trim().isEmpty ||
-                          passwordCtrl.text.trim().isEmpty) {
+                          passwordCtrl.text.trim().isEmpty ||
+                          (facturaConEquilibra &&
+                              (correoHaciendaCtrl.text.trim().isEmpty ||
+                                  codigoActividadCtrl.text.trim().isEmpty))) {
                         ScaffoldMessenger.of(ctx).showSnackBar(
                           const SnackBar(content: Text("Complete todos los campos obligatorios (*)")),
                         );
