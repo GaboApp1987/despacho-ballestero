@@ -622,6 +622,165 @@ class _NegociosScreenState extends State<NegociosScreen> {
     );
   }
 
+  /// El listado de Clientes no tenía ninguna forma de corregir un dato mal
+  /// tecleado al crear el negocio (nombre, cédula, correo/actividad de
+  /// Hacienda) -- lo único editable estaba escondido varios clics adentro,
+  /// en Gestionar > Ajustes. Mismos campos que _mostrarFormularioCrear,
+  /// precargados, con PUT en vez de POST.
+  void _mostrarFormularioEditar(Negocio n) {
+    final nombreCtrl = TextEditingController(text: n.nombreComercial);
+    final cedulaCtrl = TextEditingController(text: n.cedula);
+    final correoHaciendaCtrl = TextEditingController(text: n.correoHacienda ?? '');
+    final codigoActividadCtrl = TextEditingController(text: n.codigoActividad ?? '');
+    final usuarioApiCtrl = TextEditingController(text: n.usuarioApi ?? '');
+    final claveApiCtrl = TextEditingController();
+    String tipoCedula = n.tipoCedula;
+    String entorno = n.entornoHacienda ?? 'STAGING';
+    bool guardando = false;
+    bool facturaConEquilibra = (n.correoHacienda?.isNotEmpty ?? false) || (n.codigoActividad?.isNotEmpty ?? false);
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setStateDialog) => AlertDialog(
+          title: Text("Editar ${n.nombreComercial}"),
+          content: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: 420),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nombreCtrl,
+                    autofocus: true,
+                    decoration: const InputDecoration(labelText: "Nombre Comercial *", border: OutlineInputBorder()),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: TextField(
+                          controller: cedulaCtrl,
+                          decoration: const InputDecoration(labelText: "Cédula *", border: OutlineInputBorder()),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: tipoCedula,
+                          decoration: const InputDecoration(labelText: "Tipo", border: OutlineInputBorder()),
+                          items: _tiposCedula.entries
+                              .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                              .toList(),
+                          onChanged: (v) => setStateDialog(() => tipoCedula = v!),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: facturaConEquilibra,
+                    title: const Text("Factura electrónicamente con Equilibra"),
+                    subtitle: const Text("Desactivalo si es solo cliente contable del contador (Ingresos/Compras/Reportes)."),
+                    onChanged: (v) => setStateDialog(() => facturaConEquilibra = v),
+                  ),
+                  if (facturaConEquilibra) ...[
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: correoHaciendaCtrl,
+                      decoration: const InputDecoration(labelText: "Correo Hacienda *", border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: codigoActividadCtrl,
+                      decoration: const InputDecoration(labelText: "Código Actividad (6 dígitos) *", border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: usuarioApiCtrl,
+                      decoration: const InputDecoration(labelText: "Usuario API Hacienda", border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: claveApiCtrl,
+                      obscureText: true,
+                      decoration: const InputDecoration(labelText: "Clave API Hacienda (dejar vacío para no cambiar)", border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      value: entorno,
+                      decoration: const InputDecoration(labelText: "Entorno Hacienda", border: OutlineInputBorder()),
+                      items: const [
+                        DropdownMenuItem(value: 'STAGING', child: Text("Pruebas / Sandbox")),
+                        DropdownMenuItem(value: 'PRODUCTION', child: Text("Producción / Real")),
+                      ],
+                      onChanged: (v) => setStateDialog(() => entorno = v!),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: guardando ? null : () => Navigator.pop(ctx), child: const Text("Cancelar")),
+            ElevatedButton(
+              style: widget.puedeCrear
+                  ? ElevatedButton.styleFrom(backgroundColor: _PaletaContador.acento, foregroundColor: Colors.white)
+                  : null,
+              onPressed: guardando
+                  ? null
+                  : () async {
+                      if (nombreCtrl.text.trim().isEmpty ||
+                          cedulaCtrl.text.trim().isEmpty ||
+                          (facturaConEquilibra &&
+                              (correoHaciendaCtrl.text.trim().isEmpty ||
+                                  codigoActividadCtrl.text.trim().isEmpty))) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          const SnackBar(content: Text("Complete todos los campos obligatorios (*)")),
+                        );
+                        return;
+                      }
+                      setStateDialog(() => guardando = true);
+                      try {
+                        final response = await ApiService.patch('/negocios/${n.id}/', {
+                          'nombre_comercial': nombreCtrl.text.trim(),
+                          'cedula': cedulaCtrl.text.trim(),
+                          'tipo_cedula': tipoCedula,
+                          // Si se desactivó "Factura con Equilibra", se mandan vacíos
+                          // a propósito para poder borrar datos de Hacienda que ya
+                          // no aplican (partial_update solo ignora los que son null).
+                          'correo_hacienda': facturaConEquilibra ? correoHaciendaCtrl.text.trim() : '',
+                          'codigo_actividad': facturaConEquilibra ? codigoActividadCtrl.text.trim() : '',
+                          'usuario_api': facturaConEquilibra ? usuarioApiCtrl.text.trim() : '',
+                          'entorno_hacienda': entorno,
+                          if (facturaConEquilibra && claveApiCtrl.text.trim().isNotEmpty) 'clave_api': claveApiCtrl.text.trim(),
+                        });
+                        if (response.statusCode == 200) {
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          _cargarNegocios();
+                        } else {
+                          throw Exception(utf8.decode(response.bodyBytes));
+                        }
+                      } catch (e) {
+                        setStateDialog(() => guardando = false);
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Error: $e")));
+                        }
+                      }
+                    },
+              child: guardando
+                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text("Guardar"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   static const Map<String, String> _estadosSuscripcion = {
     'activo': 'Activo',
     'suspendido': 'Suspendido',
@@ -1134,6 +1293,12 @@ class _NegociosScreenState extends State<NegociosScreen> {
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              if (widget.puedeCrear)
+                                IconButton(
+                                  icon: Icon(Icons.edit_outlined, color: esContador ? _PaletaContador.textoTenue : null),
+                                  tooltip: "Editar",
+                                  onPressed: () => _mostrarFormularioEditar(n),
+                                ),
                               if (widget.puedeGestionarPlanes)
                                 IconButton(
                                   icon: Icon(Icons.workspace_premium_outlined, color: esContador ? _PaletaContador.textoTenue : null),

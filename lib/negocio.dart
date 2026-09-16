@@ -45,6 +45,8 @@ class Negocio {
   final int id;
   final String nombreComercial;
   final String cedula;
+  final String tipoCedula;
+  final String? codigoActividad;
 
   // 🔥 1. DECLARAMOS LOS CAMPOS DE HACIENDA COMO OPCIONALES (CON ?)
   final String? usuarioApi;
@@ -73,6 +75,8 @@ class Negocio {
     required this.id,
     required this.nombreComercial,
     required this.cedula,
+    this.tipoCedula = '01',
+    this.codigoActividad,
     this.usuarioApi,           // 👈 Ahora sí existe el parámetro
     this.pinLlave,
     this.llaveCriptografica,
@@ -101,6 +105,8 @@ class Negocio {
       id: json['id'] ?? 0,
       nombreComercial: json['nombre_comercial'] ?? json['nombreComercial'] ?? 'Sin Nombre',
       cedula: json['cedula'] ?? '',
+      tipoCedula: json['tipo_cedula'] ?? '01',
+      codigoActividad: json['codigo_actividad'],
 
       // Mapeo seguro que tolera los valores Null de la base de datos
       usuarioApi: json['usuario_api'],
