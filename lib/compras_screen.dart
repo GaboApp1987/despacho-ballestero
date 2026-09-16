@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'api_service.dart';
 import 'compra_model.dart';
 import 'formulario_compra.dart';
+import 'importar_externo_dialog.dart';
 import 'negocio.dart';
 import 'formato.dart';
 
@@ -585,12 +586,32 @@ class _ComprasScreenState extends State<ComprasScreen> {
                 backgroundColor: AppColors.primary,
               );
             }
-            return FloatingActionButton.extended(
-              heroTag: 'fab_compras',
-              onPressed: _abrirNuevaCompra,
-              icon: const Icon(Icons.add_shopping_cart),
-              label: const Text("NUEVA COMPRA"),
-              backgroundColor: AppColors.primary,
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton.extended(
+                  heroTag: 'fab_importar_compras',
+                  onPressed: () => importarArchivoExterno(
+                    context: context,
+                    negocio: widget.negocio,
+                    endpoint: '/compras/importar-externo/',
+                    tipoLabel: 'compras',
+                    onImportado: _cargarDatos,
+                  ),
+                  icon: const Icon(Icons.upload_file_outlined),
+                  label: const Text("Importar archivo"),
+                  backgroundColor: AppColors.surface,
+                  foregroundColor: AppColors.textStrong,
+                ),
+                const SizedBox(height: 10),
+                FloatingActionButton.extended(
+                  heroTag: 'fab_compras',
+                  onPressed: _abrirNuevaCompra,
+                  icon: const Icon(Icons.add_shopping_cart),
+                  label: const Text("NUEVA COMPRA"),
+                  backgroundColor: AppColors.primary,
+                ),
+              ],
             );
           },
         ),
