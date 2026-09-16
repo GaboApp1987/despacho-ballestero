@@ -56,6 +56,64 @@ class ExportService {
     return (base: base, iva: iva);
   }
 
+  // --- Estilos compartidos para que los Excel exportados no se vean "pegados"
+  // (sin separación entre encabezado y datos, números sin separador de miles,
+  // columnas demasiado angostas) -- mismo color de marca que ya usan los PDF. ---
+  static final ExcelColor _colorMarca = ExcelColor.fromHexString('FF3730A3');
+
+  static CellStyle _estiloTitulo() => CellStyle(bold: true, fontSize: 16, fontColorHex: _colorMarca);
+
+  static CellStyle _estiloSubtitulo() => CellStyle(fontColorHex: ExcelColor.fromHexString('FF6B7280'));
+
+  static CellStyle _estiloEncabezadoSeccion() => CellStyle(bold: true, fontSize: 12, fontColorHex: _colorMarca);
+
+  static CellStyle _estiloEncabezadoTabla() => CellStyle(
+        bold: true,
+        fontColorHex: ExcelColor.white,
+        backgroundColorHex: _colorMarca,
+        horizontalAlign: HorizontalAlign.Center,
+      );
+
+  static CellStyle _estiloMoneda({bool negrita = false}) => CellStyle(
+        bold: negrita,
+        numberFormat: NumFormat.standard_4, // "#,##0.00"
+        horizontalAlign: HorizontalAlign.Right,
+      );
+
+  static CellStyle _estiloTotalTexto() => CellStyle(
+        bold: true,
+        topBorder: Border(borderStyle: BorderStyle.Thin),
+      );
+
+  static CellStyle _estiloTotalMoneda() => CellStyle(
+        bold: true,
+        numberFormat: NumFormat.standard_4,
+        horizontalAlign: HorizontalAlign.Right,
+        topBorder: Border(borderStyle: BorderStyle.Thin),
+      );
+
+  /// Aplica [estilo] a las primeras [columnas] celdas de la última fila
+  /// escrita en [sheet] (justo después de un appendRow) -- evita tener que
+  /// llevar el índice de fila a mano en cada exportación.
+  static void _estilarUltimaFila(Sheet sheet, int columnas, CellStyle estilo) {
+    final fila = sheet.maxRows - 1;
+    for (var c = 0; c < columnas; c++) {
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: fila)).cellStyle = estilo;
+    }
+  }
+
+  /// Aplica [estilo] a una sola celda de la última fila escrita.
+  static void _estilarCeldaUltimaFila(Sheet sheet, int columna, CellStyle estilo) {
+    final fila = sheet.maxRows - 1;
+    sheet.cell(CellIndex.indexByColumnRow(columnIndex: columna, rowIndex: fila)).cellStyle = estilo;
+  }
+
+  static void _anchoColumnas(Sheet sheet, List<double> anchos) {
+    for (var i = 0; i < anchos.length; i++) {
+      sheet.setColumnWidth(i, anchos[i]);
+    }
+  }
+
   /// Guarda un archivo Excel ya armado, pidiéndole al usuario dónde. En Web
   /// no existe un sistema de archivos real: hay que pasarle los bytes
   /// directo a saveFile() para que dispare la descarga del navegador. En
@@ -1692,41 +1750,60 @@ class ExportService {
 
     final resumen = excel['Resumen'];
     excel.setDefaultSheet('Resumen');
+    _anchoColumnas(resumen, [32, 18, 18]);
+
     resumen.appendRow([TextCellValue('Declaración de IVA - $negocioNombre')]);
+    _estilarCeldaUltimaFila(resumen, 0, _estiloTitulo());
     resumen.appendRow([TextCellValue('Periodo: $periodo')]);
+    _estilarCeldaUltimaFila(resumen, 0, _estiloSubtitulo());
     resumen.appendRow([]);
+
     resumen.appendRow([TextCellValue('Concepto'), TextCellValue('Monto')]);
-    resumen.appendRow([TextCellValue('Ventas gravadas'), DoubleCellValue(numDe('ventas_gravadas'))]);
-    resumen.appendRow([TextCellValue('IVA de ventas (débito fiscal)'), DoubleCellValue(numDe('debito_fiscal'))]);
-    resumen.appendRow([TextCellValue('Compras netas'), DoubleCellValue(numDe('compras_totales'))]);
-    resumen.appendRow([TextCellValue('IVA de compras estimado (crédito fiscal)'), DoubleCellValue(numDe('credito_fiscal'))]);
-    resumen.appendRow([TextCellValue('Saldo del periodo'), DoubleCellValue(numDe('saldo_iva'))]);
-    resumen.appendRow([]);
-    resumen.appendRow([TextCellValue('Débito fiscal por tarifa')]);
-    resumen.appendRow([TextCellValue('Tarifa'), TextCellValue('Base'), TextCellValue('IVA')]);
-    for (final t in ((declaracion['debito_por_tarifa'] as List?) ?? [])) {
-      resumen.appendRow([
-        TextCellValue('${t['tarifa']}%'),
-        DoubleCellValue(double.tryParse(t['base'].toString()) ?? 0),
-        DoubleCellValue(double.tryParse(t['iva'].toString()) ?? 0),
-      ]);
+    _estilarUltimaFila(resumen, 2, _estiloEncabezadoTabla());
+    for (final fila in [
+      ['Ventas gravadas', numDe('ventas_gravadas'), false],
+      ['IVA de ventas (débito fiscal)', numDe('debito_fiscal'), false],
+      ['Compras netas', numDe('compras_totales'), false],
+      ['IVA de compras estimado (crédito fiscal)', numDe('credito_fiscal'), false],
+      ['Saldo del periodo', numDe('saldo_iva'), true],
+    ]) {
+      resumen.appendRow([TextCellValue(fila[0] as String), DoubleCellValue(fila[1] as double)]);
+      if (fila[2] as bool) {
+        _estilarCeldaUltimaFila(resumen, 0, _estiloTotalTexto());
+        _estilarCeldaUltimaFila(resumen, 1, _estiloTotalMoneda());
+      } else {
+        _estilarCeldaUltimaFila(resumen, 1, _estiloMoneda());
+      }
     }
     resumen.appendRow([]);
-    resumen.appendRow([TextCellValue('Crédito fiscal por tarifa')]);
-    resumen.appendRow([TextCellValue('Tarifa'), TextCellValue('Base'), TextCellValue('IVA')]);
-    for (final t in ((declaracion['credito_por_tarifa'] as List?) ?? [])) {
-      resumen.appendRow([
-        TextCellValue('${t['tarifa']}%'),
-        DoubleCellValue(double.tryParse(t['base'].toString()) ?? 0),
-        DoubleCellValue(double.tryParse(t['iva'].toString()) ?? 0),
-      ]);
+
+    void tablaPorTarifa(String titulo, List tarifas) {
+      resumen.appendRow([TextCellValue(titulo)]);
+      _estilarCeldaUltimaFila(resumen, 0, _estiloEncabezadoSeccion());
+      resumen.appendRow([TextCellValue('Tarifa'), TextCellValue('Base'), TextCellValue('IVA')]);
+      _estilarUltimaFila(resumen, 3, _estiloEncabezadoTabla());
+      for (final t in tarifas) {
+        resumen.appendRow([
+          TextCellValue('${t['tarifa']}%'),
+          DoubleCellValue(double.tryParse(t['base'].toString()) ?? 0),
+          DoubleCellValue(double.tryParse(t['iva'].toString()) ?? 0),
+        ]);
+        _estilarCeldaUltimaFila(resumen, 1, _estiloMoneda());
+        _estilarCeldaUltimaFila(resumen, 2, _estiloMoneda());
+      }
+      resumen.appendRow([]);
     }
 
+    tablaPorTarifa('Débito fiscal por tarifa', (declaracion['debito_por_tarifa'] as List?) ?? []);
+    tablaPorTarifa('Crédito fiscal por tarifa', (declaracion['credito_por_tarifa'] as List?) ?? []);
+
     final hojaFacturas = excel['Facturas'];
+    _anchoColumnas(hojaFacturas, [14, 12, 28, 14, 12, 15, 13, 15, 16]);
     hojaFacturas.appendRow([
       TextCellValue('Consecutivo'), TextCellValue('Fecha'), TextCellValue('Cliente'), TextCellValue('Cédula'),
       TextCellValue('Condición'), TextCellValue('Subtotal'), TextCellValue('IVA'), TextCellValue('Total'), TextCellValue('Estado'),
     ]);
+    _estilarUltimaFila(hojaFacturas, 9, _estiloEncabezadoTabla());
     for (final f in facturas) {
       hojaFacturas.appendRow([
         TextCellValue('F-${f.consecutivo}'),
@@ -1739,6 +1816,9 @@ class ExportService {
         DoubleCellValue(f.totalFactura),
         TextCellValue(_estadoHaciendaLabel[f.estadoHacienda] ?? f.estadoHacienda),
       ]);
+      for (final col in [5, 6, 7]) {
+        _estilarCeldaUltimaFila(hojaFacturas, col, _estiloMoneda());
+      }
     }
     hojaFacturas.appendRow([]);
     hojaFacturas.appendRow([
@@ -1748,12 +1828,18 @@ class ExportService {
       DoubleCellValue(facturas.fold(0.0, (s, f) => s + f.totalFactura)),
       TextCellValue(''),
     ]);
+    _estilarCeldaUltimaFila(hojaFacturas, 0, _estiloTotalTexto());
+    for (final col in [5, 6, 7]) {
+      _estilarCeldaUltimaFila(hojaFacturas, col, _estiloTotalMoneda());
+    }
 
     final hojaNotas = excel['Notas de Credito'];
+    _anchoColumnas(hojaNotas, [14, 12, 16, 28, 15, 13, 15]);
     hojaNotas.appendRow([
       TextCellValue('Consecutivo'), TextCellValue('Fecha'), TextCellValue('Anula Factura'),
       TextCellValue('Cliente'), TextCellValue('Subtotal'), TextCellValue('IVA'), TextCellValue('Total'),
     ]);
+    _estilarUltimaFila(hojaNotas, 7, _estiloEncabezadoTabla());
     for (final n in notasCredito) {
       hojaNotas.appendRow([
         TextCellValue(n.consecutivo),
@@ -1764,10 +1850,15 @@ class ExportService {
         DoubleCellValue(n.montoIva),
         DoubleCellValue(n.total),
       ]);
+      for (final col in [4, 5, 6]) {
+        _estilarCeldaUltimaFila(hojaNotas, col, _estiloMoneda());
+      }
     }
 
     final hojaCompras = excel['Compras'];
+    _anchoColumnas(hojaCompras, [28, 12, 22, 15]);
     hojaCompras.appendRow([TextCellValue('Proveedor'), TextCellValue('Fecha'), TextCellValue('N° Factura Proveedor'), TextCellValue('Total')]);
+    _estilarUltimaFila(hojaCompras, 4, _estiloEncabezadoTabla());
     for (final c in compras) {
       hojaCompras.appendRow([
         TextCellValue(c.nombreProveedor ?? 'Sin especificar'),
@@ -1775,9 +1866,12 @@ class ExportService {
         TextCellValue(c.numeroFacturaProveedor),
         DoubleCellValue(c.totalCompra),
       ]);
+      _estilarCeldaUltimaFila(hojaCompras, 3, _estiloMoneda());
     }
     hojaCompras.appendRow([]);
     hojaCompras.appendRow([TextCellValue('TOTAL'), TextCellValue(''), TextCellValue(''), DoubleCellValue(compras.fold(0.0, (s, c) => s + c.totalCompra))]);
+    _estilarCeldaUltimaFila(hojaCompras, 0, _estiloTotalTexto());
+    _estilarCeldaUltimaFila(hojaCompras, 3, _estiloTotalMoneda());
 
     excel.delete('Sheet1');
 

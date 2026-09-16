@@ -290,18 +290,22 @@ Widget _tablaPorTarifa(String titulo, List tarifas) {
       ],
     );
   }
+  final totalBase = tarifas.fold(0.0, (s, t) => s + (double.tryParse(t['base'].toString()) ?? 0.0));
+  final totalIva = tarifas.fold(0.0, (s, t) => s + (double.tryParse(t['iva'].toString()) ?? 0.0));
+
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Text(titulo, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
       const SizedBox(height: 6),
       Table(
-        columnWidths: const {0: FlexColumnWidth(1), 1: FlexColumnWidth(2), 2: FlexColumnWidth(2)},
+        columnWidths: const {0: FlexColumnWidth(1), 1: FlexColumnWidth(2), 2: FlexColumnWidth(2), 3: FlexColumnWidth(2)},
         children: [
           TableRow(children: [
             Text("Tarifa", style: TextStyle(color: Colors.grey[500], fontSize: 11, fontWeight: FontWeight.bold)),
             Text("Base", textAlign: TextAlign.right, style: TextStyle(color: Colors.grey[500], fontSize: 11, fontWeight: FontWeight.bold)),
             Text("IVA", textAlign: TextAlign.right, style: TextStyle(color: Colors.grey[500], fontSize: 11, fontWeight: FontWeight.bold)),
+            Text("Total", textAlign: TextAlign.right, style: TextStyle(color: Colors.grey[500], fontSize: 11, fontWeight: FontWeight.bold)),
           ]),
           ...tarifas.map((t) {
             final tarifa = t['tarifa'];
@@ -311,8 +315,15 @@ Widget _tablaPorTarifa(String titulo, List tarifas) {
               Padding(padding: const EdgeInsets.only(top: 4), child: Text("$tarifa%", style: const TextStyle(fontSize: 12))),
               Padding(padding: const EdgeInsets.only(top: 4), child: Text(formatearColones(base, decimales: 0), textAlign: TextAlign.right, style: const TextStyle(fontSize: 12))),
               Padding(padding: const EdgeInsets.only(top: 4), child: Text(formatearColones(iva, decimales: 0), textAlign: TextAlign.right, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
+              Padding(padding: const EdgeInsets.only(top: 4), child: Text(formatearColones(base + iva, decimales: 0), textAlign: TextAlign.right, style: const TextStyle(fontSize: 12))),
             ]);
           }),
+          TableRow(children: [
+            Padding(padding: const EdgeInsets.only(top: 6), child: Text("Total", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey[700]))),
+            Padding(padding: const EdgeInsets.only(top: 6), child: Text(formatearColones(totalBase, decimales: 0), textAlign: TextAlign.right, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey[700]))),
+            Padding(padding: const EdgeInsets.only(top: 6), child: Text(formatearColones(totalIva, decimales: 0), textAlign: TextAlign.right, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey[700]))),
+            Padding(padding: const EdgeInsets.only(top: 6), child: Text(formatearColones(totalBase + totalIva, decimales: 0), textAlign: TextAlign.right, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey[700]))),
+          ]),
         ],
       ),
     ],
