@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'api_service.dart';
 import 'compra_model.dart';
 import 'formulario_compra.dart';
+import 'impuesto.dart';
 import 'importar_externo_dialog.dart';
 import 'negocio.dart';
 import 'formato.dart';
@@ -260,6 +261,22 @@ class _ComprasScreenState extends State<ComprasScreen> {
     );
     if (resultado == null || resultado.files.isEmpty) return;
 
+    // Para poder asignarle un impuesto al producto que se crea solo (sin
+    // preguntar) cuando una línea no coincide con ninguno existente por
+    // CABYS -- si no, esas líneas quedaban sin impuesto y el Reporte de
+    // Compras/Declaración de IVA no podía calcular su crédito fiscal.
+    List<Impuesto> impuestos = [];
+    try {
+      final resImpuestos = await ApiService.get('/impuestos/');
+      if (resImpuestos.statusCode == 200) {
+        final data = json.decode(utf8.decode(resImpuestos.bodyBytes)) as List;
+        impuestos = data.map((j) => Impuesto.fromJson(j)).toList();
+      }
+    } catch (_) {
+      // Sin la lista de impuestos simplemente los productos nuevos quedan
+      // sin impuesto asignado, igual que antes de este fix.
+    }
+
     final archivos = resultado.files.where((f) => f.bytes != null).toList();
     final List<String> exitosos = [];
     final List<String> fallidos = [];
@@ -273,7 +290,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
     Future<void> procesarTodos() async {
       for (final archivo in archivos) {
         try {
-          await _importarUnXml(archivo.bytes!, archivo.name);
+          await _importarUnXml(archivo.bytes!, archivo.name, impuestos);
           exitosos.add(archivo.name);
         } catch (e) {
           fallidos.add("${archivo.name}: $e");
@@ -334,7 +351,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
 
   /// Lee un XML de proveedor, resuelve/crea el proveedor y los productos por
   /// CABYS (sin preguntar, ya que es un proceso masivo), y crea la compra.
-  Future<void> _importarUnXml(Uint8List bytes, String nombreArchivo) async {
+  Future<void> _importarUnXml(Uint8List bytes, String nombreArchivo, List<Impuesto> impuestos) async {
     final response = await ApiService.postMultipartBytes(
       '/compras/leer-xml/',
       {'negocio': widget.negocio.id.toString()},
@@ -370,6 +387,17 @@ class _ComprasScreenState extends State<ComprasScreen> {
       final cantidad = ((linea['cantidad'] as num?) ?? 1);
       final precio = redondear2((linea['precio_unitario'] as num?) ?? 0);
       if (productoId == null) {
+        // Busca el impuesto por el % que trae la línea (XML: <Impuesto><Tarifa>,
+        // o el que Claude haya podido leer en un PDF/foto) para no dejar el
+        // producto nuevo sin impuesto asignado -- si no viene tarifa, o no
+        // hay un impuesto activo con ese %, queda sin asignar como antes.
+        final tarifaLinea = (linea['tarifa'] as num?)?.toDouble();
+        final impuestoId = tarifaLinea == null
+            ? null
+            : impuestos.firstWhere(
+                (i) => (i.porcentaje - tarifaLinea).abs() < 0.01,
+                orElse: () => Impuesto(id: -1, nombre: '', porcentaje: -1, codigoHacienda: ''),
+              ).id;
         final resProd = await ApiService.post('/productos/', {
           'negocio': widget.negocio.id,
           'nombre': linea['detalle'] ?? 'Producto sin nombre',
@@ -377,6 +405,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
           'unidad_medida': 'Unid',
           'precio_unitario': precio,
           'stock': 0,
+          if (impuestoId != null && impuestoId != -1) 'impuesto': impuestoId,
         });
         if (resProd.statusCode != 201) throw Exception("No se pudo crear el producto '${linea['detalle']}'");
         productoId = json.decode(utf8.decode(resProd.bodyBytes))['id'];

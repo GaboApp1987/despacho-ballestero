@@ -194,12 +194,21 @@ class _FormularioCompraState extends State<FormularioCompra> {
     final detalle = linea['detalle'] as String? ?? 'Producto sin nombre';
     final cantidad = ((linea['cantidad'] as num?) ?? 1).toInt();
     final precio = ((linea['precio_unitario'] as num?) ?? 0).toDouble();
+    final tarifaLinea = (linea['tarifa'] as num?)?.toDouble();
 
     Producto? productoExistente;
     final nombreCtrl = TextEditingController(text: detalle);
     final cabysCtrl = TextEditingController(text: cabys);
     final precioCtrl = TextEditingController(text: precio.toString());
-    Impuesto? impuestoSeleccionado;
+    // Precargado con la tarifa que trae el XML/foto (<Impuesto><Tarifa> o lo
+    // que Claude haya leído) -- sigue editable, solo ahorra tener que
+    // buscarlo a mano cuando ya viene en el comprobante.
+    Impuesto? impuestoSeleccionado = tarifaLinea == null
+        ? null
+        : _listaImpuestos.cast<Impuesto?>().firstWhere(
+            (i) => i != null && (i.porcentaje - tarifaLinea).abs() < 0.01,
+            orElse: () => null,
+          );
     bool guardando = false;
 
     await showDialog(
