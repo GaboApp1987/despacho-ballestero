@@ -57,6 +57,10 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
   bool _pruebaGratis = false;
   bool _aceptaTerminos = false;
 
+  // Para que no se le olvide el usuario, se precarga con el correo mientras
+  // no se escriba uno distinto a mano.
+  String _ultimoCorreoAutocopiado = '';
+
   // Los tres tipos pagan un plan propio (ver RegistroPublicoView) -- un
   // contador que se engancha a un despacho existente no pasa por acá, eso
   // lo hace el despacho desde su panel, y no paga aparte.
@@ -77,6 +81,14 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
   void initState() {
     super.initState();
     _cargarPlanes();
+    _emailCtrl.addListener(() {
+      final correo = _emailCtrl.text.trim();
+      final usernameActual = _usernameCtrl.text.trim();
+      if (usernameActual.isEmpty || usernameActual == _ultimoCorreoAutocopiado) {
+        _usernameCtrl.text = correo;
+        _ultimoCorreoAutocopiado = correo;
+      }
+    });
   }
 
   Future<void> _cambiarTipo(String nuevoTipo) {

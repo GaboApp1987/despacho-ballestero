@@ -435,6 +435,18 @@ class _NegociosScreenState extends State<NegociosScreen> {
     int? planSeleccionado;
     bool guardando = false;
 
+    // Para que el negocio no se le olvide su usuario, se precarga con el
+    // Correo Hacienda mientras el contador no escriba uno distinto a mano.
+    String ultimoCorreoAutocopiado = '';
+    correoHaciendaCtrl.addListener(() {
+      final correo = correoHaciendaCtrl.text.trim();
+      final usernameActual = usernameCtrl.text.trim();
+      if (usernameActual.isEmpty || usernameActual == ultimoCorreoAutocopiado) {
+        usernameCtrl.text = correo;
+        ultimoCorreoAutocopiado = correo;
+      }
+    });
+
     showDialog(
       context: context,
       barrierDismissible: false,
