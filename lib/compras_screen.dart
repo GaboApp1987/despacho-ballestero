@@ -390,6 +390,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
       'proveedor': proveedorId,
       'numero_factura_proveedor': datos['numero_factura'] ?? datos['clave'] ?? '',
       'total_compra': redondear2(datos['total_comprobante'] ?? total),
+      if (datos['fecha'] != null) 'fecha_compra': datos['fecha'],
       'detalles_compra': detallesCompra,
     });
     if (resCompra.statusCode != 201) throw Exception("No se pudo crear la compra");
