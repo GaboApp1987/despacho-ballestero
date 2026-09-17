@@ -456,6 +456,61 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
                           ),
                         ),
                       ),
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text("Otras actividades del negocio",
+                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey[700])),
+                            ),
+                            TextButton.icon(
+                              onPressed: _mostrarFormularioActividad,
+                              icon: const Icon(Icons.add, size: 18),
+                              label: const Text("Agregar"),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          "Si el negocio tiene más de una actividad registrada ante Hacienda, agregalas acá -- "
+                          "al crear una Factura vas a poder elegir cuál aplica a esa venta.",
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      if (_cargandoActividades)
+                        const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else if (_actividades.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          child: Text("Sin otras actividades agregadas.", style: TextStyle(color: Colors.grey[500])),
+                        )
+                      else
+                        ..._actividades.map((a) => ListTile(
+                              dense: true,
+                              leading: const Icon(Icons.work_outline),
+                              title: Text(a.codigoActividad),
+                              subtitle: Text(
+                                [
+                                  if (a.descripcion.isNotEmpty) a.descripcion,
+                                  if ((a.alanubeEconomicActivity ?? '').isNotEmpty) "Alanube: ${a.alanubeEconomicActivity}",
+                                ].join(" · "),
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                tooltip: "Borrar",
+                                onPressed: () => _borrarActividad(a),
+                              ),
+                            )),
+                      const Divider(),
                       ListTile(
                         leading: Container(
                           width: 40,
@@ -578,70 +633,6 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
                           ],
                         ),
                       )
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // 🧾 SECCIÓN 3: OTRAS ACTIVIDADES ECONÓMICAS
-              Card(
-                elevation: 2,
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text("🧾 Otras Actividades Económicas",
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                          ),
-                          TextButton.icon(
-                            onPressed: _mostrarFormularioActividad,
-                            icon: const Icon(Icons.add, size: 18),
-                            label: const Text("Agregar"),
-                          ),
-                        ],
-                      ),
-                      const Divider(),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        child: Text(
-                          "Si el negocio tiene más de una actividad registrada ante Hacienda, agregalas acá -- "
-                          "al crear una Factura vas a poder elegir cuál aplica a esa venta.",
-                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      if (_cargandoActividades)
-                        const Padding(
-                          padding: EdgeInsets.all(16),
-                          child: Center(child: CircularProgressIndicator()),
-                        )
-                      else if (_actividades.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          child: Text("Sin otras actividades agregadas.", style: TextStyle(color: Colors.grey[500])),
-                        )
-                      else
-                        ..._actividades.map((a) => ListTile(
-                              leading: const Icon(Icons.work_outline),
-                              title: Text(a.codigoActividad),
-                              subtitle: Text(
-                                [
-                                  if (a.descripcion.isNotEmpty) a.descripcion,
-                                  if ((a.alanubeEconomicActivity ?? '').isNotEmpty) "Alanube: ${a.alanubeEconomicActivity}",
-                                ].join(" · "),
-                              ),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.delete_outline, color: Colors.red),
-                                tooltip: "Borrar",
-                                onPressed: () => _borrarActividad(a),
-                              ),
-                            )),
                     ],
                   ),
                 ),
