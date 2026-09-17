@@ -366,6 +366,17 @@ class _FormularioFacturaState extends State<FormularioFactura> {
       return;
     }
 
+    // Si el tipo de cambio quedó vacío o inválido, antes se guardaba
+    // silenciosamente en 1 (factura en dólares con el mismo valor numérico
+    // que en colones) -- mejor avisar y no dejar seguir.
+    final tipoCambio = double.tryParse(_tipoCambioController.text.trim().replaceAll(',', '.'));
+    if (_moneda == 'USD' && (tipoCambio == null || tipoCambio <= 0)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Ingrese un tipo de cambio válido para facturar en dólares.")),
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
 
     try {
@@ -382,7 +393,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
         'condicion_venta': _condicionVenta,
         'plazo_credito': plazoCredito,
         'moneda': _moneda,
-        'tipo_cambio': double.tryParse(_tipoCambioController.text.trim().replaceAll(',', '.')) ?? 1.0,
+        'tipo_cambio': tipoCambio ?? 1.0,
         if (_actividadSeleccionada != null) ...{
           'codigo_actividad': _actividadSeleccionada!.codigoActividad,
           'alanube_economic_activity': _actividadSeleccionada!.alanubeEconomicActivity ?? '',
@@ -836,6 +847,12 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                       child: TextField(
                         controller: _tipoCambioController,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        // Sin esto la vista previa "≈ US$" de abajo no se
+                        // refresca al escribir un tipo de cambio nuevo (sigue
+                        // mostrando el cálculo con el valor anterior), dando
+                        // la impresión de que el cambio no se guardó aunque
+                        // sí quede en el controller.
+                        onChanged: (_) => setState(() {}),
                         decoration: InputDecoration(
                           labelText: "Tipo de cambio",
                           isDense: true,
