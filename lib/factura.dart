@@ -73,6 +73,12 @@ class Factura {
   // dato en otra columna.
   final String moneda;
   final double tipoCambio;
+  // Solo se llena en el camino directo a Hacienda (sin Alanube, ver
+  // FacturaViewSet._enviar_a_hacienda_directo): el XML firmado exacto que
+  // se transmitió, la única forma de confirmar qué recibió Hacienda
+  // realmente (moneda incluida) ya que ese camino no tiene PDF ni correo
+  // automático ni consulta de estado todavía.
+  final String? xmlFirmado;
 
   bool get esTiquete => tipoDocumento == '04';
 
@@ -101,6 +107,7 @@ class Factura {
     this.motivoRechazo,
     this.moneda = 'CRC',
     this.tipoCambio = 1.0,
+    this.xmlFirmado,
   });
 
   factory Factura.fromJson(Map<String, dynamic> json) {
@@ -133,6 +140,7 @@ class Factura {
       motivoRechazo: json['motivo_rechazo'],
       moneda: json['moneda'] ?? 'CRC',
       tipoCambio: double.tryParse(json['tipo_cambio']?.toString() ?? '') ?? 1.0,
+      xmlFirmado: json['xml_firmado'],
     );
   }
 }

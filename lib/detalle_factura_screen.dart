@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'theme/app_theme.dart';
 import 'factura.dart';
 import 'export_service.dart';
@@ -547,6 +548,34 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
                     ],
                   ),
                 ),
+                if (factura.xmlFirmado != null && factura.xmlFirmado!.isNotEmpty)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    color: AppColors.surfaceSubtle,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        minimumSize: const Size(double.infinity, 0),
+                      ),
+                      icon: const Icon(Icons.code),
+                      // Único documento que refleja EXACTAMENTE lo que
+                      // Hacienda recibió (moneda incluida) cuando el negocio
+                      // usa el camino directo sin Alanube -- ver
+                      // FacturaViewSet._enviar_a_hacienda_directo.
+                      label: const Text("VER XML ENVIADO A HACIENDA", style: TextStyle(fontWeight: FontWeight.bold)),
+                      onPressed: () async {
+                        final uri = Uri.parse(factura.xmlFirmado!);
+                        if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("No se pudo abrir el XML.")),
+                            );
+                          }
+                        }
+                      },
+                    ),
+                  ),
                 if (factura.estadoHacienda == '2')
                   Container(
                     width: double.infinity,
