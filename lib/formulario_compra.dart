@@ -591,10 +591,12 @@ class _FormularioCompraState extends State<FormularioCompra> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              children: [
+          Expanded(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
                 // FILA PROVEEDOR CON BOTÓN +
                 Row(
                   children: [
@@ -776,24 +778,34 @@ class _FormularioCompraState extends State<FormularioCompra> {
                     }
                   },
                 ),
+                const SizedBox(height: 10),
+                // El carrito iba en un Expanded/ListView aparte, con una
+                // altura fija sobrante debajo de todo este encabezado -- al
+                // agregarle Moneda/Tipo de cambio y el aviso de cuadre, el
+                // encabezado creció y ese espacio sobrante se achicaba tanto
+                // que el carrito quedaba invisible ("estático"). Ahora es
+                // parte del mismo scroll que el resto del formulario, así
+                // que siempre se ve por más larga que sea la lista.
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _carritoCompra.length,
+                  itemBuilder: (context, i) {
+                    final item = _carritoCompra[i];
+                    return ListTile(
+                      leading: Icon(Icons.arrow_upward, color: AppColors.primary),
+                      title: Text(item.producto.nombre),
+                      subtitle: Text("Entran: ${formatearNumero(item.cantidad, decimales: 0)} unidades | Costo: ${formatearColones(item.precioCosto)}"),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete),
+                        onPressed: () => setState(() => _carritoCompra.removeAt(i)),
+                      ),
+                    );
+                  },
+                ),
               ],
-            ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: _carritoCompra.length,
-              itemBuilder: (context, i) {
-                final item = _carritoCompra[i];
-                return ListTile(
-                  leading: Icon(Icons.arrow_upward, color: AppColors.primary),
-                  title: Text(item.producto.nombre),
-                  subtitle: Text("Entran: ${formatearNumero(item.cantidad, decimales: 0)} unidades | Costo: ${formatearColones(item.precioCosto)}"),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete),
-                    onPressed: () => setState(() => _carritoCompra.removeAt(i)),
-                  ),
-                );
-              },
+                ),
+              ),
             ),
           ),
           Padding(
