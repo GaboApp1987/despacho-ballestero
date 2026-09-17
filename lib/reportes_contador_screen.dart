@@ -309,6 +309,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
                                             ? "Todos los clientes (${_negocios.length})"
                                             : "${_negociosSeleccionados.length} clientes seleccionados",
                                 overflow: TextOverflow.ellipsis,
+                                style: TextStyle(color: _colorFuerte),
                               ),
                             ),
                             Icon(Icons.arrow_drop_down, color: _colorTenue),
@@ -330,7 +331,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
                 children: [
                   Icon(Icons.date_range, size: 18, color: _colorTenue),
                   const SizedBox(width: 8),
-                  Text(_periodoTexto),
+                  Text(_periodoTexto, style: TextStyle(color: _colorFuerte)),
                 ],
               ),
             ),
@@ -413,7 +414,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(r['negocio_nombre']?.toString() ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                Text(r['negocio_nombre']?.toString() ?? '', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: _colorFuerte)),
                 const SizedBox(height: 8),
                 if (ventas != null) _filaDocumento("Ventas", total: double.tryParse(ventas['total'].toString()) ?? 0),
                 if (compras != null) _filaDocumento("Compras", total: double.tryParse(compras['total'].toString()) ?? 0),
@@ -422,7 +423,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text("IVA a pagar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      Text("IVA a pagar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: _colorFuerte)),
                       Text(
                         formatearColones(ivaAPagar),
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: ivaAPagar >= 0 ? _colorAcento : Colors.green),
@@ -488,7 +489,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(titulo, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
+                Text(titulo, style: TextStyle(fontSize: 12, color: _colorFuerte), overflow: TextOverflow.ellipsis),
                 if (subtitulo != null) Text(subtitulo, style: TextStyle(fontSize: 11, color: _colorTenue)),
               ],
             ),
@@ -496,7 +497,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(formatearColones(total), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              Text(formatearColones(total), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _colorFuerte)),
               if (iva != null)
                 Text(
                   "IVA: ${formatearColones(iva)}${esEstimado ? ' (est.)' : ''}",
@@ -518,11 +519,11 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(d['tarifa']?.toString() ?? '', style: const TextStyle(fontSize: 12)),
+                    Text(d['tarifa']?.toString() ?? '', style: TextStyle(fontSize: 12, color: _colorFuerte)),
                     Text(
                       "Base: ${formatearColones(double.tryParse(d['base_imponible'].toString()) ?? 0)} · "
                       "Impuesto: ${formatearColones(double.tryParse(d['monto_impuesto'].toString()) ?? 0)}",
-                      style: const TextStyle(fontSize: 12),
+                      style: TextStyle(fontSize: 12, color: _colorFuerte),
                     ),
                   ],
                 ),
@@ -543,7 +544,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
             children: [
               Icon(Icons.fact_check_outlined, color: _colorAcento, size: 18),
               const SizedBox(width: 8),
-              Text("Resumen para la declaración de IVA (D-104)", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              Text("Resumen para la declaración de IVA (D-104)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: _colorFuerte)),
             ],
           ),
           const SizedBox(height: 4),
@@ -568,7 +569,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("IVA a pagar (ventas − crédito fiscal de compras)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              Text("IVA a pagar (ventas − crédito fiscal de compras)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _colorFuerte)),
               Text(
                 formatearColones(ivaAPagar),
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: ivaAPagar >= 0 ? _colorAcento : Colors.green),
@@ -594,7 +595,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("Ventas (${documentos.length})", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              Text("Ventas (${documentos.length})", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: _colorFuerte)),
               Text(formatearColones(total), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: _colorAcento)),
             ],
           ),
@@ -628,8 +629,8 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text("Total neto (ventas − notas de crédito)", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                Text(formatearColones(totalNeto), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                Text("Total neto (ventas − notas de crédito)", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _colorFuerte)),
+                Text(formatearColones(totalNeto), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _colorFuerte)),
               ],
             ),
           ],
@@ -659,7 +660,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("Compras (${documentos.length})", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              Text("Compras (${documentos.length})", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: _colorFuerte)),
               Text(formatearColones(total), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: _colorAcento)),
             ],
           ),
@@ -680,7 +681,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text("Notas de Débito (${notasDebito.length})", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _colorTenue)),
-                Text("+ ${formatearColones(totalNotas)}", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                Text("+ ${formatearColones(totalNotas)}", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _colorFuerte)),
               ],
             ),
             const SizedBox(height: 6),
@@ -693,8 +694,8 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text("Total neto (compras + notas de débito)", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                Text(formatearColones(totalNeto), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                Text("Total neto (compras + notas de débito)", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _colorFuerte)),
+                Text(formatearColones(totalNeto), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _colorFuerte)),
               ],
             ),
           ],
