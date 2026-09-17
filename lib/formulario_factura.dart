@@ -815,7 +815,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                       decoration: InputDecoration(
                         labelText: "Moneda",
                         isDense: true,
-                        prefixIcon: const Icon(Icons.attach_money, size: 20),
+                        prefixIcon: const Icon(Icons.currency_exchange, size: 20),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                       ),
                       items: const [

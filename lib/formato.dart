@@ -28,6 +28,11 @@ String formatearColones(num valor, {int decimales = 2}) {
   return '₡${formatearNumero(valor, decimales: decimales)}';
 }
 
+/// Da formato "\$1.234.567,89" a un monto en dólares.
+String formatearDolares(num valor, {int decimales = 2}) {
+  return '\$${formatearNumero(valor, decimales: decimales)}';
+}
+
 /// Redondea a 2 decimales. El backend guarda montos como DecimalField con
 /// solo 2 decimales; valores con más (comunes al leer XML de Hacienda, que
 /// usa hasta 5) hacen que la API los rechace.

@@ -932,6 +932,13 @@ class ExportService {
     final subtotalAcreditado = notasCredito.fold(0.0, (s, n) => s + n.subtotal);
     final ivaAcreditado = notasCredito.fold(0.0, (s, n) => s + n.montoIva);
     final totalAcreditado = subtotalAcreditado + ivaAcreditado;
+    // DetalleFactura/totales siempre están en colones (ver Factura.moneda);
+    // si esta factura se emitió en dólares, se convierte acá para que el
+    // PDF que se descarga/comparte muestre la moneda real del comprobante,
+    // igual que ya hace el XML/Alanube al enviarla a Hacienda.
+    final esUsd = factura.moneda == 'USD' && factura.tipoCambio > 0;
+    final factorMoneda = esUsd ? 1 / factura.tipoCambio : 1.0;
+    String fmt(num v) => esUsd ? formatearDolares(v * factorMoneda) : formatearColones(v * factorMoneda);
 
     pdf.addPage(pw.MultiPage(
       pageFormat: PdfPageFormat.a4,
@@ -953,6 +960,7 @@ class ExportService {
                   pw.Text('Factura Número: F-${factura.consecutivo}'),
                   pw.Text('Fecha: ${factura.fechaEmision.split('T')[0]}'),
                   pw.Text('Condición: ${factura.condicionVenta == "02" ? 'Crédito' : 'Contado'}'),
+                  if (esUsd) pw.Text('Moneda: Dólares (US\$) -- Tipo de cambio: ${formatearColones(factura.tipoCambio)}'),
                 ],
               ),
               pw.Column(
@@ -990,9 +998,9 @@ class ExportService {
               : factura.detalles.map((d) => [
                     d.nombreProducto,
                     d.cantidad.toString(),
-                    formatearColones(d.precioUnitario),
-                    formatearColones(d.montoIva),
-                    formatearColones(d.total),
+                    fmt(d.precioUnitario),
+                    fmt(d.montoIva),
+                    fmt(d.total),
                   ]).toList(),
         ),
         pw.SizedBox(height: 20),
@@ -1001,11 +1009,11 @@ class ExportService {
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.end,
             children: [
-              pw.Text('Subtotal: ${formatearColones(subtotal)}'),
-              pw.Text('IVA: ${formatearColones(factura.totalIva)}'),
+              pw.Text('Subtotal: ${fmt(subtotal)}'),
+              pw.Text('IVA: ${fmt(factura.totalIva)}'),
               pw.SizedBox(width: 180, child: pw.Divider()),
               pw.Text(
-                notasCredito.isEmpty ? 'TOTAL: ${formatearColones(factura.totalFactura)}' : 'Total Factura Original: ${formatearColones(factura.totalFactura)}',
+                notasCredito.isEmpty ? 'TOTAL: ${fmt(factura.totalFactura)}' : 'Total Factura Original: ${fmt(factura.totalFactura)}',
                 style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16, color: PdfColors.indigo),
               ),
             ],
@@ -1042,9 +1050,9 @@ class ExportService {
                         data: n.detalles.map((d) => [
                               d.nombreProducto,
                               d.cantidad.toString(),
-                              formatearColones(d.precioUnitario),
-                              formatearColones(d.montoIva),
-                              formatearColones(d.total),
+                              fmt(d.precioUnitario),
+                              fmt(d.montoIva),
+                              fmt(d.total),
                             ]).toList(),
                       ),
                     ),
@@ -1055,9 +1063,9 @@ class ExportService {
                         child: pw.Column(
                           crossAxisAlignment: pw.CrossAxisAlignment.end,
                           children: [
-                            pw.Text('Subtotal: -${formatearColones(n.subtotal)}', style: const pw.TextStyle(color: PdfColors.red900, fontSize: 10)),
-                            pw.Text('IVA: -${formatearColones(n.montoIva)}', style: const pw.TextStyle(color: PdfColors.red900, fontSize: 10)),
-                            pw.Text('Total NC: -${formatearColones(n.total)}', style: pw.TextStyle(color: PdfColors.red900, fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                            pw.Text('Subtotal: -${fmt(n.subtotal)}', style: const pw.TextStyle(color: PdfColors.red900, fontSize: 10)),
+                            pw.Text('IVA: -${fmt(n.montoIva)}', style: const pw.TextStyle(color: PdfColors.red900, fontSize: 10)),
+                            pw.Text('Total NC: -${fmt(n.total)}', style: pw.TextStyle(color: PdfColors.red900, fontSize: 12, fontWeight: pw.FontWeight.bold)),
                           ],
                         ),
                       ),
@@ -1073,11 +1081,11 @@ class ExportService {
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.end,
               children: [
-                pw.Text('Subtotal neto: ${formatearColones(subtotal - subtotalAcreditado)}'),
-                pw.Text('IVA neto: ${formatearColones(factura.totalIva - ivaAcreditado)}'),
+                pw.Text('Subtotal neto: ${fmt(subtotal - subtotalAcreditado)}'),
+                pw.Text('IVA neto: ${fmt(factura.totalIva - ivaAcreditado)}'),
                 pw.SizedBox(width: 180, child: pw.Divider()),
                 pw.Text(
-                  'TOTAL NETO: ${formatearColones(factura.totalFactura - totalAcreditado)}',
+                  'TOTAL NETO: ${fmt(factura.totalFactura - totalAcreditado)}',
                   style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16, color: PdfColors.indigo),
                 ),
               ],

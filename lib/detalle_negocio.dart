@@ -1040,6 +1040,11 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(formatearColones(f.totalFactura), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                              if (f.moneda == 'USD' && f.tipoCambio > 0)
+                                Text(
+                                  "≈ ${formatearDolares(f.totalFactura / f.tipoCambio)}",
+                                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                ),
                               Text(horaCostaRica(f.fechaEmision), style: const TextStyle(fontSize: 10, color: Colors.grey)),
                             ],
                           ),
