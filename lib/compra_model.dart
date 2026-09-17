@@ -111,6 +111,11 @@ class Compra {
   final String? mensajeReceptorTipo;
   final String? mensajeReceptorEstado;
   final String? mensajeReceptorFecha;
+  // Si la factura del proveedor vino en dólares, totalCompra ya está
+  // convertido a colones con este tipo de cambio -- el monto original en
+  // dólares se recupera dividiendo (totalCompra / tipoCambio).
+  final String moneda;
+  final double tipoCambio;
 
   Compra({
     required this.id,
@@ -128,6 +133,8 @@ class Compra {
     this.mensajeReceptorTipo,
     this.mensajeReceptorEstado,
     this.mensajeReceptorFecha,
+    this.moneda = 'CRC',
+    this.tipoCambio = 1.0,
   });
 
   factory Compra.fromJson(Map<String, dynamic> json) {
@@ -151,6 +158,8 @@ class Compra {
       mensajeReceptorTipo: (json['mensaje_receptor_tipo'] as String?)?.isNotEmpty == true ? json['mensaje_receptor_tipo'] : null,
       mensajeReceptorEstado: (json['mensaje_receptor_estado'] as String?)?.isNotEmpty == true ? json['mensaje_receptor_estado'] : null,
       mensajeReceptorFecha: json['mensaje_receptor_fecha'],
+      moneda: json['moneda'] ?? 'CRC',
+      tipoCambio: double.tryParse(json['tipo_cambio']?.toString() ?? '') ?? 1.0,
     );
   }
 }

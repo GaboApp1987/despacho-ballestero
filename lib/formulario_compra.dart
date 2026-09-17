@@ -55,6 +55,22 @@ class _FormularioCompraState extends State<FormularioCompra> {
   // la IA leyó mal un precio en el PDF/foto -- se avisa acá para que se
   // revise ANTES de guardar, en vez de notarlo después en los reportes.
   Map<String, dynamic>? _avisoCuadre;
+  // Si el comprobante venía en dólares, todo el carrito ya se convirtió a
+  // colones con este tipo de cambio (ver _aplicarDatosParseados) -- queda
+  // editable por si el que trae el XML/foto no es el que se quiere usar.
+  String _moneda = 'CRC';
+  final TextEditingController _tipoCambioController = TextEditingController(text: '1.00');
+
+  Future<double> _obtenerTipoCambioDelDia() async {
+    try {
+      final r = await ApiService.get('/tipo-cambio/');
+      if (r.statusCode == 200) {
+        final d = json.decode(utf8.decode(r.bodyBytes));
+        if (d['disponible'] == true) return (d['venta'] as num).toDouble();
+      }
+    } catch (_) {}
+    return 1.0;
+  }
 
   Future<void> _elegirComprobante() async {
     final resultado = await FilePicker.platform.pickFiles(
@@ -130,6 +146,20 @@ class _FormularioCompraState extends State<FormularioCompra> {
         if (parseada != null) setState(() => _fecha = parseada);
       }
 
+      // Si el proveedor facturó en dólares, se convierte todo a colones acá
+      // (con el tipo de cambio que trae el comprobante, o si no, el del día
+      // según el BCCR) para que el resto de la app -- que siempre trabaja en
+      // colones -- no tenga que distinguir monedas en ningún otro lado.
+      double tipoCambioAplicar = 1.0;
+      if ((datos['moneda'] as String?)?.toUpperCase() == 'USD') {
+        final tcExtraido = (datos['tipo_cambio'] as num?)?.toDouble();
+        tipoCambioAplicar = (tcExtraido != null && tcExtraido > 0) ? tcExtraido : await _obtenerTipoCambioDelDia();
+        setState(() {
+          _moneda = 'USD';
+          _tipoCambioController.text = tipoCambioAplicar.toStringAsFixed(2);
+        });
+      }
+
       // Proveedor: si ya existe (por cédula) se selecciona; si no, se crea
       // automáticamente con los datos del XML.
       final proveedorId = datos['proveedor_id'];
@@ -178,11 +208,11 @@ class _FormularioCompraState extends State<FormularioCompra> {
             _carritoCompra.add(LineaCompra(
               producto: producto,
               cantidad: (linea['cantidad'] as num).toInt(),
-              precioCosto: redondear2(linea['precio_unitario'] as num),
+              precioCosto: redondear2((linea['precio_unitario'] as num) * tipoCambioAplicar),
             ));
           });
         } else if (mounted) {
-          await _resolverLineaSinProducto(linea);
+          await _resolverLineaSinProducto(linea, tipoCambio: tipoCambioAplicar);
         }
       }
     } catch (e) {
@@ -196,11 +226,13 @@ class _FormularioCompraState extends State<FormularioCompra> {
 
   /// Cuando una línea del XML no coincide con ningún producto ya registrado
   /// (por CABYS), se pide vincularla a uno existente o crear uno nuevo.
-  Future<void> _resolverLineaSinProducto(Map linea) async {
+  /// [tipoCambio] ya viene aplicado sobre el precio si el comprobante venía
+  /// en dólares (ver _aplicarDatosParseados) -- acá se recibe listo en colones.
+  Future<void> _resolverLineaSinProducto(Map linea, {double tipoCambio = 1.0}) async {
     final cabys = linea['codigo_cabys'] as String? ?? '';
     final detalle = linea['detalle'] as String? ?? 'Producto sin nombre';
     final cantidad = ((linea['cantidad'] as num?) ?? 1).toInt();
-    final precio = ((linea['precio_unitario'] as num?) ?? 0).toDouble();
+    final precio = ((linea['precio_unitario'] as num?) ?? 0).toDouble() * tipoCambio;
     final tarifaLinea = (linea['tarifa'] as num?)?.toDouble();
 
     Producto? productoExistente;
@@ -335,6 +367,7 @@ class _FormularioCompraState extends State<FormularioCompra> {
   @override
   void dispose() {
     _facturaProveedorController.dispose();
+    _tipoCambioController.dispose();
     super.dispose();
   }
 
@@ -506,6 +539,8 @@ class _FormularioCompraState extends State<FormularioCompra> {
         'numero_factura_proveedor': _facturaProveedorController.text.trim(),
         'condicion_compra': _condicionCompra,
         'fecha_compra': "${_fecha.year}-${_fecha.month.toString().padLeft(2, '0')}-${_fecha.day.toString().padLeft(2, '0')}",
+        'moneda': _moneda,
+        'tipo_cambio': double.tryParse(_tipoCambioController.text.trim().replaceAll(',', '.')) ?? 1.0,
         'total_compra': redondear2(_carritoCompra.fold(0.0, (sum, item) => sum + item.subtotal)),
         'detalles_compra': _carritoCompra.map((item) => {
           'producto': item.producto.id,
@@ -627,6 +662,54 @@ class _FormularioCompraState extends State<FormularioCompra> {
                   ],
                   onChanged: (val) => setState(() => _condicionCompra = val!),
                 ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: _moneda,
+                        decoration: InputDecoration(
+                          labelText: "Moneda",
+                          isDense: true,
+                          prefixIcon: const Icon(Icons.attach_money, size: 20),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: "CRC", child: Text("Colones")),
+                          DropdownMenuItem(value: "USD", child: Text("Dólares")),
+                        ],
+                        onChanged: (val) async {
+                          if (val == 'USD' && _tipoCambioController.text.trim() == '1.00') {
+                            _tipoCambioController.text = (await _obtenerTipoCambioDelDia()).toStringAsFixed(2);
+                          }
+                          setState(() => _moneda = val!);
+                        },
+                      ),
+                    ),
+                    if (_moneda == 'USD') ...[
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: _tipoCambioController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: InputDecoration(
+                            labelText: "Tipo de cambio",
+                            isDense: true,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                if (_moneda == 'USD') ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    "Los precios de las líneas siguen en colones -- este dato es solo para llevar registro "
+                    "de que la factura del proveedor venía en dólares y a qué tipo de cambio.",
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                  ),
+                ],
                 const SizedBox(height: 10),
                 OutlinedButton.icon(
                   onPressed: _procesandoXml ? null : _elegirComprobante,

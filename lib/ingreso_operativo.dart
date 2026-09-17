@@ -9,10 +9,15 @@ class IngresoOperativo {
   final String clienteCedula;
   final String descripcion;
   final String referencia;
-  final double monto; // subtotal, antes de impuesto
-  final double montoIva;
+  final double monto; // subtotal, antes de impuesto -- SIEMPRE en colones
+  final double montoIva; // SIEMPRE en colones
   final String condicionVenta; // "01" Contado, "02" Crédito
   final String? comprobanteUrl;
+  // Si la venta se cobró en dólares, monto/montoIva ya vienen convertidos a
+  // colones con este tipo de cambio -- el monto original en dólares se
+  // recupera dividiendo (monto / tipoCambio) en vez de duplicar el dato.
+  final String moneda;
+  final double tipoCambio;
 
   IngresoOperativo({
     required this.id,
@@ -25,6 +30,8 @@ class IngresoOperativo {
     this.montoIva = 0,
     this.condicionVenta = '01',
     this.comprobanteUrl,
+    this.moneda = 'CRC',
+    this.tipoCambio = 1.0,
   });
 
   double get total => monto + montoIva;
@@ -41,6 +48,8 @@ class IngresoOperativo {
       montoIva: double.tryParse(json['monto_iva']?.toString() ?? '') ?? 0,
       condicionVenta: json['condicion_venta'] ?? '01',
       comprobanteUrl: json['comprobante'],
+      moneda: json['moneda'] ?? 'CRC',
+      tipoCambio: double.tryParse(json['tipo_cambio']?.toString() ?? '') ?? 1.0,
     );
   }
 }

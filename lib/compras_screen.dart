@@ -164,6 +164,17 @@ class _ComprasScreenState extends State<ComprasScreen> {
     _cargarDatos();
   }
 
+  Future<double> _obtenerTipoCambioDelDia() async {
+    try {
+      final r = await ApiService.get('/tipo-cambio/');
+      if (r.statusCode == 200) {
+        final d = json.decode(utf8.decode(r.bodyBytes));
+        if (d['disponible'] == true) return (d['venta'] as num).toDouble();
+      }
+    } catch (_) {}
+    return 1.0;
+  }
+
   Future<void> _cargarDatos() async {
     if (!mounted) return;
     setState(() => _cargando = true);
@@ -407,6 +418,16 @@ class _ComprasScreenState extends State<ComprasScreen> {
     }
     final datos = json.decode(utf8.decode(response.bodyBytes));
 
+    // Si el proveedor facturó en dólares, se convierte todo a colones acá
+    // (con el tipo de cambio que trae el comprobante, o si no, el del día
+    // según el BCCR) -- el resto de la app siempre trabaja en colones.
+    final moneda = (datos['moneda'] as String?)?.toUpperCase() == 'USD' ? 'USD' : 'CRC';
+    double tipoCambio = 1.0;
+    if (moneda == 'USD') {
+      final tcExtraido = (datos['tipo_cambio'] as num?)?.toDouble();
+      tipoCambio = (tcExtraido != null && tcExtraido > 0) ? tcExtraido : await _obtenerTipoCambioDelDia();
+    }
+
     int? proveedorId = datos['proveedor_id'];
     if (proveedorId == null && datos['proveedor_nombre'] != null) {
       final resProv = await ApiService.post('/proveedores/', {
@@ -428,7 +449,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
     for (final linea in lineas) {
       int? productoId = linea['producto_id'];
       final cantidad = ((linea['cantidad'] as num?) ?? 1);
-      final precio = redondear2((linea['precio_unitario'] as num?) ?? 0);
+      final precio = redondear2(((linea['precio_unitario'] as num?) ?? 0) * tipoCambio);
       if (productoId == null) {
         // Busca el impuesto por el % que trae la línea (XML: <Impuesto><Tarifa>,
         // o el que Claude haya podido leer en un PDF/foto) para no dejar el
@@ -457,11 +478,14 @@ class _ComprasScreenState extends State<ComprasScreen> {
       total += precio * cantidad;
     }
 
+    final totalComprobante = datos['total_comprobante'] as num?;
     final resCompra = await ApiService.post('/compras/', {
       'negocio': widget.negocio.id,
       'proveedor': proveedorId,
       'numero_factura_proveedor': datos['numero_factura'] ?? datos['clave'] ?? '',
-      'total_compra': redondear2(datos['total_comprobante'] ?? total),
+      'moneda': moneda,
+      'tipo_cambio': tipoCambio,
+      'total_compra': redondear2(totalComprobante != null ? totalComprobante * tipoCambio : total),
       if (datos['fecha'] != null) 'fecha_compra': datos['fecha'],
       'detalles_compra': detallesCompra,
     });
@@ -926,6 +950,8 @@ class _ComprasScreenState extends State<ComprasScreen> {
               [
                 if (c.numeroFacturaProveedor.isNotEmpty) "Factura: ${c.numeroFacturaProveedor}",
                 "Total: ${formatearColones(c.totalCompra)}",
+                if (c.moneda == 'USD')
+                  "US\$${(c.totalCompra / c.tipoCambio).toStringAsFixed(2)} @ ₡${c.tipoCambio.toStringAsFixed(2)}",
                 if (c.claveHacienda != null) _textoEstadoMensajeReceptor(c),
               ].join(" · "),
             ),

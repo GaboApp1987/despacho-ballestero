@@ -37,6 +37,17 @@ class _IngresosScreenState extends State<IngresosScreen> {
     _cargarDatos();
   }
 
+  Future<double> _obtenerTipoCambioDelDia() async {
+    try {
+      final r = await ApiService.get('/tipo-cambio/');
+      if (r.statusCode == 200) {
+        final d = json.decode(utf8.decode(r.bodyBytes));
+        if (d['disponible'] == true) return (d['venta'] as num).toDouble();
+      }
+    } catch (_) {}
+    return 1.0;
+  }
+
   static const List<String> _nombresMes = [
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
@@ -147,9 +158,18 @@ class _IngresosScreenState extends State<IngresosScreen> {
     DateTime fecha = fechaInicial;
     final clienteCtrl = TextEditingController(text: ingresoExistente?.clienteNombre ?? '');
     final referenciaCtrl = TextEditingController(text: ingresoExistente?.referencia ?? '');
-    final montoCtrl = TextEditingController(text: ingresoExistente != null ? ingresoExistente.monto.toStringAsFixed(2) : '');
-    final ivaCtrl = TextEditingController(text: ingresoExistente != null ? ingresoExistente.montoIva.toStringAsFixed(2) : '');
+    // Si el ingreso ya existente venía en dólares, se muestran de vuelta los
+    // montos originales en dólares (monto/montoIva siempre están en
+    // colones) para no confundir al editar.
+    final montoCtrl = TextEditingController(
+      text: ingresoExistente != null ? (ingresoExistente.monto / ingresoExistente.tipoCambio).toStringAsFixed(2) : '',
+    );
+    final ivaCtrl = TextEditingController(
+      text: ingresoExistente != null ? (ingresoExistente.montoIva / ingresoExistente.tipoCambio).toStringAsFixed(2) : '',
+    );
     String condicion = ingresoExistente?.condicionVenta ?? '01';
+    String moneda = ingresoExistente?.moneda ?? 'CRC';
+    final tipoCambioCtrl = TextEditingController(text: (ingresoExistente?.tipoCambio ?? 1.0).toStringAsFixed(2));
     bool guardando = false;
 
     Future.microtask(() {
@@ -196,9 +216,44 @@ class _IngresosScreenState extends State<IngresosScreen> {
                     Row(
                       children: [
                         Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: moneda,
+                            decoration: const InputDecoration(labelText: "Moneda", border: OutlineInputBorder()),
+                            items: const [
+                              DropdownMenuItem(value: 'CRC', child: Text("Colones")),
+                              DropdownMenuItem(value: 'USD', child: Text("Dólares")),
+                            ],
+                            onChanged: (v) async {
+                              if (v == 'USD' && tipoCambioCtrl.text.trim() == '1.00') {
+                                tipoCambioCtrl.text = (await _obtenerTipoCambioDelDia()).toStringAsFixed(2);
+                              }
+                              setStateDialog(() => moneda = v!);
+                            },
+                          ),
+                        ),
+                        if (moneda == 'USD') ...[
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: TextField(
+                              controller: tipoCambioCtrl,
+                              decoration: const InputDecoration(labelText: "Tipo de cambio", border: OutlineInputBorder()),
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
                           child: TextField(
                             controller: montoCtrl,
-                            decoration: const InputDecoration(labelText: "Subtotal (₡)", border: OutlineInputBorder(), prefixText: "₡ "),
+                            decoration: InputDecoration(
+                              labelText: moneda == 'USD' ? "Subtotal (US\$)" : "Subtotal (₡)",
+                              border: const OutlineInputBorder(),
+                              prefixText: moneda == 'USD' ? "\$ " : "₡ ",
+                            ),
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           ),
                         ),
@@ -206,7 +261,11 @@ class _IngresosScreenState extends State<IngresosScreen> {
                         Expanded(
                           child: TextField(
                             controller: ivaCtrl,
-                            decoration: const InputDecoration(labelText: "IVA (₡)", border: OutlineInputBorder(), prefixText: "₡ "),
+                            decoration: InputDecoration(
+                              labelText: moneda == 'USD' ? "IVA (US\$)" : "IVA (₡)",
+                              border: const OutlineInputBorder(),
+                              prefixText: moneda == 'USD' ? "\$ " : "₡ ",
+                            ),
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           ),
                         ),
@@ -238,6 +297,9 @@ class _IngresosScreenState extends State<IngresosScreen> {
                           return;
                         }
                         final iva = double.tryParse(ivaCtrl.text.replaceAll(',', '.').trim()) ?? 0;
+                        final tipoCambio = moneda == 'USD'
+                            ? (double.tryParse(tipoCambioCtrl.text.replaceAll(',', '.').trim()) ?? 1.0)
+                            : 1.0;
                         setStateDialog(() => guardando = true);
                         final fechaStr = "${fecha.year}-${fecha.month.toString().padLeft(2, '0')}-${fecha.day.toString().padLeft(2, '0')}";
                         final body = {
@@ -245,8 +307,12 @@ class _IngresosScreenState extends State<IngresosScreen> {
                           'fecha': fechaStr,
                           'cliente_nombre': clienteCtrl.text.trim(),
                           'referencia': referenciaCtrl.text.trim(),
-                          'monto': redondear2(monto),
-                          'monto_iva': redondear2(iva),
+                          'moneda': moneda,
+                          'tipo_cambio': tipoCambio,
+                          // monto/monto_iva SIEMPRE se guardan en colones --
+                          // ver IngresoOperativo.moneda/tipoCambio.
+                          'monto': redondear2(monto * tipoCambio),
+                          'monto_iva': redondear2(iva * tipoCambio),
                           'condicion_venta': condicion,
                         };
                         try {
@@ -447,6 +513,8 @@ class _IngresosScreenState extends State<IngresosScreen> {
                                     ing.fecha,
                                     if (ing.referencia.isNotEmpty) ing.referencia,
                                     ing.condicionVenta == '02' ? 'Crédito' : 'Contado',
+                                    if (ing.moneda == 'USD')
+                                      "US\$${(ing.total / ing.tipoCambio).toStringAsFixed(2)} @ ₡${ing.tipoCambio.toStringAsFixed(2)}",
                                   ].join(" · "),
                                 ),
                                 trailing: Row(
