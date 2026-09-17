@@ -988,8 +988,27 @@ class ExportService {
         ],
         pw.SizedBox(height: 20),
         pw.TableHelper.fromTextArray(
-          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
           headerDecoration: const pw.BoxDecoration(color: PdfColors.indigo),
+          cellStyle: const pw.TextStyle(fontSize: 10),
+          cellAlignment: pw.Alignment.centerLeft,
+          // Sin esto las 5 columnas se repartían en partes iguales: el
+          // nombre del producto se comía el ancho que necesitaban los
+          // montos, y esos números terminaban partiéndose en dos líneas
+          // (se veía "descuadrado" -- cada fila con distinta altura).
+          columnWidths: const {
+            0: pw.FlexColumnWidth(3),
+            1: pw.FlexColumnWidth(1),
+            2: pw.FlexColumnWidth(1.8),
+            3: pw.FlexColumnWidth(1.5),
+            4: pw.FlexColumnWidth(1.8),
+          },
+          cellAlignments: const {
+            1: pw.Alignment.center,
+            2: pw.Alignment.centerRight,
+            3: pw.Alignment.centerRight,
+            4: pw.Alignment.centerRight,
+          },
           headers: const ['Producto', 'Cant', 'Precio Unit.', 'IVA', 'Total'],
           data: factura.detalles.isEmpty
               ? [
@@ -1046,6 +1065,20 @@ class ExportService {
                         headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
                         headerDecoration: const pw.BoxDecoration(color: PdfColors.orange900),
                         cellStyle: const pw.TextStyle(fontSize: 9),
+                        cellAlignment: pw.Alignment.centerLeft,
+                        columnWidths: const {
+                          0: pw.FlexColumnWidth(3),
+                          1: pw.FlexColumnWidth(1),
+                          2: pw.FlexColumnWidth(1.8),
+                          3: pw.FlexColumnWidth(1.5),
+                          4: pw.FlexColumnWidth(1.8),
+                        },
+                        cellAlignments: const {
+                          1: pw.Alignment.center,
+                          2: pw.Alignment.centerRight,
+                          3: pw.Alignment.centerRight,
+                          4: pw.Alignment.centerRight,
+                        },
                         headers: const ['Producto', 'Cant', 'Precio Unit.', 'IVA', 'Total'],
                         data: n.detalles.map((d) => [
                               d.nombreProducto,
