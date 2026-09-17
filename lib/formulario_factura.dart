@@ -84,6 +84,25 @@ class _FormularioFacturaState extends State<FormularioFactura> {
   // Manejo de Crédito
   String _condicionVenta = "01"; // "01" = Contado, "02" = Crédito
 
+  // El carrito/catálogo siempre trabaja en colones (precios del catálogo,
+  // reportes, IVA/Renta, todo internamente en colones) -- si el cliente
+  // pide facturar en dólares, esto solo afecta el documento final (XML/
+  // Alanube dividen por tipoCambio, ver generar_xml_v44 en el backend) y
+  // la vista previa del total en dólares acá abajo.
+  String _moneda = 'CRC';
+  final TextEditingController _tipoCambioController = TextEditingController(text: '1.00');
+
+  Future<double> _obtenerTipoCambioDelDia() async {
+    try {
+      final r = await ApiService.get('/tipo-cambio/');
+      if (r.statusCode == 200) {
+        final d = json.decode(utf8.decode(r.bodyBytes));
+        if (d['disponible'] == true) return (d['venta'] as num).toDouble();
+      }
+    } catch (_) {}
+    return 1.0;
+  }
+
   final TextEditingController _busquedaCtrl = TextEditingController();
   String _busqueda = '';
   int? _categoriaFiltro;
@@ -102,6 +121,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
     _consecutivoController.dispose();
     _plazoCreditoController.dispose();
     _busquedaCtrl.dispose();
+    _tipoCambioController.dispose();
     super.dispose();
   }
 
@@ -361,6 +381,8 @@ class _FormularioFacturaState extends State<FormularioFactura> {
         'total_factura': redondear2(_totalFactura),
         'condicion_venta': _condicionVenta,
         'plazo_credito': plazoCredito,
+        'moneda': _moneda,
+        'tipo_cambio': double.tryParse(_tipoCambioController.text.trim().replaceAll(',', '.')) ?? 1.0,
         if (_actividadSeleccionada != null) ...{
           'codigo_actividad': _actividadSeleccionada!.codigoActividad,
           'alanube_economic_activity': _actividadSeleccionada!.alanubeEconomicActivity ?? '',
@@ -784,6 +806,54 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                   onChanged: (v) => setState(() => _actividadSeleccionada = v),
                 ),
               ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: _moneda,
+                      decoration: InputDecoration(
+                        labelText: "Moneda",
+                        isDense: true,
+                        prefixIcon: const Icon(Icons.attach_money, size: 20),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: "CRC", child: Text("Colones")),
+                        DropdownMenuItem(value: "USD", child: Text("Dólares")),
+                      ],
+                      onChanged: (val) async {
+                        if (val == 'USD' && _tipoCambioController.text.trim() == '1.00') {
+                          _tipoCambioController.text = (await _obtenerTipoCambioDelDia()).toStringAsFixed(2);
+                        }
+                        setState(() => _moneda = val!);
+                      },
+                    ),
+                  ),
+                  if (_moneda == 'USD') ...[
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextField(
+                        controller: _tipoCambioController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: InputDecoration(
+                          labelText: "Tipo de cambio",
+                          isDense: true,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              if (_moneda == 'USD') ...[
+                const SizedBox(height: 6),
+                Text(
+                  "El catálogo y el carrito siguen en colones -- la factura se emite en dólares "
+                  "usando este tipo de cambio (según BCCR, ajustable).",
+                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                ),
+              ],
             ],
           ),
         ),
@@ -805,6 +875,20 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                   Text(formatearColones(_totalFactura), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: AppColors.primary)),
                 ],
               ),
+              if (_moneda == 'USD') ...[
+                const SizedBox(height: 4),
+                Builder(builder: (context) {
+                  final tipoCambio = double.tryParse(_tipoCambioController.text.trim().replaceAll(',', '.')) ?? 1.0;
+                  final totalUsd = tipoCambio > 0 ? _totalFactura / tipoCambio : 0.0;
+                  return Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      "≈ US\$${totalUsd.toStringAsFixed(2)}",
+                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                    ),
+                  );
+                }),
+              ],
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,

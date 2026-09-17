@@ -67,6 +67,12 @@ class Factura {
   // lleno cuando estadoHacienda es '4' (Rechazada) o '5' (Error Técnico),
   // ver Factura.get_motivo_rechazo en el backend.
   final String? motivoRechazo;
+  // totalFactura/totalIva y los montos de detalles SIEMPRE están en
+  // colones -- si esta factura se emitió en dólares, moneda/tipoCambio
+  // permiten mostrar el equivalente (total / tipoCambio) sin duplicar el
+  // dato en otra columna.
+  final String moneda;
+  final double tipoCambio;
 
   bool get esTiquete => tipoDocumento == '04';
 
@@ -93,6 +99,8 @@ class Factura {
     this.logoNegocioUrl,
     this.negocioInfo,
     this.motivoRechazo,
+    this.moneda = 'CRC',
+    this.tipoCambio = 1.0,
   });
 
   factory Factura.fromJson(Map<String, dynamic> json) {
@@ -123,6 +131,8 @@ class Factura {
       logoNegocioUrl: json['logo_negocio'],
       negocioInfo: json['negocio_info'] != null ? NegocioInfo.fromJson(json['negocio_info']) : null,
       motivoRechazo: json['motivo_rechazo'],
+      moneda: json['moneda'] ?? 'CRC',
+      tipoCambio: double.tryParse(json['tipo_cambio']?.toString() ?? '') ?? 1.0,
     );
   }
 }

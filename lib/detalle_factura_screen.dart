@@ -458,6 +458,16 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
                         const Divider(thickness: 1.5),
                         const SizedBox(height: 8),
                         _filaFinanciera(_notasCredito.isEmpty ? "TOTAL NETO:" : "Total Factura Original:", formatearColones(factura.totalFactura), _notasCredito.isEmpty),
+                        if (factura.moneda == 'USD') ...[
+                          const SizedBox(height: 4),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              "≈ US\$ ${(factura.totalFactura / factura.tipoCambio).toStringAsFixed(2)}",
+                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                            ),
+                          ),
+                        ],
                         if (_notasCredito.isNotEmpty) ...[
                           const SizedBox(height: 20),
                           const Divider(),
@@ -476,6 +486,16 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
                           const Divider(thickness: 1.5),
                           const SizedBox(height: 8),
                           _filaFinanciera("TOTAL NETO:", formatearColones(factura.totalFactura - _totalAcreditado), true),
+                          if (factura.moneda == 'USD') ...[
+                            const SizedBox(height: 4),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                "≈ US\$ ${((factura.totalFactura - _totalAcreditado) / factura.tipoCambio).toStringAsFixed(2)}",
+                                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                              ),
+                            ),
+                          ],
                         ],
                       ],
                     ),
