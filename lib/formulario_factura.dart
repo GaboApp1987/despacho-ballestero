@@ -10,6 +10,7 @@ import 'producto.dart';
 import 'impuesto.dart';
 import 'formato.dart';
 import 'historial_precio_cliente.dart';
+import 'actividad_economica.dart';
 
 // Modelo temporal para los items del carrito
 class LineaFactura {
@@ -52,6 +53,12 @@ class _FormularioFacturaState extends State<FormularioFactura> {
 
   List<Cliente> _listaClientes = [];
   List<Producto> _listaProductos = [];
+  // Actividades económicas adicionales del negocio (además de la principal,
+  // configurada en Ajustes) -- si hay al menos una, se puede elegir cuál
+  // aplica a esta venta puntual (ver ConfiguracionScreen). null = usar la
+  // principal del negocio, igual que siempre.
+  List<ActividadEconomica> _actividades = [];
+  ActividadEconomica? _actividadSeleccionada;
 
   Cliente? _clienteSeleccionado;
   bool _isLoading = true;
@@ -103,16 +110,21 @@ class _FormularioFacturaState extends State<FormularioFactura> {
       final responses = await Future.wait([
         ApiService.get('/clientes/?negocio=${widget.negocio.id}'),
         ApiService.get('/productos/?negocio=${widget.negocio.id}'),
+        ApiService.get('/actividades-economicas/?negocio=${widget.negocio.id}'),
       ]);
 
       if (responses[0].statusCode == 200 && responses[1].statusCode == 200) {
         final clientesData = json.decode(utf8.decode(responses[0].bodyBytes)) as List;
         final productosData = json.decode(utf8.decode(responses[1].bodyBytes)) as List;
+        final actividadesData = responses[2].statusCode == 200
+            ? json.decode(utf8.decode(responses[2].bodyBytes)) as List
+            : [];
 
         if (mounted) {
           setState(() {
             _listaClientes = clientesData.map((j) => Cliente.fromJson(j)).toList();
             _listaProductos = productosData.map((j) => Producto.fromJson(j)).toList();
+            _actividades = actividadesData.map((j) => ActividadEconomica.fromJson(j)).toList();
             _isLoading = false;
           });
         }
@@ -349,6 +361,10 @@ class _FormularioFacturaState extends State<FormularioFactura> {
         'total_factura': redondear2(_totalFactura),
         'condicion_venta': _condicionVenta,
         'plazo_credito': plazoCredito,
+        if (_actividadSeleccionada != null) ...{
+          'codigo_actividad': _actividadSeleccionada!.codigoActividad,
+          'alanube_economic_activity': _actividadSeleccionada!.alanubeEconomicActivity ?? '',
+        },
         'detalles': _carrito.map((item) => {
           'producto': item.producto.id,
           'cantidad': item.cantidad,
@@ -751,6 +767,23 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                   ],
                 ],
               ),
+              if (_actividades.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<ActividadEconomica?>(
+                  value: _actividadSeleccionada,
+                  decoration: InputDecoration(
+                    labelText: "Actividad económica",
+                    isDense: true,
+                    prefixIcon: const Icon(Icons.work_outline, size: 20),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  items: [
+                    const DropdownMenuItem<ActividadEconomica?>(value: null, child: Text("Principal del negocio")),
+                    ..._actividades.map((a) => DropdownMenuItem(value: a, child: Text(a.etiqueta, overflow: TextOverflow.ellipsis))),
+                  ],
+                  onChanged: (v) => setState(() => _actividadSeleccionada = v),
+                ),
+              ],
             ],
           ),
         ),

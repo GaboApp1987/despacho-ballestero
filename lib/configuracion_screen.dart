@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'negocio.dart';
 import 'api_service.dart';
 import 'logo_screen.dart';
+import 'actividad_economica.dart';
 
 class ConfiguracionScreen extends StatefulWidget {
   final Negocio negocio;
@@ -32,10 +33,17 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
   String? _logoUrl;
   bool _subiendoLlave = false;
   bool _llaveCargadaEnServidor = false;
+  // Actividades económicas ADICIONALES a la principal (arriba, Actividad
+  // Económica de Alanube) -- un negocio puede tener varias registradas ante
+  // Hacienda y elegir cuál aplica al facturar cada venta (ver el selector
+  // en FormularioFactura).
+  List<ActividadEconomica> _actividades = [];
+  bool _cargandoActividades = true;
 
   @override
   void initState() {
     super.initState();
+    _cargarActividades();
     _usuarioController = TextEditingController(text: widget.negocio.usuarioApi ?? '');
     _pinController = TextEditingController(text: widget.negocio.pinLlave ?? '');
     _entornoSeleccionado = widget.negocio.entornoHacienda ?? 'STAGING';
@@ -105,6 +113,148 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
           setState(() => _logoUrl = data['logo']);
         }
       } catch (_) {}
+    }
+  }
+
+  Future<void> _cargarActividades() async {
+    setState(() => _cargandoActividades = true);
+    try {
+      final response = await ApiService.get('/actividades-economicas/?negocio=${widget.negocio.id}');
+      if (response.statusCode == 200) {
+        final List data = json.decode(utf8.decode(response.bodyBytes));
+        if (mounted) {
+          setState(() {
+            _actividades = data.map((j) => ActividadEconomica.fromJson(j)).toList();
+            _cargandoActividades = false;
+          });
+        }
+      } else if (mounted) {
+        setState(() => _cargandoActividades = false);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _cargandoActividades = false);
+    }
+  }
+
+  void _mostrarFormularioActividad() {
+    final codigoCtrl = TextEditingController();
+    final codigoAlanubeCtrl = TextEditingController();
+    final descripcionCtrl = TextEditingController();
+    bool guardando = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setStateDialog) => AlertDialog(
+          title: const Text("Nueva Actividad Económica"),
+          content: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: 400),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: codigoCtrl,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: "Código Actividad (Hacienda) *",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: codigoAlanubeCtrl,
+                    decoration: const InputDecoration(
+                      labelText: "Código CIIU (Alanube, ej: 6820.0)",
+                      helperText: "Opcional -- si se deja vacío, se intenta usar el código de Hacienda tal cual",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: descripcionCtrl,
+                    decoration: const InputDecoration(
+                      labelText: "Descripción (opcional)",
+                      helperText: "Solo para identificarla en la app, ej: \"Venta de ropa\"",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: guardando ? null : () => Navigator.pop(ctx), child: const Text("Cancelar")),
+            ElevatedButton(
+              onPressed: guardando
+                  ? null
+                  : () async {
+                      if (codigoCtrl.text.trim().isEmpty) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          const SnackBar(content: Text("Ingrese el código de actividad.")),
+                        );
+                        return;
+                      }
+                      setStateDialog(() => guardando = true);
+                      try {
+                        final response = await ApiService.post('/actividades-economicas/', {
+                          'negocio': widget.negocio.id,
+                          'codigo_actividad': codigoCtrl.text.trim(),
+                          'alanube_economic_activity': codigoAlanubeCtrl.text.trim(),
+                          'descripcion': descripcionCtrl.text.trim(),
+                        });
+                        if (response.statusCode == 201) {
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          _cargarActividades();
+                        } else {
+                          throw Exception(utf8.decode(response.bodyBytes));
+                        }
+                      } catch (e) {
+                        setStateDialog(() => guardando = false);
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Error: $e")));
+                        }
+                      }
+                    },
+              child: guardando
+                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text("Guardar"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _borrarActividad(ActividadEconomica actividad) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("¿Borrar actividad?"),
+        content: Text("Se eliminará \"${actividad.etiqueta}\". Las facturas ya emitidas con esta actividad no cambian."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Borrar"),
+          ),
+        ],
+      ),
+    );
+    if (confirmar != true) return;
+    try {
+      final response = await ApiService.delete('/actividades-economicas/${actividad.id}/');
+      if (response.statusCode == 204 || response.statusCode == 200) {
+        _cargarActividades();
+      } else {
+        throw Exception(utf8.decode(response.bodyBytes));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo borrar: $e")));
+      }
     }
   }
 
@@ -428,6 +578,70 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
                           ],
                         ),
                       )
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // 🧾 SECCIÓN 3: OTRAS ACTIVIDADES ECONÓMICAS
+              Card(
+                elevation: 2,
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text("🧾 Otras Actividades Económicas",
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                          ),
+                          TextButton.icon(
+                            onPressed: _mostrarFormularioActividad,
+                            icon: const Icon(Icons.add, size: 18),
+                            label: const Text("Agregar"),
+                          ),
+                        ],
+                      ),
+                      const Divider(),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        child: Text(
+                          "Si el negocio tiene más de una actividad registrada ante Hacienda, agregalas acá -- "
+                          "al crear una Factura vas a poder elegir cuál aplica a esa venta.",
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      if (_cargandoActividades)
+                        const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else if (_actividades.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          child: Text("Sin otras actividades agregadas.", style: TextStyle(color: Colors.grey[500])),
+                        )
+                      else
+                        ..._actividades.map((a) => ListTile(
+                              leading: const Icon(Icons.work_outline),
+                              title: Text(a.codigoActividad),
+                              subtitle: Text(
+                                [
+                                  if (a.descripcion.isNotEmpty) a.descripcion,
+                                  if ((a.alanubeEconomicActivity ?? '').isNotEmpty) "Alanube: ${a.alanubeEconomicActivity}",
+                                ].join(" · "),
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                tooltip: "Borrar",
+                                onPressed: () => _borrarActividad(a),
+                              ),
+                            )),
                     ],
                   ),
                 ),
