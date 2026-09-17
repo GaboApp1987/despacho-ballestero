@@ -535,7 +535,16 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                 );
               }
 
-              // 🧾 Panel tipo "Tu Factura"
+              // 🧾 Panel tipo "Tu Factura". En móvil este panel ya vive
+              // dentro del SingleChildScrollView de toda la página (ver
+              // más abajo), pero en escritorio no tiene ningún ancestro con
+              // scroll -- ahí el encabezado (cliente, condición, actividad,
+              // moneda/tipo de cambio) comparte una altura FIJA con
+              // Expanded(child: listaCarrito), así que cuanto más creciera
+              // el encabezado, más se apretaba el carrito hasta casi
+              // desaparecer ("estático", sin ver lo que se agregaba). Se le
+              // da su propio scroll para que el carrito siempre se vea
+              // completo sin importar cuántos campos tenga arriba.
               final panelFactura = Container(
                 decoration: BoxDecoration(
                   color: AppColors.surface,
@@ -544,7 +553,9 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                     top: anchoCorto ? BorderSide(color: AppColors.border) : BorderSide.none,
                   ),
                 ),
-                child: _panelCarrito(dentroDeScrollExterno: anchoCorto),
+                child: anchoCorto
+                    ? _panelCarrito(dentroDeScrollExterno: true)
+                    : SingleChildScrollView(child: _panelCarrito(dentroDeScrollExterno: true)),
               );
 
               if (anchoCorto) {
