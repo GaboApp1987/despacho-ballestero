@@ -107,14 +107,14 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     (id: 3, icono: Icons.inventory_2_outlined, titulo: "Inventario"),
     // -- Ventas --
     (id: 0, icono: Icons.receipt_long_outlined, titulo: "Facturas"),
+    // -- Compras (a la par de Facturas, a pedido del contador) --
+    (id: 8, icono: Icons.shopping_cart_outlined, titulo: "Compras"),
     (id: 18, icono: Icons.trending_up, titulo: "Ingresos"),
     (id: 4, icono: Icons.request_quote_outlined, titulo: "Cotizaciones"),
     (id: 6, icono: Icons.monetization_on_outlined, titulo: "Cuentas por Cobrar"),
     (id: 16, icono: Icons.receipt_outlined, titulo: "Recibos de Pago"),
     (id: 15, icono: Icons.assignment_return_outlined, titulo: "Notas de Crédito/Débito"),
     (id: 11, icono: Icons.loyalty_outlined, titulo: "Tarjeta de Lealtad"),
-    // -- Compras --
-    (id: 8, icono: Icons.shopping_cart_outlined, titulo: "Compras"),
     (id: 17, icono: Icons.mark_email_read_outlined, titulo: "Correos de Compra"),
     (id: 13, icono: Icons.local_shipping_outlined, titulo: "Cuentas por Pagar"),
     (id: 9, icono: Icons.receipt_long_outlined, titulo: "Gastos"),
