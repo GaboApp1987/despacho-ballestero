@@ -18,6 +18,11 @@ import 'widgets/staggered_entrance.dart';
 class _TemaDashboard {
   static Color fondo = AppColors.surface;
   static Color texto = AppColors.textStrong;
+  // Acento cian de AppColors.primary es el mismo en claro y oscuro (pensado
+  // para resaltar sobre fondo oscuro) -- en la paleta clara del contador se
+  // ve pálido/verdoso y ajeno al azul (TemaContador.acento) que ya usan sus
+  // otras pantallas (perfil, reportes), así que acá se pisa igual que fondo/texto.
+  static Color acento = AppColors.primary;
 }
 
 /// Botón de acción moderno para AppBars con fondo de color (círculo
@@ -56,6 +61,7 @@ Widget buildDashboardHeader(
 }) {
   _TemaDashboard.fondo = esContador ? const Color(0xFFF8FAFC) : AppColors.surface;
   _TemaDashboard.texto = esContador ? const Color(0xFF0F172A) : AppColors.textStrong;
+  _TemaDashboard.acento = esContador ? TemaContador.acento : AppColors.primary;
 
   final cantContadores = (d['cantidad_contadores'] as num?)?.toInt() ?? 0;
   final cantNegocios = (d['cantidad_negocios'] as num?)?.toInt() ?? 0;
@@ -211,7 +217,7 @@ List<Widget> _buildRecordatorioFiscal(Map? r) {
   final diasIva = (r['dias_para_iva'] as num?)?.toInt();
   final diasRenta = (r['dias_para_renta'] as num?)?.toInt();
   if (diasIva == null || diasRenta == null) return [];
-  Color colorPara(int dias) => dias <= 5 ? Colors.red : (dias <= 10 ? Colors.amber.shade800 : AppColors.primary);
+  Color colorPara(int dias) => dias <= 5 ? Colors.red : (dias <= 10 ? Colors.amber.shade800 : _TemaDashboard.acento);
   return [
     const SizedBox(height: 12),
     Row(
@@ -666,11 +672,13 @@ class DashboardDrawer extends StatelessWidget {
   final Future<Map<String, dynamic>> dashboardFuture;
   final Future<void> Function(int negocioId) onAbrirNegocio;
   final bool mostrarContadores;
+  final bool esContador;
   const DashboardDrawer({
     super.key,
     required this.dashboardFuture,
     required this.onAbrirNegocio,
     this.mostrarContadores = true,
+    this.esContador = false,
   });
 
   Widget _item(
@@ -680,6 +688,10 @@ class DashboardDrawer extends StatelessWidget {
     required List items,
     required List<Widget> Function(List) constructor,
   }) {
+    // Mismo motivo que _TemaDashboard.acento en buildDashboardHeader: el
+    // cian de AppColors.primary es el del tema oscuro, no el azul que usa
+    // la paleta clara del contador (TemaContador.acento).
+    final acento = esContador ? TemaContador.acento : AppColors.primary;
     return ListTile(
       leading: Icon(icono, color: AppColors.textMuted),
       title: Text(titulo, style: const TextStyle(fontSize: 14)),
@@ -687,8 +699,8 @@ class DashboardDrawer extends StatelessWidget {
           ? null
           : Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
-              child: Text("${items.length}", style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold)),
+              decoration: BoxDecoration(color: acento.withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
+              child: Text("${items.length}", style: TextStyle(color: acento, fontSize: 12, fontWeight: FontWeight.bold)),
             ),
       enabled: items.isNotEmpty,
       onTap: () {

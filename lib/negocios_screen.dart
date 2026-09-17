@@ -914,7 +914,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
       child: Scaffold(
       backgroundColor: esContador ? _PaletaContador.fondo : AppColors.background,
       drawer: (!esAncho && widget.puedeCrear)
-          ? DashboardDrawer(dashboardFuture: _dashboardFuture, onAbrirNegocio: _abrirNegocioPorId, mostrarContadores: false)
+          ? DashboardDrawer(dashboardFuture: _dashboardFuture, onAbrirNegocio: _abrirNegocioPorId, mostrarContadores: false, esContador: esContador)
           : null,
       appBar: esAncho ? null : AppBar(
         leading: Navigator.canPop(context)
