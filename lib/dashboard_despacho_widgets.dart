@@ -189,7 +189,7 @@ List<Widget> _buildSeccionAlertas(List alertas, Future<void> Function(int) onAbr
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(a['negocio_nombre'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    Text(a['negocio_nombre'] ?? '', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _TemaDashboard.texto)),
                     Text(
                       "${a['contador_nombre'] ?? 'Sin contador'}${fecha != null ? ' · Próximo cobro: $fecha' : ''}",
                       style: TextStyle(fontSize: 11, color: Colors.grey[600]),
@@ -297,7 +297,7 @@ List<Widget> _buildSeccionAlertasHacienda(List alertas, Future<void> Function(in
                   children: [
                     Text(
                       "${a['negocio_nombre'] ?? ''} · ${a['tipo'] ?? ''} ${a['consecutivo'] ?? ''}",
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _TemaDashboard.texto),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
@@ -349,7 +349,7 @@ List<Widget> _buildSeccionCuentasVencidas(List cuentas, num total, Future<void> 
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("${c['negocio_nombre'] ?? ''} · ${c['cliente'] ?? ''}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), overflow: TextOverflow.ellipsis),
+                    Text("${c['negocio_nombre'] ?? ''} · ${c['cliente'] ?? ''}", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _TemaDashboard.texto), overflow: TextOverflow.ellipsis),
                     Text("Vencida hace $dias día(s)", style: TextStyle(fontSize: 11, color: Colors.grey[600])),
                   ],
                 ),
@@ -391,7 +391,7 @@ List<Widget> _buildSeccionCertificados(List certs, Future<void> Function(int) on
               Icon(Icons.badge_outlined, color: color, size: 18),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(c['negocio_nombre'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), overflow: TextOverflow.ellipsis),
+                child: Text(c['negocio_nombre'] ?? '', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _TemaDashboard.texto), overflow: TextOverflow.ellipsis),
               ),
               Text(
                 dias < 0 ? "Vencido" : "Vence en $dias día(s)",
@@ -429,7 +429,7 @@ List<Widget> _buildSeccionClientesInactivos(List clientes, Future<void> Function
               Icon(Icons.pause_circle_outline, color: Colors.grey[600], size: 18),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(c['negocio_nombre'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), overflow: TextOverflow.ellipsis),
+                child: Text(c['negocio_nombre'] ?? '', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _TemaDashboard.texto), overflow: TextOverflow.ellipsis),
               ),
               Text(
                 dias == null ? "Sin facturas" : "Sin facturar hace ${dias.toInt()} día(s)",
@@ -472,7 +472,7 @@ List<Widget> _buildSeccionCarga(List carga) {
                   child: Text(
                     c['nombre'] ?? '',
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _TemaDashboard.texto),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -527,14 +527,14 @@ List<Widget> _buildSeccionActividad(List facturas, List clientes, {bool mostrarC
                           Expanded(
                             child: Text(
                               "${f['negocio_nombre']} · ${f['cliente']}",
-                              style: const TextStyle(fontSize: 12),
+                              style: TextStyle(fontSize: 12, color: _TemaDashboard.texto),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           const SizedBox(width: 6),
                           Text(
                             formatearColones(double.tryParse(f['total'].toString()) ?? 0, decimales: 0),
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _TemaDashboard.texto),
                           ),
                         ],
                       ),
@@ -556,7 +556,7 @@ List<Widget> _buildSeccionActividad(List facturas, List clientes, {bool mostrarC
                       padding: const EdgeInsets.only(bottom: 6),
                       child: Text(
                         mostrarContador ? "${c['negocio_nombre']} · ${c['contador_nombre'] ?? 'Sin contador'}" : "${c['negocio_nombre']}",
-                        style: const TextStyle(fontSize: 12),
+                        style: TextStyle(fontSize: 12, color: _TemaDashboard.texto),
                         overflow: TextOverflow.ellipsis,
                       ),
                     )),
@@ -620,6 +620,7 @@ List<Widget> _buildSeccionConVerTodas({
       Align(
         alignment: Alignment.centerRight,
         child: TextButton(
+          style: TextButton.styleFrom(foregroundColor: _TemaDashboard.acento),
           onPressed: () => Navigator.push(
             context,
             MaterialPageRoute(
