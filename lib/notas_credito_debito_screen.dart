@@ -362,6 +362,16 @@ class _NotasCreditoDebitoScreenState extends State<NotasCreditoDebitoScreen> wit
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(formatearColones(n.total), style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+                  // El monto de arriba siempre está en colones (mismo
+                  // criterio que el listado de facturas), pero si la
+                  // factura que esta nota anula fue en dólares, se agrega
+                  // esta segunda línea con el monto real en USD para poder
+                  // diferenciarlas a simple vista sin tener que abrir el PDF.
+                  if (n.facturaMoneda == 'USD' && n.facturaTipoCambio > 0)
+                    Text(
+                      formatearDolares(n.total / n.facturaTipoCambio),
+                      style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w600),
+                    ),
                   // Mientras sigue Procesando: "Consultar" para forzar el
                   // chequeo de estado. Una vez Aceptada, si por lo que sea el
                   // correo al cliente no salió (correo_enviado en False --
