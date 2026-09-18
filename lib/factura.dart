@@ -15,6 +15,11 @@ class DetalleFacturaItem {
   // solo para poder mostrarlo (PDF, detalle de factura).
   final double montoDescuento;
   final String naturalezaDescuento;
+  // AUDITORIA.md hallazgo A3 -- ver DetalleFactura.monto_exoneracion en el
+  // backend. monto_iva ya viene neto (con esto restado).
+  final double porcentajeExoneracion;
+  final double montoExoneracion;
+  final String nombreInstitucionExoneracion;
 
   DetalleFacturaItem({
     this.id,
@@ -28,6 +33,9 @@ class DetalleFacturaItem {
     this.yaAcreditado = false,
     this.montoDescuento = 0,
     this.naturalezaDescuento = '',
+    this.porcentajeExoneracion = 0,
+    this.montoExoneracion = 0,
+    this.nombreInstitucionExoneracion = '',
   });
 
   double get total => subtotal + montoIva;
@@ -47,6 +55,9 @@ class DetalleFacturaItem {
       yaAcreditado: json['ya_acreditado'] == true,
       montoDescuento: double.tryParse(json['monto_descuento']?.toString() ?? '') ?? 0.0,
       naturalezaDescuento: json['naturaleza_descuento'] ?? '',
+      porcentajeExoneracion: double.tryParse(json['porcentaje_exoneracion']?.toString() ?? '') ?? 0.0,
+      montoExoneracion: double.tryParse(json['monto_exoneracion']?.toString() ?? '') ?? 0.0,
+      nombreInstitucionExoneracion: json['nombre_institucion_exoneracion'] ?? '',
     );
   }
 }

@@ -444,6 +444,12 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
                                               "${linea.naturalezaDescuento.isNotEmpty ? ' (${linea.naturalezaDescuento})' : ''}",
                                               style: const TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.w600),
                                             ),
+                                          if (linea.porcentajeExoneracion > 0)
+                                            Text(
+                                              "Exonerado ${linea.porcentajeExoneracion.toStringAsFixed(0)}% del IVA: -${formatearColones(linea.montoExoneracion)}"
+                                              "${linea.nombreInstitucionExoneracion.isNotEmpty ? ' (${linea.nombreInstitucionExoneracion})' : ''}",
+                                              style: const TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.w600),
+                                            ),
                                         ],
                                       ),
                                     ),

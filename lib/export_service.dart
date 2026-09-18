@@ -932,6 +932,7 @@ class ExportService {
     // colones igual que el resto (se convierte más abajo junto con todo lo
     // demás cuando la factura es en dólares).
     final totalDescuentoColones = factura.detalles.fold(0.0, (s, d) => s + d.montoDescuento);
+    final totalExoneradoColones = factura.detalles.fold(0.0, (s, d) => s + d.montoExoneracion);
     final logo = await _cargarLogo(factura.logoNegocioUrl);
     final subtotalAcreditado = notasCredito.fold(0.0, (s, n) => s + n.subtotal);
     final ivaAcreditado = notasCredito.fold(0.0, (s, n) => s + n.montoIva);
@@ -1037,6 +1038,8 @@ class ExportService {
                 pw.Text('Descuento: -${fmt(totalDescuentoColones)}', style: const pw.TextStyle(color: PdfColors.green800)),
               ],
               pw.Text('Subtotal: ${fmt(subtotal)}'),
+              if (totalExoneradoColones > 0)
+                pw.Text('IVA exonerado: -${fmt(totalExoneradoColones)}', style: const pw.TextStyle(color: PdfColors.green800)),
               pw.Text('IVA: ${fmt(factura.totalIva)}'),
               pw.SizedBox(width: 180, child: pw.Divider()),
               pw.Text(

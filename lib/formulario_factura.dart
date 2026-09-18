@@ -24,6 +24,14 @@ class LineaFactura {
   // generar_xml_v44/<Descuento>).
   double montoDescuento;
   String naturalezaDescuento;
+  // Exoneración de IVA por línea (AUDITORIA.md hallazgo A3) -- para
+  // vender sin impuesto (total o parcial) a clientes con autorización de
+  // Hacienda. porcentajeExoneracion 100 = totalmente exenta.
+  double porcentajeExoneracion;
+  String tipoDocExoneracion;
+  String numeroDocExoneracion;
+  String nombreInstitucionExoneracion;
+  DateTime? fechaEmisionDocExoneracion;
 
   LineaFactura({
     required this.producto,
@@ -31,6 +39,11 @@ class LineaFactura {
     this.impuesto,
     this.montoDescuento = 0,
     this.naturalezaDescuento = '',
+    this.porcentajeExoneracion = 0,
+    this.tipoDocExoneracion = '',
+    this.numeroDocExoneracion = '',
+    this.nombreInstitucionExoneracion = '',
+    this.fechaEmisionDocExoneracion,
   }) : precioUnitario = producto.precioUnitario;
 
   double get porcentajeIva => impuesto?.porcentaje ?? 0.0;
@@ -39,7 +52,13 @@ class LineaFactura {
   // esto, no sobre el bruto, igual que en el backend (ver
   // DetalleFactura.subtotal en models.py).
   double get subtotal => montoBruto - montoDescuento;
-  double get montoIva => subtotal * (porcentajeIva / 100);
+  // IVA a tarifa completa (bruto, sin exonerar) sobre el neto post-descuento.
+  double get montoIvaBruto => subtotal * (porcentajeIva / 100);
+  // Cuánto de ese IVA se perdona por la exoneración.
+  double get montoExoneracion => montoIvaBruto * (porcentajeExoneracion / 100);
+  // IVA NETO realmente cobrado -- este es el que se manda al backend como
+  // monto_iva (ver DetalleFactura.monto_iva).
+  double get montoIva => montoIvaBruto - montoExoneracion;
   double get total => subtotal + montoIva;
 }
 
@@ -409,12 +428,31 @@ class _FormularioFacturaState extends State<FormularioFactura> {
   /// Edición rápida de una línea: solo cantidad y precio unitario. El
   /// impuesto no se toca aquí — es el que tiene asignado el producto; para
   /// cambiarlo hay que editar el producto en el catálogo.
+  // Catálogo de Hacienda para el tipo de documento de exoneración (v4.4) --
+  // se usa tal cual en el XML (ver generar_xml_v44/<Exoneracion>/
+  // TipoDocumento), así que hay que mandar el código, no el texto.
+  static const Map<String, String> _tiposDocExoneracion = {
+    '01': 'Compras autorizadas (régimen especial)',
+    '05': 'Zona Franca',
+    '07': 'Exenciones Dirección General de Hacienda',
+    '09': 'Instituciones públicas',
+    '99': 'Otros',
+  };
+
   void _editarLineaCarrito(int index) {
     final item = _carrito[index];
     final cantidadCtrl = TextEditingController(text: item.cantidad.toString());
     final precioCtrl = TextEditingController(text: item.precioUnitario.toStringAsFixed(2));
     final descuentoCtrl = TextEditingController(text: item.montoDescuento > 0 ? item.montoDescuento.toStringAsFixed(2) : '');
     final naturalezaCtrl = TextEditingController(text: item.naturalezaDescuento);
+    bool exonerado = item.porcentajeExoneracion > 0;
+    final porcentajeExoneracionCtrl = TextEditingController(
+      text: item.porcentajeExoneracion > 0 ? item.porcentajeExoneracion.toStringAsFixed(0) : '100',
+    );
+    String tipoDocExoneracion = item.tipoDocExoneracion.isNotEmpty ? item.tipoDocExoneracion : '99';
+    final numeroDocExoneracionCtrl = TextEditingController(text: item.numeroDocExoneracion);
+    final institucionExoneracionCtrl = TextEditingController(text: item.nombreInstitucionExoneracion);
+    DateTime? fechaExoneracion = item.fechaEmisionDocExoneracion;
 
     // No se debe facturar por debajo del costo + 10% de margen mínimo. Si el
     // producto no tiene costo cargado (0), no hay piso que exigir.
@@ -510,6 +548,69 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                   ),
                 ),
               ],
+              const Divider(height: 28),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text("Venta exonerada de IVA"),
+                subtitle: const Text("Cliente con autorización de Hacienda (institución pública, zona franca, etc.)", style: TextStyle(fontSize: 12)),
+                value: exonerado,
+                onChanged: (v) => setDialogState(() => exonerado = v),
+              ),
+              if (exonerado) ...[
+                TextField(
+                  controller: porcentajeExoneracionCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: "% exonerado del IVA",
+                    border: OutlineInputBorder(),
+                    suffixText: "%",
+                    helperText: "100 = totalmente exenta. Menos de 100 exonera solo esa parte del impuesto.",
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: tipoDocExoneracion,
+                  decoration: const InputDecoration(labelText: "Tipo de documento de exoneración", border: OutlineInputBorder()),
+                  items: _tiposDocExoneracion.entries
+                      .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value, overflow: TextOverflow.ellipsis)))
+                      .toList(),
+                  onChanged: (v) => setDialogState(() => tipoDocExoneracion = v ?? '99'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: numeroDocExoneracionCtrl,
+                  decoration: const InputDecoration(labelText: "Número del documento de exoneración", border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: institucionExoneracionCtrl,
+                  decoration: const InputDecoration(
+                    labelText: "Institución que autoriza",
+                    border: OutlineInputBorder(),
+                    hintText: "Ej. Ministerio de Hacienda, una municipalidad...",
+                  ),
+                ),
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () async {
+                    final fecha = await showDatePicker(
+                      context: ctx,
+                      initialDate: fechaExoneracion ?? DateTime.now(),
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now(),
+                    );
+                    if (fecha != null) setDialogState(() => fechaExoneracion = fecha);
+                  },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(labelText: "Fecha de emisión del documento", border: OutlineInputBorder()),
+                    child: Text(
+                      fechaExoneracion != null
+                          ? "${fechaExoneracion!.day.toString().padLeft(2, '0')}/${fechaExoneracion!.month.toString().padLeft(2, '0')}/${fechaExoneracion!.year}"
+                          : "Toque para elegir (hoy si se deja vacío)",
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -552,11 +653,32 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                 );
                 return;
               }
+              double nuevoPorcentajeExoneracion = 0;
+              if (exonerado) {
+                nuevoPorcentajeExoneracion = double.tryParse(porcentajeExoneracionCtrl.text.replaceAll(',', '.')) ?? 0;
+                if (nuevoPorcentajeExoneracion <= 0 || nuevoPorcentajeExoneracion > 100) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(content: Text("El porcentaje exonerado debe estar entre 1 y 100")),
+                  );
+                  return;
+                }
+                if (numeroDocExoneracionCtrl.text.trim().isEmpty || institucionExoneracionCtrl.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(content: Text("Complete el número de documento y la institución de la exoneración")),
+                  );
+                  return;
+                }
+              }
               setState(() {
                 item.cantidad = nuevaCantidad;
                 item.precioUnitario = nuevoPrecio;
                 item.montoDescuento = nuevoDescuento;
                 item.naturalezaDescuento = nuevoDescuento > 0 ? naturalezaCtrl.text.trim() : '';
+                item.porcentajeExoneracion = exonerado ? nuevoPorcentajeExoneracion : 0;
+                item.tipoDocExoneracion = exonerado ? tipoDocExoneracion : '';
+                item.numeroDocExoneracion = exonerado ? numeroDocExoneracionCtrl.text.trim() : '';
+                item.nombreInstitucionExoneracion = exonerado ? institucionExoneracionCtrl.text.trim() : '';
+                item.fechaEmisionDocExoneracion = exonerado ? (fechaExoneracion ?? DateTime.now()) : null;
               });
               Navigator.pop(ctx);
             },
@@ -630,11 +752,19 @@ class _FormularioFacturaState extends State<FormularioFactura> {
           'cantidad': item.cantidad,
           'precio_unitario': redondear2(item.precioUnitario),
           // Tiquete Interno nunca lleva IVA -- el backend también lo exige
-          // (ver FacturaSerializer.validate).
+          // (ver FacturaSerializer.validate). Por lo mismo, tampoco tiene
+          // sentido una exoneración de un impuesto que ya es 0 ahí.
           'monto_iva': _esInterno ? 0 : redondear2(item.montoIva),
           'subtotal': redondear2(item.subtotal),
           'monto_descuento': redondear2(item.montoDescuento),
           'naturaleza_descuento': item.naturalezaDescuento,
+          'porcentaje_exoneracion': _esInterno ? 0 : item.porcentajeExoneracion,
+          'monto_exoneracion': _esInterno ? 0 : redondear2(item.montoExoneracion),
+          'tipo_doc_exoneracion': item.tipoDocExoneracion,
+          'numero_doc_exoneracion': item.numeroDocExoneracion,
+          'nombre_institucion_exoneracion': item.nombreInstitucionExoneracion,
+          if (item.fechaEmisionDocExoneracion != null)
+            'fecha_emision_doc_exoneracion': item.fechaEmisionDocExoneracion!.toIso8601String().split('T')[0],
         }).toList(),
       };
 
@@ -1212,6 +1342,12 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                 Text(
                   "Descuento: -${formatearColones(item.montoDescuento)}"
                   "${item.naturalezaDescuento.isNotEmpty ? ' (${item.naturalezaDescuento})' : ''}",
+                  style: const TextStyle(fontSize: 11, color: Colors.green, fontWeight: FontWeight.w600),
+                ),
+              if (item.porcentajeExoneracion > 0)
+                Text(
+                  "Exonerado ${item.porcentajeExoneracion.toStringAsFixed(0)}% del IVA: -${formatearColones(item.montoExoneracion)}"
+                  "${item.nombreInstitucionExoneracion.isNotEmpty ? ' (${item.nombreInstitucionExoneracion})' : ''}",
                   style: const TextStyle(fontSize: 11, color: Colors.green, fontWeight: FontWeight.w600),
                 ),
               Builder(builder: (context) {
