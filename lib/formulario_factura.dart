@@ -239,6 +239,173 @@ class _FormularioFacturaState extends State<FormularioFactura> {
 
   void _quitar(int index) => setState(() => _carrito.removeAt(index));
 
+  /// Reparte un descuento general de toda la factura entre las líneas del
+  /// carrito, proporcional al peso (precio*cantidad) de cada una -- Hacienda
+  /// solo permite declarar descuentos POR LÍNEA (nodo <Descuento>, ver
+  /// backend generar_xml_v44), no existe un "descuento de factura completa"
+  /// en el XML v4.4, así que esto es lo que hace posible ofrecer un campo
+  /// único en la UI sin dejar de declarar cada línea correctamente. La
+  /// última línea se lleva el resto exacto (en vez de su parte
+  /// proporcional redondeada) para que la suma de los descuentos por línea
+  /// dé exactamente el monto pedido, sin quedar descuadrado por redondeo.
+  /// Devuelve la lista de productos que quedarían por debajo del piso de
+  /// costo+10% con ese descuento (vacía si todo bien) -- no aplica nada si
+  /// la lista no está vacía, para no dejar precios por debajo del costo.
+  List<String> _aplicarDescuentoGeneral(double montoTotalDescuento, String motivo) {
+    if (_carrito.isEmpty) return [];
+    final totalBruto = _carrito.fold<double>(0, (s, i) => s + i.montoBruto);
+    if (totalBruto <= 0) return [];
+    final montoLimitado = montoTotalDescuento.clamp(0, totalBruto).toDouble();
+
+    final nuevosDescuentos = <double>[];
+    double acumulado = 0;
+    for (var i = 0; i < _carrito.length; i++) {
+      final item = _carrito[i];
+      double parte;
+      if (i == _carrito.length - 1) {
+        parte = redondear2(montoLimitado - acumulado);
+      } else {
+        parte = redondear2(montoLimitado * (item.montoBruto / totalBruto));
+        acumulado += parte;
+      }
+      nuevosDescuentos.add(parte);
+    }
+
+    final productosBajoMinimo = <String>[];
+    for (var i = 0; i < _carrito.length; i++) {
+      final item = _carrito[i];
+      final costo = item.producto.costo;
+      if (costo <= 0) continue;
+      final precioNetoUnitario = (item.montoBruto - nuevosDescuentos[i]) / item.cantidad;
+      if (precioNetoUnitario < redondear2(costo * 1.10)) {
+        productosBajoMinimo.add(item.producto.nombre);
+      }
+    }
+    if (productosBajoMinimo.isNotEmpty) return productosBajoMinimo;
+
+    setState(() {
+      for (var i = 0; i < _carrito.length; i++) {
+        _carrito[i].montoDescuento = nuevosDescuentos[i];
+        _carrito[i].naturalezaDescuento = nuevosDescuentos[i] > 0 ? motivo : '';
+      }
+    });
+    return [];
+  }
+
+  void _quitarDescuentoGeneral() {
+    setState(() {
+      for (final item in _carrito) {
+        item.montoDescuento = 0;
+        item.naturalezaDescuento = '';
+      }
+    });
+  }
+
+  void _editarDescuentoGeneral() {
+    if (_carrito.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Agregue al menos un producto antes de aplicar un descuento general.")),
+      );
+      return;
+    }
+    String tipo = 'porcentaje'; // 'porcentaje' o 'monto'
+    final valorCtrl = TextEditingController();
+    final motivoCtrl = TextEditingController(text: 'Descuento general de factura');
+    final totalBruto = _carrito.fold<double>(0, (s, i) => s + i.montoBruto);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final valor = double.tryParse(valorCtrl.text.replaceAll(',', '.')) ?? 0;
+          final montoResultante = tipo == 'porcentaje' ? totalBruto * (valor / 100) : valor;
+          return AlertDialog(
+            title: const Text("Descuento general de la factura"),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Se reparte proporcionalmente entre las ${_carrito.length} línea(s) del carrito "
+                    "(Hacienda exige declarar el descuento por línea, no de la factura completa).",
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 12),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(value: 'porcentaje', label: Text("Porcentaje")),
+                      ButtonSegment(value: 'monto', label: Text("Monto fijo")),
+                    ],
+                    selected: {tipo},
+                    onSelectionChanged: (nuevo) => setDialogState(() => tipo = nuevo.first),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: valorCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: tipo == 'porcentaje' ? "Porcentaje de descuento" : "Monto del descuento (₡)",
+                      border: const OutlineInputBorder(),
+                      prefixText: tipo == 'porcentaje' ? null : "₡ ",
+                      suffixText: tipo == 'porcentaje' ? "%" : null,
+                    ),
+                    onChanged: (_) => setDialogState(() {}),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: motivoCtrl,
+                    decoration: const InputDecoration(labelText: "Motivo", border: OutlineInputBorder()),
+                  ),
+                  if (valor > 0) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      "Descuento total: ${formatearColones(montoResultante)}",
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _quitarDescuentoGeneral();
+                },
+                child: const Text("Quitar descuento", style: TextStyle(color: Colors.red)),
+              ),
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
+              ElevatedButton(
+                onPressed: () {
+                  if (valor <= 0) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      const SnackBar(content: Text("Ingrese un descuento válido")),
+                    );
+                    return;
+                  }
+                  final productosBajoMinimo = _aplicarDescuentoGeneral(montoResultante, motivoCtrl.text.trim());
+                  if (productosBajoMinimo.isNotEmpty) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      SnackBar(content: Text(
+                        "Ese descuento deja por debajo del costo+10% a: ${productosBajoMinimo.join(', ')}. "
+                        "Reduzca el descuento o ajuste el precio de esos productos.",
+                      )),
+                    );
+                    return;
+                  }
+                  Navigator.pop(ctx);
+                },
+                child: const Text("Aplicar"),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   /// Edición rápida de una línea: solo cantidad y precio unitario. El
   /// impuesto no se toca aquí — es el que tiene asignado el producto; para
   /// cambiarlo hay que editar el producto en el catálogo.
@@ -955,6 +1122,26 @@ class _FormularioFacturaState extends State<FormularioFactura> {
           decoration: BoxDecoration(color: AppColors.surfaceSubtle, border: Border(top: BorderSide(color: AppColors.border))),
           child: Column(
             children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Builder(builder: (context) {
+                    final totalDescuento = _carrito.fold<double>(0, (s, i) => s + i.montoDescuento);
+                    return totalDescuento > 0
+                        ? Text(
+                            "Descuento general: -${formatearColones(totalDescuento)}",
+                            style: const TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.w600),
+                          )
+                        : const SizedBox.shrink();
+                  }),
+                  TextButton.icon(
+                    onPressed: _isSaving ? null : _editarDescuentoGeneral,
+                    icon: const Icon(Icons.sell_outlined, size: 16),
+                    label: const Text("Descuento general", style: TextStyle(fontSize: 12)),
+                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4)),
+                  ),
+                ],
+              ),
               _filaResumen("Subtotal", formatearColones(_totalSubtotal)),
               _filaResumen("IVA", formatearColones(_totalIva)),
               const Divider(),
