@@ -2157,6 +2157,14 @@ class ExportService {
   static Future<void> exportNotaCreditoToPdf(NotaCredito nota, {bool share = false}) async {
     final pdf = pw.Document(theme: await _cargarTema());
     final logo = await _cargarLogo(nota.logoNegocioUrl);
+    // DetalleNotaCredito/totales siempre están en colones (la nota no tiene
+    // moneda propia, hereda la de la factura que anula -- ver
+    // NotaCredito.facturaMoneda); si esa factura se emitió en dólares, se
+    // convierte acá para que este PDF muestre la moneda real, igual que ya
+    // hace exportFacturaDetalleToPdf.
+    final esUsd = nota.facturaMoneda == 'USD' && nota.facturaTipoCambio > 0;
+    final factorMoneda = esUsd ? 1 / nota.facturaTipoCambio : 1.0;
+    String fmt(num v) => esUsd ? formatearDolares(v * factorMoneda) : formatearColones(v * factorMoneda);
 
     pdf.addPage(pw.MultiPage(
       pageFormat: PdfPageFormat.a4,
@@ -2173,6 +2181,7 @@ class ExportService {
                   pw.Text('Consecutivo: ${nota.consecutivo}'),
                   pw.Text('Anula Factura: F-${nota.facturaConsecutivo ?? ''}'),
                   pw.Text('Fecha: ${nota.fechaEmision.split('T')[0]}'),
+                  if (esUsd) pw.Text('Moneda: Dólares (US\$) -- Tipo de cambio: ${formatearColones(nota.facturaTipoCambio)}'),
                 ],
               ),
               pw.Column(
@@ -2211,9 +2220,9 @@ class ExportService {
               : nota.detalles.map((d) => [
                     d.nombreProducto,
                     d.cantidad.toString(),
-                    formatearColones(d.precioUnitario),
-                    formatearColones(d.montoIva),
-                    formatearColones(d.total),
+                    fmt(d.precioUnitario),
+                    fmt(d.montoIva),
+                    fmt(d.total),
                   ]).toList(),
         ),
         pw.SizedBox(height: 20),
@@ -2222,11 +2231,11 @@ class ExportService {
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.end,
             children: [
-              pw.Text('Subtotal: ${formatearColones(nota.subtotal)}'),
-              pw.Text('IVA: ${formatearColones(nota.montoIva)}'),
+              pw.Text('Subtotal: ${fmt(nota.subtotal)}'),
+              pw.Text('IVA: ${fmt(nota.montoIva)}'),
               pw.SizedBox(width: 180, child: pw.Divider()),
               pw.Text(
-                'TOTAL ACREDITADO: ${formatearColones(nota.total)}',
+                'TOTAL ACREDITADO: ${fmt(nota.total)}',
                 style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16, color: PdfColors.orange900),
               ),
             ],

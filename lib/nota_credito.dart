@@ -50,6 +50,11 @@ class NotaCredito {
   final String? logoNegocioUrl;
   final NegocioInfo? negocioInfo;
   final List<DetalleNotaCreditoItem> detalles;
+  // Moneda/tipo de cambio de la factura que esta nota anula -- la nota no
+  // tiene moneda propia, siempre es la misma que la factura original (ver
+  // NotaCreditoSerializer.factura_moneda en el backend).
+  final String facturaMoneda;
+  final double facturaTipoCambio;
 
   NotaCredito({
     required this.id,
@@ -70,6 +75,8 @@ class NotaCredito {
     this.logoNegocioUrl,
     this.negocioInfo,
     this.detalles = const [],
+    this.facturaMoneda = 'CRC',
+    this.facturaTipoCambio = 1.0,
   });
 
   factory NotaCredito.fromJson(Map<String, dynamic> json) {
@@ -94,6 +101,8 @@ class NotaCredito {
       detalles: (json['detalles'] as List<dynamic>? ?? [])
           .map((d) => DetalleNotaCreditoItem.fromJson(d as Map<String, dynamic>))
           .toList(),
+      facturaMoneda: json['factura_moneda'] ?? 'CRC',
+      facturaTipoCambio: double.tryParse(json['factura_tipo_cambio']?.toString() ?? '') ?? 1.0,
     );
   }
 }
