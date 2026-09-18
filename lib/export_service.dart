@@ -928,6 +928,10 @@ class ExportService {
   static Future<void> exportFacturaDetalleToPdf(Factura factura, {bool share = false, List<NotaCredito> notasCredito = const []}) async {
     final pdf = pw.Document(theme: await _cargarTema());
     final subtotal = factura.totalFactura - factura.totalIva;
+    // AUDITORIA.md hallazgo A3 -- suma de los descuentos por línea, en
+    // colones igual que el resto (se convierte más abajo junto con todo lo
+    // demás cuando la factura es en dólares).
+    final totalDescuentoColones = factura.detalles.fold(0.0, (s, d) => s + d.montoDescuento);
     final logo = await _cargarLogo(factura.logoNegocioUrl);
     final subtotalAcreditado = notasCredito.fold(0.0, (s, n) => s + n.subtotal);
     final ivaAcreditado = notasCredito.fold(0.0, (s, n) => s + n.montoIva);
@@ -1028,6 +1032,10 @@ class ExportService {
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.end,
             children: [
+              if (totalDescuentoColones > 0) ...[
+                pw.Text('Subtotal bruto: ${fmt(subtotal + totalDescuentoColones)}'),
+                pw.Text('Descuento: -${fmt(totalDescuentoColones)}', style: const pw.TextStyle(color: PdfColors.green800)),
+              ],
               pw.Text('Subtotal: ${fmt(subtotal)}'),
               pw.Text('IVA: ${fmt(factura.totalIva)}'),
               pw.SizedBox(width: 180, child: pw.Divider()),

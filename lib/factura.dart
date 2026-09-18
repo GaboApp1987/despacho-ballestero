@@ -10,6 +10,11 @@ class DetalleFacturaItem {
   final double montoIva;
   final double subtotal;
   final bool yaAcreditado;
+  // AUDITORIA.md hallazgo A3 -- ver DetalleFactura.monto_descuento en el
+  // backend. subtotal ya viene neto (con esto restado); se guarda aparte
+  // solo para poder mostrarlo (PDF, detalle de factura).
+  final double montoDescuento;
+  final String naturalezaDescuento;
 
   DetalleFacturaItem({
     this.id,
@@ -21,9 +26,12 @@ class DetalleFacturaItem {
     required this.montoIva,
     required this.subtotal,
     this.yaAcreditado = false,
+    this.montoDescuento = 0,
+    this.naturalezaDescuento = '',
   });
 
   double get total => subtotal + montoIva;
+  double get montoBruto => precioUnitario * cantidad;
 
   factory DetalleFacturaItem.fromJson(Map<String, dynamic> json) {
     final productoDetalle = json['producto_detalle'] as Map<String, dynamic>?;
@@ -37,6 +45,8 @@ class DetalleFacturaItem {
       montoIva: double.tryParse(json['monto_iva'].toString()) ?? 0.0,
       subtotal: double.tryParse(json['subtotal'].toString()) ?? 0.0,
       yaAcreditado: json['ya_acreditado'] == true,
+      montoDescuento: double.tryParse(json['monto_descuento']?.toString() ?? '') ?? 0.0,
+      naturalezaDescuento: json['naturaleza_descuento'] ?? '',
     );
   }
 }

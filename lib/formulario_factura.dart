@@ -18,15 +18,27 @@ class LineaFactura {
   int cantidad;
   double precioUnitario;
   Impuesto? impuesto;
+  // Descuento por línea (AUDITORIA.md hallazgo A3) -- monto fijo en
+  // colones, no porcentaje, para que quede claro exactamente cuánto se
+  // rebajó (lo que exige Hacienda documentar en el XML, ver
+  // generar_xml_v44/<Descuento>).
+  double montoDescuento;
+  String naturalezaDescuento;
 
   LineaFactura({
     required this.producto,
     required this.cantidad,
     this.impuesto,
+    this.montoDescuento = 0,
+    this.naturalezaDescuento = '',
   }) : precioUnitario = producto.precioUnitario;
 
   double get porcentajeIva => impuesto?.porcentaje ?? 0.0;
-  double get subtotal => precioUnitario * cantidad;
+  double get montoBruto => precioUnitario * cantidad;
+  // Neto, ya con el descuento restado -- el IVA (abajo) se calcula sobre
+  // esto, no sobre el bruto, igual que en el backend (ver
+  // DetalleFactura.subtotal en models.py).
+  double get subtotal => montoBruto - montoDescuento;
   double get montoIva => subtotal * (porcentajeIva / 100);
   double get total => subtotal + montoIva;
 }
@@ -234,6 +246,8 @@ class _FormularioFacturaState extends State<FormularioFactura> {
     final item = _carrito[index];
     final cantidadCtrl = TextEditingController(text: item.cantidad.toString());
     final precioCtrl = TextEditingController(text: item.precioUnitario.toStringAsFixed(2));
+    final descuentoCtrl = TextEditingController(text: item.montoDescuento > 0 ? item.montoDescuento.toStringAsFixed(2) : '');
+    final naturalezaCtrl = TextEditingController(text: item.naturalezaDescuento);
 
     // No se debe facturar por debajo del costo + 10% de margen mínimo. Si el
     // producto no tiene costo cargado (0), no hay piso que exigir.
@@ -306,6 +320,29 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                   ),
                 ),
               ],
+              const SizedBox(height: 12),
+              TextField(
+                controller: descuentoCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: "Descuento (₡, opcional)",
+                  border: OutlineInputBorder(),
+                  prefixText: "₡ ",
+                  helperText: "Monto fijo, no porcentaje -- se resta del total de la línea.",
+                ),
+                onChanged: (_) => setDialogState(() {}),
+              ),
+              if ((double.tryParse(descuentoCtrl.text.replaceAll(',', '.')) ?? 0) > 0) ...[
+                const SizedBox(height: 12),
+                TextField(
+                  controller: naturalezaCtrl,
+                  decoration: const InputDecoration(
+                    labelText: "Motivo del descuento",
+                    border: OutlineInputBorder(),
+                    hintText: "Ej. Pronto pago, promoción, cliente frecuente...",
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -315,21 +352,44 @@ class _FormularioFacturaState extends State<FormularioFactura> {
             onPressed: () {
               final nuevaCantidad = int.tryParse(cantidadCtrl.text);
               final nuevoPrecio = double.tryParse(precioCtrl.text.replaceAll(',', '.'));
+              final nuevoDescuento = double.tryParse(descuentoCtrl.text.replaceAll(',', '.')) ?? 0;
               if (nuevaCantidad == null || nuevaCantidad <= 0 || nuevoPrecio == null || nuevoPrecio < 0) {
                 ScaffoldMessenger.of(ctx).showSnackBar(
                   const SnackBar(content: Text("Ingrese una cantidad y un precio válidos")),
                 );
                 return;
               }
-              if (costo > 0 && nuevoPrecio < precioMinimo) {
+              if (nuevoDescuento < 0) {
                 ScaffoldMessenger.of(ctx).showSnackBar(
-                  SnackBar(content: Text("El precio no puede ser menor a ${formatearColones(precioMinimo)} (costo + 10%)")),
+                  const SnackBar(content: Text("El descuento no puede ser negativo")),
+                );
+                return;
+              }
+              final double montoBruto = nuevoPrecio * nuevaCantidad;
+              if (nuevoDescuento > montoBruto) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text("El descuento no puede ser mayor al total de la línea")),
+                );
+                return;
+              }
+              // El piso de costo+10% aplica al precio NETO (ya con el
+              // descuento aplicado) -- si no, el descuento sería una forma
+              // de esquivar el mínimo sin que se note.
+              final double precioNetoUnitario = (montoBruto - nuevoDescuento) / nuevaCantidad;
+              if (costo > 0 && precioNetoUnitario < precioMinimo) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  SnackBar(content: Text(
+                    "Con ese descuento, el precio neto (${formatearColones(precioNetoUnitario)}) queda por debajo "
+                    "del mínimo permitido (${formatearColones(precioMinimo)})",
+                  )),
                 );
                 return;
               }
               setState(() {
                 item.cantidad = nuevaCantidad;
                 item.precioUnitario = nuevoPrecio;
+                item.montoDescuento = nuevoDescuento;
+                item.naturalezaDescuento = nuevoDescuento > 0 ? naturalezaCtrl.text.trim() : '';
               });
               Navigator.pop(ctx);
             },
@@ -405,7 +465,9 @@ class _FormularioFacturaState extends State<FormularioFactura> {
           // Tiquete Interno nunca lleva IVA -- el backend también lo exige
           // (ver FacturaSerializer.validate).
           'monto_iva': _esInterno ? 0 : redondear2(item.montoIva),
-          'subtotal': redondear2(item.subtotal)
+          'subtotal': redondear2(item.subtotal),
+          'monto_descuento': redondear2(item.montoDescuento),
+          'naturaleza_descuento': item.naturalezaDescuento,
         }).toList(),
       };
 
@@ -959,6 +1021,12 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                     : "${formatearColones(item.precioUnitario)} c/u · ${item.impuesto?.nombre ?? 'Sin impuesto'} (${formatearNumero(item.porcentajeIva)}%)",
                 style: TextStyle(fontSize: 11, color: Colors.grey[500]),
               ),
+              if (item.montoDescuento > 0)
+                Text(
+                  "Descuento: -${formatearColones(item.montoDescuento)}"
+                  "${item.naturalezaDescuento.isNotEmpty ? ' (${item.naturalezaDescuento})' : ''}",
+                  style: const TextStyle(fontSize: 11, color: Colors.green, fontWeight: FontWeight.w600),
+                ),
               Builder(builder: (context) {
                 final anterior = _ultimoPrecioPorProducto[item.producto.id];
                 if (anterior == null || anterior.precioUnitario == item.precioUnitario) {

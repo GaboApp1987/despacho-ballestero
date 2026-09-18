@@ -434,10 +434,16 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
                                               style: TextStyle(fontSize: 11, color: Colors.grey[500]),
                                             ),
                                           Text(
-                                            "${linea.cantidad} x ${formatearColones(linea.precioUnitario)} = ${formatearColones(linea.subtotal)}"
+                                            "${linea.cantidad} x ${formatearColones(linea.precioUnitario)} = ${formatearColones(linea.montoBruto)}"
                                             "${linea.montoIva > 0 ? '  ·  IVA ${formatearColones(linea.montoIva)}' : ''}",
                                             style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                                           ),
+                                          if (linea.montoDescuento > 0)
+                                            Text(
+                                              "Descuento: -${formatearColones(linea.montoDescuento)}"
+                                              "${linea.naturalezaDescuento.isNotEmpty ? ' (${linea.naturalezaDescuento})' : ''}",
+                                              style: const TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.w600),
+                                            ),
                                         ],
                                       ),
                                     ),
