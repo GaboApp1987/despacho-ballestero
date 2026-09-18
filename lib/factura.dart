@@ -89,6 +89,7 @@ class Factura {
   // realmente (moneda incluida) ya que ese camino no tiene PDF ni correo
   // automático ni consulta de estado todavía.
   final String? xmlFirmado;
+  final bool correoEnviado;
 
   bool get esTiquete => tipoDocumento == '04';
 
@@ -118,6 +119,7 @@ class Factura {
     this.moneda = 'CRC',
     this.tipoCambio = 1.0,
     this.xmlFirmado,
+    this.correoEnviado = false,
   });
 
   factory Factura.fromJson(Map<String, dynamic> json) {
@@ -151,6 +153,7 @@ class Factura {
       moneda: json['moneda'] ?? 'CRC',
       tipoCambio: double.tryParse(json['tipo_cambio']?.toString() ?? '') ?? 1.0,
       xmlFirmado: json['xml_firmado'],
+      correoEnviado: json['correo_enviado'] == true,
     );
   }
 }

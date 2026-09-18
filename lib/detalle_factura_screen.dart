@@ -582,7 +582,16 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
                       },
                     ),
                   ),
-                if (factura.estadoHacienda == '2')
+                // "Consultar estado" mientras sigue Enviando(2). Una vez
+                // Aceptada(3), si por lo que sea el correo al cliente no
+                // salió (correo_enviado en False -- ej. fallo puntual de
+                // Brevo), se ofrece "Reenviar correo" en su lugar: el mismo
+                // endpoint consultar-hacienda ya reintenta el correo cuando
+                // ve estado '3' y correo_enviado=False (ver
+                // _consultar_y_notificar_hacienda_directo en el backend) --
+                // antes este botón desaparecía apenas quedaba Aceptada y no
+                // había forma de reenviar el correo desde la app.
+                if (factura.estadoHacienda == '2' || (factura.estadoHacienda == '3' && !factura.correoEnviado))
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -593,8 +602,11 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         minimumSize: const Size(double.infinity, 0),
                       ),
-                      icon: const Icon(Icons.refresh, color: Colors.orange),
-                      label: const Text("CONSULTAR ESTADO EN HACIENDA", style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+                      icon: Icon(factura.estadoHacienda == '3' ? Icons.mail_outline : Icons.refresh, color: Colors.orange),
+                      label: Text(
+                        factura.estadoHacienda == '3' ? "REENVIAR CORREO" : "CONSULTAR ESTADO EN HACIENDA",
+                        style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                      ),
                       onPressed: _isProcesando ? null : () => _manejarAccion(_consultarEstadoHacienda),
                     ),
                   ),
