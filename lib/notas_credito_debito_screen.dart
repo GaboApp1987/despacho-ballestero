@@ -79,6 +79,15 @@ class _NotasCreditoDebitoScreenState extends State<NotasCreditoDebitoScreen> wit
             final idx = _notasCredito.indexWhere((x) => x.id == n.id);
             if (idx != -1) _notasCredito[idx] = actualizada;
           });
+          // Si ya estaba Aceptada, consultar-hacienda no cambia el estado --
+          // el único efecto visible en ese caso es el reenvío del correo
+          // (ver correo_info en ConsultarHaciendaView, backend), así que hay
+          // que avisarle al usuario con un SnackBar o va a parecer que el
+          // botón no hizo nada.
+          final correoInfo = data['correo_info'];
+          if (correoInfo != null) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(correoInfo)));
+          }
         }
       } else {
         final data = json.decode(utf8.decode(r.bodyBytes));
@@ -353,7 +362,15 @@ class _NotasCreditoDebitoScreenState extends State<NotasCreditoDebitoScreen> wit
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(formatearColones(n.total), style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
-                  if (n.estadoHacienda == '1' || n.estadoHacienda == '2') ...[
+                  // Mientras sigue Procesando: "Consultar" para forzar el
+                  // chequeo de estado. Una vez Aceptada, si por lo que sea el
+                  // correo al cliente no salió (correo_enviado en False --
+                  // ej. fallo puntual de Brevo, o se reseteó a mano en el
+                  // admin para reenviar con datos corregidos), se ofrece
+                  // "Reenviar correo" en su lugar -- antes esta fila
+                  // desaparecía apenas quedaba Aceptada y no había forma de
+                  // reenviar el correo desde la app.
+                  if (n.estadoHacienda == '1' || n.estadoHacienda == '2' || (n.estadoHacienda == '3' && !n.correoEnviado)) ...[
                     const SizedBox(height: 4),
                     _consultandoIndividual.contains(n.id)
                         ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
@@ -362,9 +379,12 @@ class _NotasCreditoDebitoScreenState extends State<NotasCreditoDebitoScreen> wit
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.refresh, size: 13, color: AppColors.primary),
+                                Icon(n.estadoHacienda == '3' ? Icons.mail_outline : Icons.refresh, size: 13, color: AppColors.primary),
                                 const SizedBox(width: 3),
-                                Text('Consultar', style: TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w600)),
+                                Text(
+                                  n.estadoHacienda == '3' ? 'Reenviar correo' : 'Consultar',
+                                  style: TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w600),
+                                ),
                               ],
                             ),
                           ),

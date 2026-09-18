@@ -55,6 +55,7 @@ class NotaCredito {
   // NotaCreditoSerializer.factura_moneda en el backend).
   final String facturaMoneda;
   final double facturaTipoCambio;
+  final bool correoEnviado;
 
   NotaCredito({
     required this.id,
@@ -77,6 +78,7 @@ class NotaCredito {
     this.detalles = const [],
     this.facturaMoneda = 'CRC',
     this.facturaTipoCambio = 1.0,
+    this.correoEnviado = false,
   });
 
   factory NotaCredito.fromJson(Map<String, dynamic> json) {
@@ -103,6 +105,7 @@ class NotaCredito {
           .toList(),
       facturaMoneda: json['factura_moneda'] ?? 'CRC',
       facturaTipoCambio: double.tryParse(json['factura_tipo_cambio']?.toString() ?? '') ?? 1.0,
+      correoEnviado: json['correo_enviado'] == true,
     );
   }
 }
