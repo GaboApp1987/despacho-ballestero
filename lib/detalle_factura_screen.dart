@@ -598,7 +598,12 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
                       onPressed: _isProcesando ? null : () => _manejarAccion(_consultarEstadoHacienda),
                     ),
                   ),
-                if (factura.estadoHacienda == '5' || factura.estadoHacienda == '1')
+                // Backend permite reintentar en cualquier estado que no sea
+                // "Enviando"(2)/"Aceptada"(3) (ver
+                // FacturaViewSet.reenviar_hacienda_view) -- acá faltaba "4"
+                // Rechazada, el caso más común para usar este botón (corregir
+                // la causa del rechazo y reenviar la MISMA factura).
+                if (factura.estadoHacienda == '5' || factura.estadoHacienda == '1' || factura.estadoHacienda == '4')
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
