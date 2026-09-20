@@ -9,7 +9,7 @@
            por error y funcionara en silencio en vez de fallar.
          - allowBackup=false: sin esto, Android usa su valor por defecto
            (permitir backup), lo que puede copiar el almacenamiento de la
-           app -- incluido SharedPreferences, ver B3 -- vía adb backup o
+           app, incluido SharedPreferences (ver B3), vía adb backup o
            copias de respaldo del fabricante. -->
     <application
         android:label="despacho_app"
