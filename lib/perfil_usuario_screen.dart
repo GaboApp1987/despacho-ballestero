@@ -54,6 +54,10 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
   List<FirmanteContador> _firmantes = [];
   bool _guardandoFirmantes = false;
 
+  final _plantillaCertificacionCtrl = TextEditingController();
+  bool _guardandoPlantilla = false;
+  bool _cargandoPlantillaDefault = false;
+
   Color get _colorFondo => widget.esContador ? TemaContador.fondo : AppColors.background;
   Color get _colorSuperficie => widget.esContador ? TemaContador.superficie : AppColors.surface;
   Color get _colorBorde => widget.esContador ? TemaContador.borde : AppColors.border;
@@ -96,6 +100,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
     _especialidadCtrl.dispose();
     _direccionProfesionalCtrl.dispose();
     _polizaCtrl.dispose();
+    _plantillaCertificacionCtrl.dispose();
     super.dispose();
   }
 
@@ -112,6 +117,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
           _polizaVencimiento = data['poliza_vencimiento'] != null ? DateTime.tryParse(data['poliza_vencimiento']) : null;
           _firmarConNombreRegistrado = data['firmar_con_nombre_registrado'] ?? true;
           _firmantes = ((data['firmantes'] as List?) ?? []).map((f) => FirmanteContador.fromJson(f)).toList();
+          _plantillaCertificacionCtrl.text = data['plantilla_certificacion_ingreso'] ?? '';
         });
       }
     } catch (_) {
@@ -156,6 +162,63 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
       }
     } finally {
       if (mounted) setState(() => _guardandoDatosCpa = false);
+    }
+  }
+
+  Future<void> _guardarPlantillaCertificacion() async {
+    setState(() => _guardandoPlantilla = true);
+    try {
+      final response = await ApiService.patch(widget.logoEndpoint, {
+        'plantilla_certificacion_ingreso': _plantillaCertificacionCtrl.text.trim(),
+      });
+      if (response.statusCode == 200) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Plantilla de certificación guardada"), backgroundColor: Colors.green),
+          );
+        }
+      } else {
+        throw Exception(utf8.decode(response.bodyBytes));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      }
+    } finally {
+      if (mounted) setState(() => _guardandoPlantilla = false);
+    }
+  }
+
+  Future<void> _cargarPlantillaPorDefecto() async {
+    if (_plantillaCertificacionCtrl.text.trim().isNotEmpty) {
+      final confirmar = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text("¿Reemplazar el texto actual?"),
+          content: const Text("Esto va a sobreescribir lo que ya escribiste en el cuadro con la redacción por defecto, para que la edités a partir de ahí. No se guarda hasta que toqués \"Guardar plantilla\"."),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text("Cancelar")),
+            TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text("Reemplazar")),
+          ],
+        ),
+      );
+      if (confirmar != true) return;
+    }
+    setState(() => _cargandoPlantillaDefault = true);
+    try {
+      final response = await ApiService.get('/socios/plantilla-certificacion-default/');
+      if (response.statusCode == 200) {
+        final data = json.decode(utf8.decode(response.bodyBytes));
+        setState(() => _plantillaCertificacionCtrl.text = data['plantilla'] ?? '');
+      } else {
+        throw Exception(utf8.decode(response.bodyBytes));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      }
+    } finally {
+      if (mounted) setState(() => _cargandoPlantillaDefault = false);
     }
   }
 
@@ -675,6 +738,70 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                           child: _guardandoDatosCpa
                               ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                               : const Text("Guardar datos profesionales", style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: _colorSuperficie,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: _colorBorde),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.description_outlined, size: 20, color: _colorFuerte),
+                        const SizedBox(width: 8),
+                        Text("Plantilla de Certificación de Ingresos", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _colorFuerte)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      "Tu propia redacción para el cuerpo del documento. Si la dejás vacía, se usa la redacción por defecto del despacho. Separá cada párrafo con una línea en blanco; un párrafo escrito TODO EN MAYÚSCULAS se muestra como subtítulo.",
+                      style: TextStyle(fontSize: 13, color: widget.esContador ? TemaContador.textoTenue : Colors.grey),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "Marcadores disponibles: {nombre} {cedula} {nacionalidad} {estado_civil} {actividad} {proposito} {dirigido_a} {fecha_inicio} {fecha_fin} {fecha_emision} {lugar_emision} {moneda_simbolo} {ingreso_bruto_promedio} {ingreso_neto_promedio} {anos_ejerciendo_frase}",
+                      style: TextStyle(fontSize: 11.5, fontStyle: FontStyle.italic, color: widget.esContador ? TemaContador.textoTenue : Colors.grey),
+                    ),
+                    const SizedBox(height: 14),
+                    if (_cargandoDatosCpa)
+                      const Center(child: CircularProgressIndicator())
+                    else ...[
+                      TextField(
+                        controller: _plantillaCertificacionCtrl,
+                        style: TextStyle(color: _colorFuerte, fontSize: 13),
+                        maxLines: 14,
+                        minLines: 6,
+                        decoration: _decoracionCampo("Redacción (vacío = usar la de por defecto)"),
+                      ),
+                      const SizedBox(height: 10),
+                      TextButton.icon(
+                        onPressed: _cargandoPlantillaDefault ? null : _cargarPlantillaPorDefecto,
+                        style: TextButton.styleFrom(foregroundColor: _colorAcento),
+                        icon: _cargandoPlantillaDefault
+                            ? SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: _colorAcento))
+                            : const Icon(Icons.file_download_outlined, size: 18),
+                        label: const Text("Cargar la redacción por defecto para editarla"),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _guardandoPlantilla ? null : _guardarPlantillaCertificacion,
+                          style: ElevatedButton.styleFrom(backgroundColor: _colorAcento, foregroundColor: Colors.white),
+                          child: _guardandoPlantilla
+                              ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Text("Guardar plantilla", style: TextStyle(fontWeight: FontWeight.bold)),
                         ),
                       ),
                     ],
