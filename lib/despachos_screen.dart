@@ -416,7 +416,17 @@ class _DespachosScreenState extends State<DespachosScreen> {
       child: Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text("Despachos"),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              "PANEL DE ADMINISTRADOR",
+              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 1.4, color: AppColors.primary),
+            ),
+            const Text("Despachos"),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.workspace_premium_outlined),

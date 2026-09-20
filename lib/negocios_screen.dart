@@ -1401,11 +1401,21 @@ class _NegociosScreenState extends State<NegociosScreen> {
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: Text(
-                        _miSocio?.nombre ?? 'Contador',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            "MODO CONTADOR",
+                            style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w800, fontSize: 9.5, letterSpacing: 1.2),
+                          ),
+                          Text(
+                            _miSocio?.nombre ?? 'Contador',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14),
+                          ),
+                        ],
                       ),
                     ),
                   ],

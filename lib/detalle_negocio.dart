@@ -558,7 +558,17 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
                     onPressed: () => _scaffoldKey.currentState?.openDrawer(),
                   )
                 : null),
-        title: Text(_tituloSeccionActiva()),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              "PANEL DEL NEGOCIO",
+              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 1.4, color: AppColors.primary),
+            ),
+            Text(_tituloSeccionActiva()),
+          ],
+        ),
         bottom: esMovil ? null : PreferredSize(preferredSize: const Size.fromHeight(56), child: _buildPillTabsBar()),
         actions: [
           // Con hasta 7 elementos (2 fijos + hasta 2 pastillas condicionales

@@ -309,9 +309,19 @@ class _ContadoresScreenState extends State<ContadoresScreen> {
         backgroundColor: const Color(0xFF4F46E5),
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text(
-          "Mis Contadores",
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Text(
+              "PANEL DEL DESPACHO",
+              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 1.4, color: Colors.white70),
+            ),
+            Text(
+              "Mis Contadores",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+            ),
+          ],
         ),
         actions: [
           accionAppBar(
