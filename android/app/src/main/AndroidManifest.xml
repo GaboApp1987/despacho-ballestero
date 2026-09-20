@@ -2,11 +2,21 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- AUDITORIA.md hallazgo B4:
+         - usesCleartextTraffic=false: la app siempre habla HTTPS
+           (equilibracr.com/api); dejarlo en true era una puerta abierta
+           innecesaria a que algo (un WebView, una librería) usara http://
+           por error y funcionara en silencio en vez de fallar.
+         - allowBackup=false: sin esto, Android usa su valor por defecto
+           (permitir backup), lo que puede copiar el almacenamiento de la
+           app -- incluido SharedPreferences, ver B3 -- vía adb backup o
+           copias de respaldo del fabricante. -->
     <application
         android:label="despacho_app"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="false"
+        android:allowBackup="false">
 
         <activity
             android:name=".MainActivity"

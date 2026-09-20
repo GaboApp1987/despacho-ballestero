@@ -1,9 +1,14 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiService {
+  // AUDITORIA.md hallazgo B3 -- el token/refresh_token vivían en
+  // SharedPreferences (texto plano, legible en el dispositivo con
+  // root/adb backup); FlutterSecureStorage usa Android Keystore / iOS
+  // Keychain / DPAPI en Windows, cifrados por el sistema operativo.
+  static const _almacenSeguro = FlutterSecureStorage();
   // URL base del servidor Django. Por defecto apunta a local (para "flutter
   // run" normal, sin tocar nada). Para compilar apuntando a producción:
   //   flutter build windows --dart-define=API_BASE_URL=https://equilibracr.com/api
@@ -23,24 +28,21 @@ class ApiService {
 
   /// Obtiene el token guardado en el dispositivo
   static Future<String?> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('token');
+    return _almacenSeguro.read(key: 'token');
   }
 
   /// Guarda el access token (y el refresh token, si viene) tras el login.
   static Future<void> saveTokens({required String access, String? refresh}) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('token', access);
+    await _almacenSeguro.write(key: 'token', value: access);
     if (refresh != null) {
-      await prefs.setString('refresh_token', refresh);
+      await _almacenSeguro.write(key: 'refresh_token', value: refresh);
     }
   }
 
   /// Elimina los tokens guardados (cierre de sesión)
   static Future<void> logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('token');
-    await prefs.remove('refresh_token');
+    await _almacenSeguro.delete(key: 'token');
+    await _almacenSeguro.delete(key: 'refresh_token');
   }
 
   /// Construye las cabeceras predeterminadas con el token Bearer JWT
@@ -56,8 +58,7 @@ class ApiService {
   /// Intenta renovar el access token usando el refresh token guardado.
   /// Devuelve true si lo logró.
   static Future<bool> _renovarToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    final refresh = prefs.getString('refresh_token');
+    final refresh = await _almacenSeguro.read(key: 'refresh_token');
     if (refresh == null) return false;
 
     try {
@@ -68,14 +69,14 @@ class ApiService {
       );
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        await prefs.setString('token', data['access']);
+        await _almacenSeguro.write(key: 'token', value: data['access']);
         // Con ROTATE_REFRESH_TOKENS=True el backend invalida el refresh
         // token usado y manda uno nuevo en la misma respuesta -- si no lo
         // guardamos aca, la proxima renovacion (unas horas despues) falla
         // con el refresh token ya invalidado y la sesion se cierra sola,
         // justo lo contrario de lo que se buscaba con la rotacion.
         if (data['refresh'] != null) {
-          await prefs.setString('refresh_token', data['refresh']);
+          await _almacenSeguro.write(key: 'refresh_token', value: data['refresh']);
         }
         return true;
       }

@@ -15,6 +15,11 @@ dependencies:
   cupertino_icons: ^1.0.8
   google_fonts: ^6.2.1
   shared_preferences: ^2.5.4
+  # AUDITORIA.md hallazgo B3 -- solo para el token/refresh_token (ver
+  # api_service.dart): SharedPreferences los guardaba sin cifrar, legibles
+  # en texto plano en el dispositivo (adb backup, root, etc.).
+  # flutter_secure_storage usa Android Keystore / iOS Keychain.
+  flutter_secure_storage: ^9.2.2
   # Exportación
   pdf: ^3.10.8
   printing: ^5.11.1
