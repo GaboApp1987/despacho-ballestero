@@ -505,14 +505,14 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
     // Los controladores/focus de meses que ya no quedan en la tabla (el
     // contador acortó el periodo) se liberan; los demás se conservan tal
     // cual -- así no se pierde lo que ya estaba tecleado en esos meses.
+    // Ambos mapas están indexados como "mes#actividad" (ingresos y egresos
+    // se llevan por columna igual, ver _sincronizarActividadesEnTabla).
     final etiquetasNuevas = nuevas.map((m) => m.mes).toSet();
-    // _ingresosCtrls/_ingresosFocus están indexados como "mes#actividad";
-    // _egresosCtrls/_egresosFocus son uno por mes directo.
     for (final clave in _ingresosCtrls.keys.where((k) => !etiquetasNuevas.contains(k.split('#').first)).toList()) {
       _ingresosCtrls.remove(clave)?.dispose();
       _ingresosFocus.remove(clave)?.dispose();
     }
-    for (final clave in _egresosCtrls.keys.where((k) => !etiquetasNuevas.contains(k)).toList()) {
+    for (final clave in _egresosCtrls.keys.where((k) => !etiquetasNuevas.contains(k.split('#').first)).toList()) {
       _egresosCtrls.remove(clave)?.dispose();
       _egresosFocus.remove(clave)?.dispose();
     }
@@ -533,19 +533,23 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
 
   bool get _multiActividad => _actividadesActuales.length > 1;
 
-  /// Ajusta ingresosPorActividad de cada mes a la cantidad actual de
-  /// actividades -- por POSICIÓN, no por nombre, para que renombrar una
-  /// actividad no le borre el monto ya cargado. Si se agregó una
-  /// actividad, la nueva columna arranca en 0; si se quitó, ese monto se
-  /// pierde (es lo esperado: esa columna ya no existe).
+  /// Ajusta ingresosPorActividad y egresosPorActividad de cada mes a la
+  /// cantidad actual de actividades -- por POSICIÓN, no por nombre, para
+  /// que renombrar una actividad no le borre el monto ya cargado. Si se
+  /// agregó una actividad, la nueva columna arranca en 0; si se quitó, ese
+  /// monto se pierde (es lo esperado: esa columna ya no existe).
   void _sincronizarActividadesEnTabla() {
     final cantidad = _actividadesActuales.length;
     setState(() {
       for (final m in _cert.datosMensuales) {
-        final valores = m.ingresosPorActividad;
-        if (valores.length == cantidad) continue;
-        final nuevos = List<double>.generate(cantidad, (i) => i < valores.length ? valores[i] : 0);
-        m.ingresosPorActividad = nuevos;
+        if (m.ingresosPorActividad.length != cantidad) {
+          m.ingresosPorActividad = List<double>.generate(
+              cantidad, (i) => i < m.ingresosPorActividad.length ? m.ingresosPorActividad[i] : 0);
+        }
+        if (m.egresosPorActividad.length != cantidad) {
+          m.egresosPorActividad = List<double>.generate(
+              cantidad, (i) => i < m.egresosPorActividad.length ? m.egresosPorActividad[i] : 0);
+        }
       }
     });
   }
@@ -570,12 +574,16 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
         ),
       );
 
-  TextEditingController _ctrlEgresos(MesCertificacion m) =>
-      _egresosCtrls.putIfAbsent(m.mes, () => TextEditingController(text: _formatoMonto(m.egresos)));
+  TextEditingController _ctrlEgresos(MesCertificacion m, int actividadIndex) => _egresosCtrls.putIfAbsent(
+        '${m.mes}#$actividadIndex',
+        () => TextEditingController(
+          text: _formatoMonto(actividadIndex < m.egresosPorActividad.length ? m.egresosPorActividad[actividadIndex] : 0),
+        ),
+      );
 
   FocusNode _focusIngresos(MesCertificacion m, int actividadIndex) => _ingresosFocus.putIfAbsent('${m.mes}#$actividadIndex', () => FocusNode());
 
-  FocusNode _focusEgresos(MesCertificacion m) => _egresosFocus.putIfAbsent(m.mes, () => FocusNode());
+  FocusNode _focusEgresos(MesCertificacion m, int actividadIndex) => _egresosFocus.putIfAbsent('${m.mes}#$actividadIndex', () => FocusNode());
 
   /// Refleja los montos de m en los controladores de la tabla cuando el
   /// cambio vino de CÓDIGO (extracción por IA, aplicar % a todos), no de
@@ -586,8 +594,10 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
       final c = _ingresosCtrls['${m.mes}#$i'];
       if (c != null) c.text = _formatoMonto(m.ingresosPorActividad[i]);
     }
-    final cEgr = _egresosCtrls[m.mes];
-    if (cEgr != null) cEgr.text = _formatoMonto(m.egresos);
+    for (var i = 0; i < m.egresosPorActividad.length; i++) {
+      final c = _egresosCtrls['${m.mes}#$i'];
+      if (c != null) c.text = _formatoMonto(m.egresosPorActividad[i]);
+    }
   }
 
   Future<void> _elegirFecha({required bool esInicio}) async {
@@ -615,7 +625,10 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
     if (porcentaje == null) return;
     setState(() {
       for (final m in _cert.datosMensuales) {
-        m.egresos = m.ingresos * (porcentaje / 100);
+        for (var i = 0; i < m.egresosPorActividad.length; i++) {
+          final ingresoActividad = i < m.ingresosPorActividad.length ? m.ingresosPorActividad[i] : 0;
+          m.egresosPorActividad[i] = ingresoActividad * (porcentaje / 100);
+        }
         _sincronizarCeldasMes(m);
       }
     });
@@ -637,7 +650,12 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
           final signo = aleatorio.nextBool() ? 1 : -1;
           m.ingresosPorActividad[i] = (base + signo * diferencia).clamp(0, double.infinity);
         }
-        if (porcentajeEgresos != null) m.egresos = m.ingresos * (porcentajeEgresos / 100);
+        if (porcentajeEgresos != null) {
+          for (var i = 0; i < m.egresosPorActividad.length; i++) {
+            final ingresoActividad = i < m.ingresosPorActividad.length ? m.ingresosPorActividad[i] : 0;
+            m.egresosPorActividad[i] = ingresoActividad * (porcentajeEgresos / 100);
+          }
+        }
         _sincronizarCeldasMes(m);
       }
     });
@@ -888,10 +906,14 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
         fila = MesCertificacion(mes: etiqueta, ingresosPorActividad: [ingresos]);
         _cert.datosMensuales.add(fila);
       }
+      if (fila.egresosPorActividad.isEmpty) fila.egresosPorActividad = [0];
       if (_cert.modoEgresos == 'manual') {
-        fila.egresos += egresos;
+        fila.egresosPorActividad[0] += egresos;
       } else if (porcentaje != null) {
-        fila.egresos = fila.ingresos * (porcentaje / 100);
+        for (var i = 0; i < fila.egresosPorActividad.length; i++) {
+          final ingresoActividad = i < fila.ingresosPorActividad.length ? fila.ingresosPorActividad[i] : 0;
+          fila.egresosPorActividad[i] = ingresoActividad * (porcentaje / 100);
+        }
       }
       _sincronizarCeldasMes(fila);
     }
@@ -1405,7 +1427,7 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                           Icon(Icons.swipe_left_alt, size: 16, color: TemaContador.textoTenue),
                           const SizedBox(width: 6),
                           Text(
-                            "Deslizá la tabla hacia la derecha para ver los ingresos de cada actividad",
+                            "Deslizá la tabla hacia la derecha para ver los ingresos y egresos de cada actividad",
                             style: TextStyle(fontSize: 11.5, color: TemaContador.textoTenue, fontStyle: FontStyle.italic),
                           ),
                         ],
@@ -1426,7 +1448,9 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                         for (final a in _actividadesActuales)
                           DataColumn(label: Text(_multiActividad ? "Ing.: $a" : "Ingresos"), numeric: true),
                         if (_multiActividad) const DataColumn(label: Text("Total ingresos"), numeric: true),
-                        const DataColumn(label: Text("Egresos"), numeric: true),
+                        for (final a in _actividadesActuales)
+                          DataColumn(label: Text(_multiActividad ? "Eg.: $a" : "Egresos"), numeric: true),
+                        if (_multiActividad) const DataColumn(label: Text("Total egresos"), numeric: true),
                         const DataColumn(label: Text("Total"), numeric: true),
                       ],
                       rows: _cert.datosMensuales.map((m) {
@@ -1434,6 +1458,9 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                         // anterior con menos columnas de las que hay ahora.
                         while (m.ingresosPorActividad.length < _actividadesActuales.length) {
                           m.ingresosPorActividad.add(0);
+                        }
+                        while (m.egresosPorActividad.length < _actividadesActuales.length) {
+                          m.egresosPorActividad.add(0);
                         }
                         return DataRow(cells: [
                           DataCell(Text(m.mes, style: const TextStyle(color: TemaContador.textoFuerte))),
@@ -1460,8 +1487,8 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                                   if (_cert.modoEgresos == 'porcentaje') {
                                     final porcentaje = double.tryParse(_porcentajeCtrl.text.replaceAll(',', '.'));
                                     if (porcentaje != null) {
-                                      m.egresos = m.ingresos * (porcentaje / 100);
-                                      _egresosCtrls[m.mes]?.text = _formatoMonto(m.egresos);
+                                      m.egresosPorActividad[i] = m.ingresosPorActividad[i] * (porcentaje / 100);
+                                      _egresosCtrls['${m.mes}#$i']?.text = _formatoMonto(m.egresosPorActividad[i]);
                                     }
                                   }
                                   setState(() {});
@@ -1471,29 +1498,32 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                             )),
                           if (_multiActividad)
                             DataCell(Text("$_simboloMoneda${m.ingresos.toStringAsFixed(0)}", style: const TextStyle(color: TemaContador.textoFuerte))),
-                          DataCell(SizedBox(
-                            width: 110,
-                            child: TextFormField(
-                              controller: _ctrlEgresos(m),
-                              focusNode: _focusEgresos(m),
-                              enabled: _cert.modoEgresos == 'manual',
-                              keyboardType: TextInputType.number,
-                              textInputAction: TextInputAction.next,
-                              textAlign: TextAlign.right,
-                              style: const TextStyle(color: TemaContador.textoFuerte),
-                              decoration: InputDecoration(
-                                isDense: true,
-                                filled: true,
-                                fillColor: TemaContador.superficie,
-                                border: OutlineInputBorder(borderSide: const BorderSide(color: TemaContador.borde)),
-                                enabledBorder: OutlineInputBorder(borderSide: const BorderSide(color: TemaContador.borde)),
-                                disabledBorder: OutlineInputBorder(borderSide: const BorderSide(color: TemaContador.borde)),
-                                focusedBorder: OutlineInputBorder(borderSide: const BorderSide(color: TemaContador.acento, width: 1.5)),
+                          for (var i = 0; i < _actividadesActuales.length; i++)
+                            DataCell(SizedBox(
+                              width: 110,
+                              child: TextFormField(
+                                controller: _ctrlEgresos(m, i),
+                                focusNode: _focusEgresos(m, i),
+                                enabled: _cert.modoEgresos == 'manual',
+                                keyboardType: TextInputType.number,
+                                textInputAction: TextInputAction.next,
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(color: TemaContador.textoFuerte),
+                                decoration: InputDecoration(
+                                  isDense: true,
+                                  filled: true,
+                                  fillColor: TemaContador.superficie,
+                                  border: OutlineInputBorder(borderSide: const BorderSide(color: TemaContador.borde)),
+                                  enabledBorder: OutlineInputBorder(borderSide: const BorderSide(color: TemaContador.borde)),
+                                  disabledBorder: OutlineInputBorder(borderSide: const BorderSide(color: TemaContador.borde)),
+                                  focusedBorder: OutlineInputBorder(borderSide: const BorderSide(color: TemaContador.acento, width: 1.5)),
+                                ),
+                                onChanged: (v) => setState(() => m.egresosPorActividad[i] = double.tryParse(v.replaceAll(',', '')) ?? 0),
+                                onFieldSubmitted: (_) => FocusScope.of(context).nextFocus(),
                               ),
-                              onChanged: (v) => setState(() => m.egresos = double.tryParse(v.replaceAll(',', '')) ?? 0),
-                              onFieldSubmitted: (_) => FocusScope.of(context).nextFocus(),
-                            ),
-                          )),
+                            )),
+                          if (_multiActividad)
+                            DataCell(Text("$_simboloMoneda${m.egresos.toStringAsFixed(0)}", style: const TextStyle(color: TemaContador.textoFuerte))),
                           DataCell(Text("$_simboloMoneda${m.total.toStringAsFixed(0)}", style: const TextStyle(color: TemaContador.textoFuerte, fontWeight: FontWeight.bold))),
                         ]);
                       }).toList(),

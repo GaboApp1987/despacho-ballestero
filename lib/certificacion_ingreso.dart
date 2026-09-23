@@ -5,23 +5,32 @@ class MesCertificacion {
   // Un monto por actividad económica, en el MISMO ORDEN que
   // CertificacionIngreso.actividades -- por posición, no por nombre, para
   // que renombrar una actividad no desordene los montos ya cargados.
+  // egresosPorActividad es opcional de usar: con una sola actividad se
+  // comporta como el egreso único de siempre; con varias, el contador
+  // puede repartirlo por actividad si le sirve, o dejar todo en la
+  // primera columna -- el total (egresos) siempre es la suma.
   List<double> ingresosPorActividad;
-  double egresos;
+  List<double> egresosPorActividad;
 
-  MesCertificacion({required this.mes, List<double>? ingresosPorActividad, this.egresos = 0})
-      : ingresosPorActividad = ingresosPorActividad ?? [0];
+  MesCertificacion({required this.mes, List<double>? ingresosPorActividad, List<double>? egresosPorActividad})
+      : ingresosPorActividad = ingresosPorActividad ?? [0],
+        egresosPorActividad = egresosPorActividad ?? [0];
 
   double get ingresos => ingresosPorActividad.fold(0.0, (a, b) => a + b);
+  double get egresos => egresosPorActividad.fold(0.0, (a, b) => a + b);
   double get total => ingresos - egresos;
 
   factory MesCertificacion.fromJson(Map<String, dynamic> json) {
-    final lista = json['ingresos_por_actividad'] as List?;
+    final listaIngresos = json['ingresos_por_actividad'] as List?;
+    final listaEgresos = json['egresos_por_actividad'] as List?;
     return MesCertificacion(
       mes: json['mes'] ?? '',
-      ingresosPorActividad: (lista != null && lista.isNotEmpty)
-          ? lista.map((v) => (v as num).toDouble()).toList()
+      ingresosPorActividad: (listaIngresos != null && listaIngresos.isNotEmpty)
+          ? listaIngresos.map((v) => (v as num).toDouble()).toList()
           : [(json['ingresos'] as num?)?.toDouble() ?? 0],
-      egresos: (json['egresos'] as num?)?.toDouble() ?? 0,
+      egresosPorActividad: (listaEgresos != null && listaEgresos.isNotEmpty)
+          ? listaEgresos.map((v) => (v as num).toDouble()).toList()
+          : [(json['egresos'] as num?)?.toDouble() ?? 0],
     );
   }
 
@@ -29,6 +38,7 @@ class MesCertificacion {
         'mes': mes,
         'ingresos_por_actividad': ingresosPorActividad,
         'ingresos': ingresos,
+        'egresos_por_actividad': egresosPorActividad,
         'egresos': egresos,
       };
 }
