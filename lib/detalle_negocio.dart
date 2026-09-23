@@ -33,6 +33,7 @@ import 'tarjeta_lealtad_screen.dart';
 import 'addons_screen.dart';
 import 'login.dart';
 import 'formato.dart';
+import 'perfil_usuario_screen.dart';
 import 'widgets/bloqueo_salida_raiz.dart';
 import 'widgets/soporte_chat.dart';
 
@@ -621,6 +622,24 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
             icon: const Icon(Icons.support_agent),
             tooltip: "Soporte",
             onPressed: () => mostrarSoporteChat(context, contexto: 'usuario', negocioId: widget.negocio.id),
+          ),
+          IconButton(
+            icon: const Icon(Icons.account_circle_rounded),
+            tooltip: "Mi Perfil",
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => PerfilUsuarioScreen(
+                    nombre: _negocioConCuota.nombreComercial,
+                    subtitulo: "Negocio",
+                    logoEndpoint: '/negocios/${widget.negocio.id}/',
+                    logoUrlInicial: _negocioConCuota.logoUrl,
+                  ),
+                ),
+              );
+              _cargarNegocioActualizado();
+            },
           ),
           IconButton(
             icon: const Icon(Icons.logout),
