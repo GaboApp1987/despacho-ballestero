@@ -12,6 +12,7 @@ import 'firmante_contador.dart';
 import 'firmante_selector.dart';
 import 'negocio.dart';
 import 'socio.dart';
+import 'widgets/bloqueo_salida_raiz.dart';
 
 /// Nombre de archivo legible para una certificación: el nombre del
 /// solicitante en vez de un id suelto.
@@ -166,7 +167,8 @@ class _CertificacionesScreenState extends State<CertificacionesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return BloqueoSalidaRaiz(
+      child: Scaffold(
       backgroundColor: TemaContador.fondo,
       appBar: AppBar(
         leading: IconButton(
@@ -297,6 +299,7 @@ class _CertificacionesScreenState extends State<CertificacionesScreen> {
                     ),
                   ],
                 ),
+      ),
     );
   }
 }
@@ -976,7 +979,8 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return BloqueoSalidaRaiz(
+      child: Scaffold(
       backgroundColor: TemaContador.fondo,
       appBar: AppBar(
         leading: IconButton(
@@ -1449,6 +1453,7 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
             ],
           ),
         ),
+      ),
       ),
     );
   }
