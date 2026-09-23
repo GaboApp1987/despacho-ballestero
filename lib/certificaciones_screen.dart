@@ -1300,9 +1300,12 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                             style: TextStyle(fontSize: 11.5, color: TemaContador.textoTenue),
                           ),
                           const SizedBox(height: 10),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.center,
+                          // Wrap (no Row) -- ver el mismo comentario en el
+                          // bloque de "% de egresos" un poco más abajo.
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 10,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               SizedBox(
                                 width: 220,
@@ -1322,7 +1325,6 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 12),
                               ElevatedButton(
                                 style: ElevatedButton.styleFrom(backgroundColor: TemaContador.acento, foregroundColor: Colors.white),
                                 onPressed: _rellenarConPromedio,
@@ -1351,9 +1353,14 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                   if (_cert.modoEgresos == 'porcentaje')
                     Padding(
                       padding: const EdgeInsets.only(top: 10),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.center,
+                      // Wrap (no Row) -- en pantallas angostas el campo ya
+                      // ocupa casi todo el ancho disponible; con Row el botón
+                      // quedaba recortado en silencio (sin banda de overflow
+                      // en release) en vez de simplemente bajar de línea.
+                      child: Wrap(
+                        spacing: 12,
+                        runSpacing: 10,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           SizedBox(
                             width: 220,
@@ -1374,7 +1381,6 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                               onChanged: (_) => _aplicarPorcentajeATodos(),
                             ),
                           ),
-                          const SizedBox(width: 12),
                           ElevatedButton(
                             style: ElevatedButton.styleFrom(backgroundColor: TemaContador.acento, foregroundColor: Colors.white),
                             onPressed: _aplicarPorcentajeATodos,
