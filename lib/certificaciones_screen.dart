@@ -108,9 +108,23 @@ class _CertificacionesScreenState extends State<CertificacionesScreen> {
   final _busquedaCtrl = TextEditingController();
   String _busqueda = '';
 
+  /// Las últimas 3 emitidas primero (para encontrar rápido lo recién
+  /// hecho), y de ahí para abajo en orden alfabético por nombre del
+  /// solicitante -- pedido explícito del usuario, no solo lo más nuevo
+  /// primero como antes.
+  List<CertificacionIngreso> get _certificacionesOrdenadas {
+    final copia = [..._certificaciones]
+      ..sort((a, b) => (b.creadoEn ?? DateTime(0)).compareTo(a.creadoEn ?? DateTime(0)));
+    final recientes = copia.take(3).toList();
+    final resto = copia.skip(3).toList()
+      ..sort((a, b) => a.nombreSolicitante.toLowerCase().compareTo(b.nombreSolicitante.toLowerCase()));
+    return [...recientes, ...resto];
+  }
+
   List<CertificacionIngreso> get _certificacionesFiltradas {
-    if (_busqueda.isEmpty) return _certificaciones;
-    return _certificaciones.where((c) => c.nombreSolicitante.toLowerCase().contains(_busqueda)).toList();
+    final ordenadas = _certificacionesOrdenadas;
+    if (_busqueda.isEmpty) return ordenadas;
+    return ordenadas.where((c) => c.nombreSolicitante.toLowerCase().contains(_busqueda)).toList();
   }
 
   @override

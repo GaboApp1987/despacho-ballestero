@@ -64,6 +64,7 @@ class CertificacionIngreso {
   String lugarEmision;
   final double? ingresoBrutoPromedio;
   final double? ingresoNetoPromedio;
+  final DateTime? creadoEn;
 
   static const Map<String, String> estadosCiviles = {
     'soltero': 'Soltero(a)',
@@ -101,6 +102,7 @@ class CertificacionIngreso {
     this.lugarEmision = 'San José',
     this.ingresoBrutoPromedio,
     this.ingresoNetoPromedio,
+    this.creadoEn,
   })  : datosMensuales = datosMensuales ?? [],
         actividades = actividades ?? [];
 
@@ -138,6 +140,7 @@ class CertificacionIngreso {
       lugarEmision: json['lugar_emision'] ?? 'San José',
       ingresoBrutoPromedio: (json['ingreso_bruto_promedio'] as num?)?.toDouble(),
       ingresoNetoPromedio: (json['ingreso_neto_promedio'] as num?)?.toDouble(),
+      creadoEn: json['creado_en'] != null ? DateTime.tryParse(json['creado_en']) : null,
     );
   }
 
