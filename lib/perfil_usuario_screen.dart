@@ -58,6 +58,9 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
   bool _guardandoPlantilla = false;
   bool _cargandoPlantillaDefault = false;
 
+  String? _membreteUrl;
+  bool _generandoMembreteIA = false;
+
   Color get _colorFondo => widget.esContador ? TemaContador.fondo : AppColors.background;
   Color get _colorSuperficie => widget.esContador ? TemaContador.superficie : AppColors.surface;
   Color get _colorBorde => widget.esContador ? TemaContador.borde : AppColors.border;
@@ -118,6 +121,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
           _firmarConNombreRegistrado = data['firmar_con_nombre_registrado'] ?? true;
           _firmantes = ((data['firmantes'] as List?) ?? []).map((f) => FirmanteContador.fromJson(f)).toList();
           _plantillaCertificacionCtrl.text = data['plantilla_certificacion_ingreso'] ?? '';
+          _membreteUrl = data['membrete'];
         });
       }
     } catch (_) {
@@ -307,6 +311,55 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
       } catch (_) {
         // si falla, se queda con el logo anterior en pantalla
       }
+    }
+  }
+
+  Future<void> _abrirCambiarMembrete() async {
+    final actualizado = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LogoScreen(
+          titulo: "Mi Membrete",
+          endpoint: widget.logoEndpoint,
+          logoUrlInicial: _membreteUrl,
+          campo: 'membrete',
+        ),
+      ),
+    );
+    if (actualizado == true) {
+      try {
+        final response = await ApiService.get(widget.logoEndpoint);
+        if (response.statusCode == 200 && mounted) {
+          setState(() => _membreteUrl = json.decode(utf8.decode(response.bodyBytes))['membrete']);
+        }
+      } catch (_) {
+        // si falla, se queda con el membrete anterior en pantalla
+      }
+    }
+  }
+
+  Future<void> _generarMembreteIA() async {
+    setState(() => _generandoMembreteIA = true);
+    try {
+      final response = await ApiService.post('${widget.logoEndpoint}generar-membrete-ia/', {});
+      if (response.statusCode == 200) {
+        final data = json.decode(utf8.decode(response.bodyBytes));
+        if (mounted) {
+          setState(() => _membreteUrl = data['membrete']);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Membrete generado con IA"), backgroundColor: Colors.green),
+          );
+        }
+      } else {
+        final datos = json.decode(utf8.decode(response.bodyBytes));
+        throw Exception(datos['detail'] ?? 'No se pudo generar el membrete.');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$e")));
+      }
+    } finally {
+      if (mounted) setState(() => _generandoMembreteIA = false);
     }
   }
 
@@ -802,6 +855,80 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                           child: _guardandoPlantilla
                               ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                               : const Text("Guardar plantilla", style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: _colorSuperficie,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: _colorBorde),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.badge_outlined, size: 20, color: _colorFuerte),
+                        const SizedBox(width: 8),
+                        Text("Membrete", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _colorFuerte)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      "Encabezado con tu diseño propio para las certificaciones y demás documentos formales -- si lo definís, reemplaza el encabezado de texto (nombre, carné, correo, dirección).",
+                      style: TextStyle(fontSize: 13, color: widget.esContador ? TemaContador.textoTenue : Colors.grey),
+                    ),
+                    const SizedBox(height: 14),
+                    if (_cargandoDatosCpa)
+                      const Center(child: CircularProgressIndicator())
+                    else ...[
+                      Center(
+                        child: Container(
+                          width: 340,
+                          height: 110,
+                          decoration: BoxDecoration(
+                            color: _colorFondo,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: _colorBorde),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: (_membreteUrl != null && _membreteUrl!.isNotEmpty)
+                              ? Image.network(
+                                  _membreteUrl!,
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      Icon(Icons.broken_image_outlined, size: 40, color: widget.esContador ? TemaContador.textoTenue : Colors.grey),
+                                )
+                              : Icon(Icons.image_outlined, size: 40, color: widget.esContador ? TemaContador.textoTenue : Colors.grey),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _abrirCambiarMembrete,
+                          style: OutlinedButton.styleFrom(foregroundColor: _colorAcento, side: BorderSide(color: _colorAcento)),
+                          icon: const Icon(Icons.upload_outlined),
+                          label: Text(_membreteUrl != null && _membreteUrl!.isNotEmpty ? "Cambiar membrete" : "Subir membrete"),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _generandoMembreteIA ? null : _generarMembreteIA,
+                          style: ElevatedButton.styleFrom(backgroundColor: _colorAcento, foregroundColor: Colors.white),
+                          icon: _generandoMembreteIA
+                              ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Icon(Icons.auto_awesome),
+                          label: Text(_generandoMembreteIA ? "Generando..." : "Crear membrete con IA", style: const TextStyle(fontWeight: FontWeight.bold)),
                         ),
                       ),
                     ],

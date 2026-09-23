@@ -5,19 +5,25 @@ import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'api_service.dart';
 
-/// Pantalla genérica para subir/reemplazar el logo de un Negocio, Socio
-/// (contador) o Despacho — los tres usan el mismo patrón de API
-/// (PATCH multipart al endpoint de detalle con el campo 'logo').
+/// Pantalla genérica para subir/reemplazar una imagen (logo o membrete) de
+/// un Negocio, Socio (contador) o Despacho — todos usan el mismo patrón de
+/// API (PATCH multipart al endpoint de detalle con el nombre de campo que
+/// corresponda). `campo` determina qué campo se manda ('logo' por
+/// defecto, o 'membrete' para el encabezado de los documentos formales del
+/// contador) y también la forma del recuadro de vista previa -- el
+/// membrete es un banner ancho, no un logo cuadrado.
 class LogoScreen extends StatefulWidget {
   final String titulo;
   final String endpoint; // ej: '/negocios/5/', '/socios/3/', '/despachos/1/'
   final String? logoUrlInicial;
+  final String campo;
 
   const LogoScreen({
     super.key,
     required this.titulo,
     required this.endpoint,
     this.logoUrlInicial,
+    this.campo = 'logo',
   });
 
   @override
@@ -47,7 +53,7 @@ class _LogoScreenState extends State<LogoScreen> {
       final response = await ApiService.get(widget.endpoint);
       if (response.statusCode == 200) {
         final data = json.decode(utf8.decode(response.bodyBytes));
-        if (mounted) setState(() => _logoUrl = data['logo']);
+        if (mounted) setState(() => _logoUrl = data[widget.campo]);
       }
     } catch (_) {
       // Si falla, simplemente no se precarga el logo actual.
@@ -73,12 +79,12 @@ class _LogoScreenState extends State<LogoScreen> {
     if (_bytesSeleccionados == null) return;
     setState(() => _guardando = true);
     try {
-      final response = await ApiService.uploadBytes(widget.endpoint, 'logo', _bytesSeleccionados!, _nombreSeleccionado ?? 'logo.png');
+      final response = await ApiService.uploadBytes(widget.endpoint, widget.campo, _bytesSeleccionados!, _nombreSeleccionado ?? '${widget.campo}.png');
       if (response.statusCode == 200) {
         final data = json.decode(utf8.decode(response.bodyBytes));
         if (mounted) {
           setState(() {
-            _logoUrl = data['logo'];
+            _logoUrl = data[widget.campo];
             _bytesSeleccionados = null;
           });
           // Para el Negocio, el backend intenta sincronizar el logo con
@@ -86,11 +92,11 @@ class _LogoScreenState extends State<LogoScreen> {
           // facturas -- si esa sincronizacion falla, antes quedaba solo en
           // los logs del servidor y nadie se enteraba. Ahora, si vino ese
           // aviso en la respuesta, se lo mostramos aca en vez del mensaje
-          // generico de "Logo actualizado".
+          // generico de "Logo actualizado". Solo aplica al campo 'logo'.
           final avisoAlanube = data['alanube_logo_info'] as String?;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(avisoAlanube ?? "Logo actualizado"),
+              content: Text(avisoAlanube ?? (widget.campo == 'membrete' ? "Membrete actualizado" : "Logo actualizado")),
               backgroundColor: (avisoAlanube != null && avisoAlanube.contains("no se pudo"))
                   ? Colors.orange
                   : Colors.green,
@@ -104,7 +110,7 @@ class _LogoScreenState extends State<LogoScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error al subir el logo: $e"), backgroundColor: Colors.red),
+          SnackBar(content: Text("Error al subir la imagen: $e"), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -127,8 +133,8 @@ class _LogoScreenState extends State<LogoScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
-                        width: 180,
-                        height: 180,
+                        width: widget.campo == 'membrete' ? 372 : 180,
+                        height: widget.campo == 'membrete' ? 130 : 180,
                         decoration: BoxDecoration(
                           color: AppColors.surfaceSubtle,
                           borderRadius: BorderRadius.circular(16),
@@ -164,7 +170,7 @@ class _LogoScreenState extends State<LogoScreen> {
                                   child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                                 )
                               : const Icon(Icons.save),
-                          label: Text(_guardando ? "Guardando..." : "Guardar Logo"),
+                          label: Text(_guardando ? "Guardando..." : (widget.campo == 'membrete' ? "Guardar Membrete" : "Guardar Logo")),
                         ),
                       ),
                     ],
