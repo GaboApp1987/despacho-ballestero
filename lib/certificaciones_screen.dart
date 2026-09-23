@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -364,6 +365,16 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
   final _lugarCtrl = TextEditingController();
   final _porcentajeCtrl = TextEditingController();
 
+  // "Modo promedio" para rellenar rápido la tabla de ingresos: el contador
+  // indica un monto aproximado y cada mes (de cada actividad) se llena con
+  // un valor cercano a ese monto, con una diferencia aleatoria entre
+  // ₡50.000 y ₡150.000 (para arriba o para abajo) -- así no queda un
+  // ingreso idéntico mes a mes. Es un relleno de una sola vez, no un modo
+  // persistente: el contador puede seguir editando cualquier celda después.
+  bool _mostrarPromedioIngresos = false;
+  final _montoPromedioCtrl = TextEditingController();
+  final _tablaScrollCtrl = ScrollController();
+
   @override
   void initState() {
     super.initState();
@@ -425,6 +436,8 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
     _dirigidoACtrl.dispose();
     _lugarCtrl.dispose();
     _porcentajeCtrl.dispose();
+    _montoPromedioCtrl.dispose();
+    _tablaScrollCtrl.dispose();
     for (final c in _actividadesExtraCtrls) {
       c.dispose();
     }
@@ -603,6 +616,28 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
     setState(() {
       for (final m in _cert.datosMensuales) {
         m.egresos = m.ingresos * (porcentaje / 100);
+        _sincronizarCeldasMes(m);
+      }
+    });
+  }
+
+  /// Rellena cada mes (y cada columna de actividad, si hay varias) con un
+  /// monto cercano al indicado -- diferencia aleatoria entre ₡50.000 y
+  /// ₡150.000, para arriba o para abajo. Si además hay egresos por %,
+  /// los recalcula con el nuevo ingreso.
+  void _rellenarConPromedio() {
+    final base = double.tryParse(_montoPromedioCtrl.text.replaceAll(',', ''));
+    if (base == null || base <= 0) return;
+    final aleatorio = Random();
+    final porcentajeEgresos = _cert.modoEgresos == 'porcentaje' ? double.tryParse(_porcentajeCtrl.text.replaceAll(',', '.')) : null;
+    setState(() {
+      for (final m in _cert.datosMensuales) {
+        for (var i = 0; i < m.ingresosPorActividad.length; i++) {
+          final diferencia = 50000 + aleatorio.nextDouble() * 100000;
+          final signo = aleatorio.nextBool() ? 1 : -1;
+          m.ingresosPorActividad[i] = (base + signo * diferencia).clamp(0, double.infinity);
+        }
+        if (porcentajeEgresos != null) m.egresos = m.ingresos * (porcentajeEgresos / 100);
         _sincronizarCeldasMes(m);
       }
     });
@@ -1247,6 +1282,57 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                     "Subí los estados de cuenta (PDF/Excel) del cliente -- la IA suma ingresos y egresos por mes. Podés seleccionar varios de una vez.",
                     style: TextStyle(fontSize: 11.5, color: TemaContador.textoTenue),
                   ),
+                  const SizedBox(height: 10),
+                  TextButton.icon(
+                    onPressed: () => setState(() => _mostrarPromedioIngresos = !_mostrarPromedioIngresos),
+                    icon: Icon(_mostrarPromedioIngresos ? Icons.expand_less : Icons.auto_awesome, size: 18),
+                    label: const Text("Rellenar ingresos con un monto promedio"),
+                    style: TextButton.styleFrom(foregroundColor: TemaContador.acento),
+                  ),
+                  if (_mostrarPromedioIngresos)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Indicá un monto y cada mes se llena con una cifra parecida (varía entre ₡50.000 y ₡150.000 de más o de menos) en vez de repetir el mismo número.",
+                            style: TextStyle(fontSize: 11.5, color: TemaContador.textoTenue),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 220,
+                                child: TextField(
+                                  controller: _montoPromedioCtrl,
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  style: const TextStyle(color: TemaContador.textoFuerte, fontWeight: FontWeight.bold),
+                                  decoration: InputDecoration(
+                                    labelText: "Monto promedio mensual",
+                                    labelStyle: const TextStyle(color: TemaContador.textoTenue),
+                                    floatingLabelStyle: const TextStyle(color: TemaContador.acento, fontWeight: FontWeight.w600),
+                                    filled: true,
+                                    fillColor: TemaContador.superficie,
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: TemaContador.borde)),
+                                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: TemaContador.borde)),
+                                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: TemaContador.acento, width: 1.5)),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(backgroundColor: TemaContador.acento, foregroundColor: Colors.white),
+                                onPressed: _rellenarConPromedio,
+                                child: const Text("Rellenar"),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
                   const SizedBox(height: 12),
                   SegmentedButton<String>(
                     segments: const [
@@ -1298,7 +1384,32 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                       ),
                     ),
                   const SizedBox(height: 12),
-                  SingleChildScrollView(
+                  // Con varias actividades la tabla se ensancha (una columna
+                  // de ingresos por cada una) y en pantallas angostas queda
+                  // fuera de vista sin ningún indicio -- reportado como "no
+                  // se abre el espacio para la otra actividad" cuando en
+                  // realidad la columna sí se agregaba, solo que quedaba
+                  // escondida a la derecha sin scroll visible.
+                  if (_multiActividad)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.swipe_left_alt, size: 16, color: TemaContador.textoTenue),
+                          const SizedBox(width: 6),
+                          Text(
+                            "Deslizá la tabla hacia la derecha para ver los ingresos de cada actividad",
+                            style: TextStyle(fontSize: 11.5, color: TemaContador.textoTenue, fontStyle: FontStyle.italic),
+                          ),
+                        ],
+                      ),
+                    ),
+                  Scrollbar(
+                    controller: _tablaScrollCtrl,
+                    thumbVisibility: true,
+                    child: SingleChildScrollView(
+                    controller: _tablaScrollCtrl,
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
                       headingRowColor: WidgetStateProperty.all(TemaContador.superficie),
@@ -1381,6 +1492,7 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                         ]);
                       }).toList(),
                     ),
+                  ),
                   ),
                   const Divider(height: 24),
                   Row(
