@@ -770,7 +770,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      "Marcadores disponibles: {nombre} {cedula} {nacionalidad} {estado_civil} {actividad} {proposito} {dirigido_a} {fecha_inicio} {fecha_fin} {fecha_emision} {lugar_emision} {moneda_simbolo} {ingreso_bruto_promedio} {ingreso_neto_promedio} {anos_ejerciendo_frase}",
+                      "Marcadores disponibles: {nombre} {cedula} {nacionalidad} {direccion} {estado_civil} {actividad} {proposito} {dirigido_a} {fecha_inicio} {fecha_fin} {fecha_emision} {lugar_emision} {moneda_simbolo} {ingreso_bruto_promedio} {ingreso_neto_promedio} {anos_ejerciendo_frase}",
                       style: TextStyle(fontSize: 11.5, fontStyle: FontStyle.italic, color: widget.esContador ? TemaContador.textoTenue : Colors.grey),
                     ),
                     const SizedBox(height: 14),

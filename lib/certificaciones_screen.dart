@@ -105,11 +105,25 @@ class CertificacionesScreen extends StatefulWidget {
 class _CertificacionesScreenState extends State<CertificacionesScreen> {
   bool _cargando = true;
   List<CertificacionIngreso> _certificaciones = [];
+  final _busquedaCtrl = TextEditingController();
+  String _busqueda = '';
+
+  List<CertificacionIngreso> get _certificacionesFiltradas {
+    if (_busqueda.isEmpty) return _certificaciones;
+    return _certificaciones.where((c) => c.nombreSolicitante.toLowerCase().contains(_busqueda)).toList();
+  }
 
   @override
   void initState() {
     super.initState();
+    _busquedaCtrl.addListener(() => setState(() => _busqueda = _busquedaCtrl.text.trim().toLowerCase()));
     _cargar();
+  }
+
+  @override
+  void dispose() {
+    _busquedaCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _cargar() async {
@@ -176,13 +190,47 @@ class _CertificacionesScreenState extends State<CertificacionesScreen> {
                     ],
                   ),
                 )
-              : RefreshIndicator(
+              : Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                      child: TextField(
+                        controller: _busquedaCtrl,
+                        style: const TextStyle(color: TemaContador.textoFuerte),
+                        decoration: InputDecoration(
+                          hintText: "Buscar por nombre...",
+                          hintStyle: const TextStyle(color: TemaContador.textoTenue),
+                          prefixIcon: const Icon(Icons.search, color: TemaContador.textoTenue),
+                          suffixIcon: _busqueda.isEmpty
+                              ? null
+                              : IconButton(
+                                  icon: const Icon(Icons.close, color: TemaContador.textoTenue),
+                                  onPressed: () => _busquedaCtrl.clear(),
+                                ),
+                          filled: true,
+                          fillColor: TemaContador.superficie,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: TemaContador.borde)),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: TemaContador.borde)),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: TemaContador.acento, width: 1.5)),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: _certificacionesFiltradas.isEmpty
+                          ? Center(
+                              child: Text(
+                                "No se encontraron certificaciones con ese nombre.",
+                                style: const TextStyle(color: TemaContador.textoTenue),
+                              ),
+                            )
+                          : RefreshIndicator(
                   onRefresh: _cargar,
                   child: ListView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-                    itemCount: _certificaciones.length,
+                    itemCount: _certificacionesFiltradas.length,
                     itemBuilder: (context, index) {
-                      final c = _certificaciones[index];
+                      final c = _certificacionesFiltradas[index];
                       return Card(
                         margin: const EdgeInsets.only(bottom: 10),
                         color: TemaContador.superficie,
@@ -231,6 +279,9 @@ class _CertificacionesScreenState extends State<CertificacionesScreen> {
                       );
                     },
                   ),
+                        ),
+                    ),
+                  ],
                 ),
     );
   }
@@ -283,6 +334,7 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
   final _cedulaCtrl = TextEditingController();
   final _tipoCedulaCtrl = TextEditingController();
   final _nacionalidadCtrl = TextEditingController();
+  final _direccionCtrl = TextEditingController();
   final _actividadCtrl = TextEditingController();
   // Actividades ADICIONALES a la principal (_actividadCtrl) -- cuando hay
   // al menos una, la tabla de 12 meses muestra una columna de ingresos por
@@ -308,6 +360,7 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
     _cedulaCtrl.text = _cert.cedula;
     _tipoCedulaCtrl.text = _cert.tipoCedulaTexto;
     _nacionalidadCtrl.text = _cert.nacionalidad;
+    _direccionCtrl.text = _cert.direccion;
     _actividadCtrl.text = _cert.actividadEconomica;
     if (_cert.actividades.length > 1) {
       for (final a in _cert.actividades.skip(1)) {
@@ -347,6 +400,7 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
     _cedulaCtrl.dispose();
     _tipoCedulaCtrl.dispose();
     _nacionalidadCtrl.dispose();
+    _direccionCtrl.dispose();
     _actividadCtrl.dispose();
     _numeroActividadCtrl.dispose();
     _anosCtrl.dispose();
@@ -585,6 +639,7 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
       ..cedula = _cedulaCtrl.text.trim()
       ..tipoCedulaTexto = _tipoCedulaCtrl.text.trim()
       ..nacionalidad = _nacionalidadCtrl.text.trim()
+      ..direccion = _direccionCtrl.text.trim()
       ..actividadEconomica = _actividadCtrl.text.trim()
       ..actividades = _actividadesActuales
       ..numeroActividadEconomica = _numeroActividadCtrl.text.trim()
@@ -650,6 +705,7 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
     set(_cedulaCtrl, 'cedula', 'Cédula');
     set(_tipoCedulaCtrl, 'tipo_cedula_texto', 'Tipo de cédula');
     set(_nacionalidadCtrl, 'nacionalidad', 'Nacionalidad');
+    set(_direccionCtrl, 'direccion', 'Dirección');
     set(_actividadCtrl, 'actividad_economica', 'Actividad económica');
     set(_numeroActividadCtrl, 'numero_actividad_economica', 'N.° de actividad');
     set(_propositoCtrl, 'proposito', 'Propósito');
@@ -1038,6 +1094,8 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
                       ),
                     ),
                   ]),
+                  const SizedBox(height: 10),
+                  TextField(controller: _direccionCtrl, style: const TextStyle(color: TemaContador.textoFuerte), decoration: _decoracion("Dirección")),
                   const SizedBox(height: 10),
                   TextField(
                     controller: _actividadCtrl,

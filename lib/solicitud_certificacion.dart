@@ -22,6 +22,7 @@ class SolicitudCertificacion {
   final String cedula;
   final String tipoCedulaTexto;
   final String nacionalidad;
+  final String direccion;
   final String estadoCivil;
   final String actividadEconomica;
   final String numeroActividadEconomica;
@@ -45,6 +46,7 @@ class SolicitudCertificacion {
     required this.cedula,
     this.tipoCedulaTexto = '',
     this.nacionalidad = '',
+    this.direccion = '',
     this.estadoCivil = '',
     this.actividadEconomica = '',
     this.numeroActividadEconomica = '',
@@ -70,6 +72,7 @@ class SolicitudCertificacion {
         cedula: json['cedula'] ?? '',
         tipoCedulaTexto: json['tipo_cedula_texto'] ?? '',
         nacionalidad: json['nacionalidad'] ?? '',
+        direccion: json['direccion'] ?? '',
         estadoCivil: json['estado_civil'] ?? '',
         actividadEconomica: json['actividad_economica'] ?? '',
         numeroActividadEconomica: json['numero_actividad_economica'] ?? '',

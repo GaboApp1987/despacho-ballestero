@@ -36,6 +36,7 @@ class _SolicitudPublicaScreenState extends State<SolicitudPublicaScreen> {
   final _cedulaCtrl = TextEditingController();
   final _tipoCedulaCtrl = TextEditingController();
   final _nacionalidadCtrl = TextEditingController();
+  final _direccionCtrl = TextEditingController();
   String _estadoCivil = '';
   final _actividadCtrl = TextEditingController();
   final _numeroActividadCtrl = TextEditingController();
@@ -76,6 +77,7 @@ class _SolicitudPublicaScreenState extends State<SolicitudPublicaScreen> {
     _cedulaCtrl.dispose();
     _tipoCedulaCtrl.dispose();
     _nacionalidadCtrl.dispose();
+    _direccionCtrl.dispose();
     _actividadCtrl.dispose();
     _numeroActividadCtrl.dispose();
     _anosCtrl.dispose();
@@ -204,6 +206,7 @@ class _SolicitudPublicaScreenState extends State<SolicitudPublicaScreen> {
         'cedula': _cedulaCtrl.text.trim(),
         'tipo_cedula_texto': _tipoCedulaCtrl.text.trim(),
         'nacionalidad': _nacionalidadCtrl.text.trim(),
+        'direccion': _direccionCtrl.text.trim(),
         'estado_civil': _estadoCivil,
         'actividad_economica': _actividadCtrl.text.trim(),
         'numero_actividad_economica': _numeroActividadCtrl.text.trim(),
@@ -398,6 +401,8 @@ class _SolicitudPublicaScreenState extends State<SolicitudPublicaScreen> {
                               ),
                             ),
                           ]),
+                          const SizedBox(height: 10),
+                          TextField(controller: _direccionCtrl, style: const TextStyle(color: TemaContador.textoFuerte), decoration: _decoracion("Dirección")),
                           const SizedBox(height: 10),
                           Row(children: [
                             Expanded(child: TextField(controller: _telefonoCtrl, style: const TextStyle(color: TemaContador.textoFuerte), decoration: _decoracion("Teléfono de contacto"))),

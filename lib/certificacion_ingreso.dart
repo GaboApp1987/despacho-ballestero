@@ -44,6 +44,7 @@ class CertificacionIngreso {
   String cedula;
   String tipoCedulaTexto;
   String nacionalidad;
+  String direccion;
   String estadoCivil;
   String actividadEconomica;
   // Nombres de las actividades a certificar -- si tiene más de un
@@ -83,6 +84,7 @@ class CertificacionIngreso {
     this.cedula = '',
     this.tipoCedulaTexto = '',
     this.nacionalidad = '',
+    this.direccion = '',
     this.estadoCivil = 'soltero',
     this.actividadEconomica = '',
     List<String>? actividades,
@@ -114,6 +116,7 @@ class CertificacionIngreso {
       cedula: json['cedula'] ?? '',
       tipoCedulaTexto: json['tipo_cedula_texto'] ?? '',
       nacionalidad: json['nacionalidad'] ?? '',
+      direccion: json['direccion'] ?? '',
       estadoCivil: json['estado_civil'] ?? 'soltero',
       actividadEconomica: json['actividad_economica'] ?? '',
       actividades: ((json['actividades'] as List?) ?? []).map((a) => a.toString()).toList(),
@@ -145,6 +148,7 @@ class CertificacionIngreso {
         'cedula': cedula,
         'tipo_cedula_texto': tipoCedulaTexto,
         'nacionalidad': nacionalidad,
+        'direccion': direccion,
         'estado_civil': estadoCivil,
         'actividad_economica': actividadEconomica,
         'actividades': actividades,
