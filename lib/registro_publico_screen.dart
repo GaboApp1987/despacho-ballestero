@@ -4,15 +4,15 @@ import 'package:url_launcher/url_launcher.dart';
 import 'api_service.dart';
 import 'formato.dart';
 import 'login.dart';
-import 'onvo_cobro_automatico_screen.dart';
 import 'plan.dart';
 import 'theme/app_theme.dart';
 
 /// Alta pública desde el login (sin sesión previa): despacho contable,
-/// contador independiente, o negocio directo. Los tres necesitan elegir un
-/// plan y pagarlo (vía OnvoCobroAutomaticoScreen) antes de poder usar el
-/// sistema -- ver RegistroPublicoView, que ya los crea con la suscripción
-/// en "suspendido" independientemente de esto.
+/// contador independiente, o negocio directo. La cuenta queda creada pero
+/// INACTIVA hasta que confirmen el correo (ver VerificacionCorreo en el
+/// backend) -- recién después de confirmar y entrar pueden elegir un plan
+/// y pagarlo (vía OnvoCobroAutomaticoScreen, ofrecido desde
+/// SuscripcionSuspendidaScreen apenas entran con la suscripción sin pagar).
 class RegistroPublicoScreen extends StatefulWidget {
   const RegistroPublicoScreen({super.key});
 
@@ -199,25 +199,29 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
         throw Exception(datos['detail'] ?? 'No se pudo completar el registro.');
       }
 
-      await ApiService.saveTokens(access: datos['access'], refresh: datos['refresh']);
-
+      // La cuenta queda creada pero INACTIVA hasta que confirmen el correo
+      // (ver VerificacionCorreo en el backend -- AUDITORIA.md, incidente de
+      // bots del 2026-09-23) -- ya no hay tokens que guardar ni con qué
+      // autenticar la configuración del cobro automático todavía. Si hace
+      // falta pagar, lo van a poder hacer apenas entren después de
+      // confirmar (SuscripcionSuspendidaScreen ofrece el mismo camino).
       if (!mounted) return;
-      // Se lee de la RESPUESTA del backend, no del checkbox local -- un
-      // código promocional válido también salta el pago, aunque el
-      // checkbox de "prueba gratis" nunca se haya marcado.
-      final quedoEnPrueba = datos['prueba_gratis'] == true;
-      if (_requierePago && !quedoEnPrueba) {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => OnvoCobroAutomaticoScreen(
-              tipo: _tipo,
-              suscripcionId: datos['suscripcion_id'],
-              nombreTitular: _nombreCtrl.text.trim(),
-            ),
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text("¡Ya casi!"),
+          content: Text(
+            datos['detail'] ?? "Te enviamos un correo para confirmar tu cuenta. Revisá tu bandeja de entrada (y spam) y hacé clic en el link para activarla.",
           ),
-        );
-      }
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text("Entendido"),
+            ),
+          ],
+        ),
+      );
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
@@ -497,7 +501,7 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                       ),
                       child: _enviando
                           ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : Text(_requierePago && !_pruebaGratis ? "Continuar al pago" : "Crear cuenta"),
+                          : const Text("Crear cuenta"),
                     ),
                     const SizedBox(height: 12),
                   ],
