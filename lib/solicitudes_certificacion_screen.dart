@@ -483,34 +483,41 @@ class _DetalleSolicitudScreenState extends State<_DetalleSolicitudScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: s.estado == 'completada'
-          ? null
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(foregroundColor: TemaContador.textoFuerte, side: const BorderSide(color: TemaContador.borde)),
-                        onPressed: _procesando ? null : _completar,
-                        child: const Text("Marcar como completada"),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      flex: 2,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(backgroundColor: TemaContador.acento, foregroundColor: Colors.white),
-                        onPressed: _procesando ? null : _usarDatos,
-                        icon: const Icon(Icons.badge_outlined, size: 18),
-                        label: const Text("Usar estos datos"),
-                      ),
-                    ),
-                  ],
+      // "Usar estos datos" queda disponible SIEMPRE, aunque la solicitud ya
+      // esté marcada como completada -- antes desaparecía del todo en ese
+      // caso, y si alguien tocaba "Marcar como completada" primero (por
+      // error, o pensando que así se procesaba) se quedaba sin forma de
+      // generar la certificación real desde acá (los datos y adjuntos
+      // seguían ahí, solo que inaccesibles por este camino). "Marcar como
+      // completada" sola solo tiene sentido mientras sigue pendiente.
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              if (s.estado != 'completada') ...[
+                Expanded(
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(foregroundColor: TemaContador.textoFuerte, side: const BorderSide(color: TemaContador.borde)),
+                    onPressed: _procesando ? null : _completar,
+                    child: const Text("Marcar como completada"),
+                  ),
+                ),
+                const SizedBox(width: 10),
+              ],
+              Expanded(
+                flex: 2,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(backgroundColor: TemaContador.acento, foregroundColor: Colors.white),
+                  onPressed: _procesando ? null : _usarDatos,
+                  icon: const Icon(Icons.badge_outlined, size: 18),
+                  label: const Text("Usar estos datos"),
                 ),
               ),
-            ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
