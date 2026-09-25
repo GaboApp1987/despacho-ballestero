@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'api_service.dart';
 import 'chat_service.dart';
 import 'theme/app_theme.dart';
@@ -138,19 +139,33 @@ class _ChatDetalleScreenState extends State<ChatDetalleScreen> {
               child: Row(
                 children: [
                   Expanded(
-                    child: TextField(
-                      controller: _inputCtrl,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _enviar(),
-                      style: TextStyle(color: _colorFuerte),
-                      decoration: InputDecoration(
-                        hintText: "Escribí un mensaje...",
-                        filled: true,
-                        fillColor: _colorSuperficie,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide(color: _colorBorde)),
-                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide(color: _colorBorde)),
-                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide(color: _colorAcento, width: 1.5)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                    // En Flutter Web, onSubmitted del TextField no siempre
+                    // dispara con el Enter físico del teclado (sí funciona
+                    // con teclados IME de celular) -- este Focus intercepta
+                    // la tecla directamente para que Enter funcione siempre,
+                    // sin depender de eso.
+                    child: Focus(
+                      onKeyEvent: (node, event) {
+                        if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.enter) {
+                          _enviar();
+                          return KeyEventResult.handled;
+                        }
+                        return KeyEventResult.ignored;
+                      },
+                      child: TextField(
+                        controller: _inputCtrl,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) => _enviar(),
+                        style: TextStyle(color: _colorFuerte),
+                        decoration: InputDecoration(
+                          hintText: "Escribí un mensaje...",
+                          filled: true,
+                          fillColor: _colorSuperficie,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide(color: _colorBorde)),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide(color: _colorBorde)),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide(color: _colorAcento, width: 1.5)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                        ),
                       ),
                     ),
                   ),
