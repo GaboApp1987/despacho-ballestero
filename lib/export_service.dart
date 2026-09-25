@@ -216,8 +216,8 @@ class ExportService {
               pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  pw.Text('Reporte de Facturación', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
-                  pw.Text('Periodo: $periodo', style: const pw.TextStyle(fontSize: 12)),
+                  pw.Text('Reporte de Facturación', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold, color: PdfColors.indigo)),
+                  pw.Text('Periodo: $periodo', style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
                 ],
               ),
               pw.Text(negocioNombre, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
@@ -226,8 +226,8 @@ class ExportService {
         ),
         pw.SizedBox(height: 16),
         pw.Container(
-          padding: const pw.EdgeInsets.all(10),
-          decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey400), borderRadius: pw.BorderRadius.circular(6)),
+          padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: pw.BoxDecoration(color: PdfColors.indigo50, borderRadius: pw.BorderRadius.circular(6)),
           child: pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
@@ -241,15 +241,39 @@ class ExportService {
               ),
               pw.Text(
                 'Total: ${formatearColones(facturas.fold<double>(0.0, (sum, f) => sum + f.totalFactura))}',
-                style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 13),
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 13, color: PdfColors.indigo),
               ),
             ],
           ),
         ),
         pw.SizedBox(height: 20),
         pw.TableHelper.fromTextArray(
-          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
+          headerDecoration: const pw.BoxDecoration(color: PdfColors.indigo),
+          cellStyle: const pw.TextStyle(fontSize: 9.5),
+          cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+          headerPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
           headers: const ['Fecha', 'Doc #', 'Cliente', 'Condición', 'Subtotal', 'Tarifa', 'IVA', 'Total'],
+          columnWidths: const {
+            0: pw.FlexColumnWidth(1.2),
+            1: pw.FlexColumnWidth(1.1),
+            2: pw.FlexColumnWidth(2.2),
+            3: pw.FlexColumnWidth(1.1),
+            4: pw.FlexColumnWidth(1.3),
+            5: pw.FlexColumnWidth(0.8),
+            6: pw.FlexColumnWidth(1.2),
+            7: pw.FlexColumnWidth(1.3),
+          },
+          cellAlignments: const {
+            0: pw.Alignment.centerLeft,
+            1: pw.Alignment.centerLeft,
+            2: pw.Alignment.centerLeft,
+            3: pw.Alignment.center,
+            4: pw.Alignment.centerRight,
+            5: pw.Alignment.center,
+            6: pw.Alignment.centerRight,
+            7: pw.Alignment.centerRight,
+          },
           data: facturas.map((f) => [
             f.fechaEmision.split('T')[0],
             'F-${f.consecutivo}',
@@ -262,14 +286,24 @@ class ExportService {
           ]).toList(),
         ),
         pw.SizedBox(height: 24),
-        pw.Text('Detalle por tarifa de IVA', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+        pw.Text('Detalle por tarifa de IVA', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold, color: PdfColors.indigo)),
         pw.SizedBox(height: 8),
         pw.Builder(builder: (context) {
           final porTarifa = _agruparPorTarifa(facturas);
           final tarifas = porTarifa.base.keys.toList()..sort();
           return pw.TableHelper.fromTextArray(
-            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.indigo),
+            cellStyle: const pw.TextStyle(fontSize: 9.5),
+            cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+            headerPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
             headers: const ['Tarifa', 'Base', 'IVA', 'Total'],
+            cellAlignments: const {
+              0: pw.Alignment.center,
+              1: pw.Alignment.centerRight,
+              2: pw.Alignment.centerRight,
+              3: pw.Alignment.centerRight,
+            },
             data: tarifas.map((t) {
               final base = porTarifa.base[t] ?? 0;
               final iva = porTarifa.iva[t] ?? 0;
@@ -295,11 +329,15 @@ class ExportService {
     final sumaTotal = facturas.fold<double>(0.0, (s, f) => s + f.totalFactura);
 
     sheetObject.appendRow([TextCellValue('Reporte de Facturación')]); // fila 1
+    _estilarCeldaUltimaFila(sheetObject, 0, _estiloTitulo());
     sheetObject.appendRow([                                          // fila 2: sumas del periodo
       TextCellValue('Subtotal:'), DoubleCellValue(sumaSubtotal),
       TextCellValue('IVA:'), DoubleCellValue(sumaIva),
       TextCellValue('Total:'), DoubleCellValue(sumaTotal),
     ]);
+    _estilarCeldaUltimaFila(sheetObject, 1, _estiloMoneda());
+    _estilarCeldaUltimaFila(sheetObject, 3, _estiloMoneda());
+    _estilarCeldaUltimaFila(sheetObject, 5, _estiloMoneda(negrita: true));
     sheetObject.appendRow([]); // fila 3: separador
     sheetObject.appendRow([    // fila 4: encabezado de la tabla
       TextCellValue('Fecha'),
@@ -312,6 +350,7 @@ class ExportService {
       TextCellValue('IVA'),
       TextCellValue('Total'),
     ]);
+    _estilarUltimaFila(sheetObject, 9, _estiloEncabezadoTabla());
 
     for (var f in facturas) { // fila 5 en adelante: una por factura
       sheetObject.appendRow([
@@ -325,21 +364,40 @@ class ExportService {
         DoubleCellValue(f.totalIva),
         DoubleCellValue(f.totalFactura),
       ]);
+      for (final col in [5, 7, 8]) {
+        _estilarCeldaUltimaFila(sheetObject, col, _estiloMoneda());
+      }
+    }
+    sheetObject.appendRow([]);
+    sheetObject.appendRow([
+      TextCellValue('TOTAL'), TextCellValue(''), TextCellValue(''), TextCellValue(''), TextCellValue(''),
+      DoubleCellValue(sumaSubtotal), TextCellValue(''), DoubleCellValue(sumaIva), DoubleCellValue(sumaTotal),
+    ]);
+    _estilarCeldaUltimaFila(sheetObject, 0, _estiloTotalTexto());
+    for (final col in [5, 7, 8]) {
+      _estilarCeldaUltimaFila(sheetObject, col, _estiloTotalMoneda());
     }
 
     // Detalle por Tarifa: a la par de la tabla principal (no en otra hoja),
-    // arrancando en la columna L (deja J y K de separación) y alineado con
+    // arrancando en la columna K (deja J de separación) y alineado con
     // las primeras filas del resumen.
-    const colTarifas = 11; // L (0-indexed: A=0 ... I=8, J=9, K=10, L=11)
+    const colTarifas = 10; // K (0-indexed: A=0 ... H=8, I=9, J=9 gap, K=10)
     void celda(int col, int fila, CellValue valor) {
       sheetObject.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: fila)).value = valor;
     }
+    void estilarCelda(int col, int fila, CellStyle estilo) {
+      sheetObject.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: fila)).cellStyle = estilo;
+    }
 
     celda(colTarifas, 0, TextCellValue('Detalle por Tarifa de IVA'));
+    estilarCelda(colTarifas, 0, _estiloEncabezadoSeccion());
     celda(colTarifas, 1, TextCellValue('Tarifa'));
     celda(colTarifas + 1, 1, TextCellValue('Base'));
     celda(colTarifas + 2, 1, TextCellValue('IVA'));
     celda(colTarifas + 3, 1, TextCellValue('Total'));
+    for (var i = 0; i < 4; i++) {
+      estilarCelda(colTarifas + i, 1, _estiloEncabezadoTabla());
+    }
 
     final porTarifa = _agruparPorTarifa(facturas);
     final tarifasOrdenadas = porTarifa.base.keys.toList()..sort();
@@ -349,16 +407,24 @@ class ExportService {
       final iva = porTarifa.iva[t] ?? 0;
       celda(colTarifas, filaTarifa, TextCellValue('$t%'));
       celda(colTarifas + 1, filaTarifa, DoubleCellValue(base));
+      estilarCelda(colTarifas + 1, filaTarifa, _estiloMoneda());
       celda(colTarifas + 2, filaTarifa, DoubleCellValue(iva));
+      estilarCelda(colTarifas + 2, filaTarifa, _estiloMoneda());
       celda(colTarifas + 3, filaTarifa, DoubleCellValue(base + iva));
+      estilarCelda(colTarifas + 3, filaTarifa, _estiloMoneda());
       filaTarifa++;
     }
     final baseTotal = porTarifa.base.values.fold(0.0, (s, v) => s + v);
     final ivaTotal = porTarifa.iva.values.fold(0.0, (s, v) => s + v);
     celda(colTarifas, filaTarifa, TextCellValue('TOTAL'));
+    estilarCelda(colTarifas, filaTarifa, _estiloTotalTexto());
     celda(colTarifas + 1, filaTarifa, DoubleCellValue(baseTotal));
+    estilarCelda(colTarifas + 1, filaTarifa, _estiloTotalMoneda());
     celda(colTarifas + 2, filaTarifa, DoubleCellValue(ivaTotal));
+    estilarCelda(colTarifas + 2, filaTarifa, _estiloTotalMoneda());
     celda(colTarifas + 3, filaTarifa, DoubleCellValue(baseTotal + ivaTotal));
+    estilarCelda(colTarifas + 3, filaTarifa, _estiloTotalMoneda());
+    _anchoColumnas(sheetObject, [14, 14, 26, 14, 12, 14, 10, 14, 14, 3, 14, 14, 14, 14]);
 
     await _guardarExcel(excel, dialogTitle: 'Guardar Reporte de Facturación', fileName: 'reporte_facturacion.xlsx');
   }
