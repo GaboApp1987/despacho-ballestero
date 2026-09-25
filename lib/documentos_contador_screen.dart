@@ -136,29 +136,27 @@ class _DocumentosContadorScreenState extends State<DocumentosContadorScreen> {
     required VoidCallback onTap,
     String? badge,
   }) {
+    final avatarIcono = CircleAvatar(backgroundColor: TemaContador.acento.withOpacity(0.12), child: Icon(icono, color: TemaContador.acento));
     return Card(
       color: TemaContador.superficie,
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: TemaContador.borde)),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: CircleAvatar(backgroundColor: TemaContador.acento.withOpacity(0.12), child: Icon(icono, color: TemaContador.acento)),
+        // Puntito rojo con el conteo sobre el ícono, igual que el aviso de
+        // "no leídos" de una app de mensajes -- antes era un pill aparte
+        // metido junto a la flecha, mucho menos notorio.
+        leading: badge == null
+            ? avatarIcono
+            : Badge(
+                label: Text(badge, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                backgroundColor: Colors.red,
+                offset: const Offset(4, -4),
+                child: avatarIcono,
+              ),
         title: Text(titulo, style: const TextStyle(fontWeight: FontWeight.w700, color: TemaContador.textoFuerte)),
         subtitle: Text(subtitulo, style: const TextStyle(color: TemaContador.textoTenue, fontSize: 12.5)),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (badge != null) ...[
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: Colors.orange, borderRadius: BorderRadius.circular(12)),
-                child: Text(badge, style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold)),
-              ),
-              const SizedBox(width: 8),
-            ],
-            const Icon(Icons.chevron_right, color: TemaContador.acento),
-          ],
-        ),
+        trailing: const Icon(Icons.chevron_right, color: TemaContador.acento),
         onTap: onTap,
       ),
     );
