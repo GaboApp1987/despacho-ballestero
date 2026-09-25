@@ -31,6 +31,10 @@ class _SolicitudPublicaScreenState extends State<SolicitudPublicaScreen> {
 
   bool _enviando = false;
   bool _enviado = false;
+  // Se pone en true recién cuando intentan enviar por primera vez -- antes
+  // de eso no tiene sentido mostrar los campos obligatorios en rojo, se
+  // vería como si algo ya estuviera mal sin que el cliente hiciera nada.
+  bool _intentoEnviar = false;
 
   final _nombreCtrl = TextEditingController();
   final _cedulaCtrl = TextEditingController();
@@ -188,13 +192,14 @@ class _SolicitudPublicaScreenState extends State<SolicitudPublicaScreen> {
   }
 
   Future<void> _enviar() async {
+    setState(() => _intentoEnviar = true);
     if (_nombreCtrl.text.trim().isEmpty ||
         _cedulaCtrl.text.trim().isEmpty ||
         _actividadCtrl.text.trim().isEmpty ||
         _propositoCtrl.text.trim().isEmpty ||
         _dirigidoACtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Completá al menos nombre, cédula, actividad económica, propósito y a quién va dirigida.")),
+        const SnackBar(content: Text("Revisá los campos marcados en rojo.")),
       );
       return;
     }
@@ -237,8 +242,13 @@ class _SolicitudPublicaScreenState extends State<SolicitudPublicaScreen> {
     if (mounted) setState(() => _enviando = false);
   }
 
-  InputDecoration _decoracion(String label) => InputDecoration(
+  InputDecoration _decoracion(String label, {String? ayuda, String? error}) => InputDecoration(
         labelText: label,
+        helperText: ayuda,
+        helperMaxLines: 2,
+        helperStyle: const TextStyle(color: TemaContador.textoTenue, fontSize: 11.5),
+        errorText: error,
+        errorMaxLines: 2,
         labelStyle: const TextStyle(color: TemaContador.textoTenue),
         filled: true,
         fillColor: TemaContador.superficie,
@@ -246,6 +256,13 @@ class _SolicitudPublicaScreenState extends State<SolicitudPublicaScreen> {
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: TemaContador.borde)),
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: TemaContador.acento, width: 1.5)),
       );
+
+  // "Este campo es obligatorio" solo después del primer intento de enviar
+  // (ver _intentoEnviar) y solo mientras siga vacío -- se limpia solo en
+  // cuanto el cliente escribe algo, gracias al onChanged de cada campo
+  // obligatorio (ver más abajo).
+  String? _errorSiVacio(TextEditingController ctrl) =>
+      _intentoEnviar && ctrl.text.trim().isEmpty ? "Este campo es obligatorio" : null;
 
   Widget _tarjeta({required String titulo, required Widget child}) => Container(
         width: double.infinity,
@@ -379,12 +396,30 @@ class _SolicitudPublicaScreenState extends State<SolicitudPublicaScreen> {
                       titulo: "Tus datos",
                       child: Column(
                         children: [
-                          TextField(controller: _nombreCtrl, style: const TextStyle(color: TemaContador.textoFuerte), decoration: _decoracion("Nombre completo *")),
+                          TextField(
+                            controller: _nombreCtrl,
+                            style: const TextStyle(color: TemaContador.textoFuerte),
+                            decoration: _decoracion("Nombre completo *", error: _errorSiVacio(_nombreCtrl)),
+                            onChanged: (_) => setState(() {}),
+                          ),
                           const SizedBox(height: 10),
                           Row(children: [
-                            Expanded(child: TextField(controller: _cedulaCtrl, style: const TextStyle(color: TemaContador.textoFuerte), decoration: _decoracion("Cédula *"))),
+                            Expanded(
+                              child: TextField(
+                                controller: _cedulaCtrl,
+                                style: const TextStyle(color: TemaContador.textoFuerte),
+                                decoration: _decoracion("Cédula *", error: _errorSiVacio(_cedulaCtrl)),
+                                onChanged: (_) => setState(() {}),
+                              ),
+                            ),
                             const SizedBox(width: 10),
-                            Expanded(child: TextField(controller: _tipoCedulaCtrl, style: const TextStyle(color: TemaContador.textoFuerte), decoration: _decoracion("Tipo (física, jurídica...)"))),
+                            Expanded(
+                              child: TextField(
+                                controller: _tipoCedulaCtrl,
+                                style: const TextStyle(color: TemaContador.textoFuerte),
+                                decoration: _decoracion("Tipo (física, jurídica...)", ayuda: "Física, Jurídica, DIMEX o NITE"),
+                              ),
+                            ),
                           ]),
                           const SizedBox(height: 10),
                           Row(children: [
@@ -402,7 +437,11 @@ class _SolicitudPublicaScreenState extends State<SolicitudPublicaScreen> {
                             ),
                           ]),
                           const SizedBox(height: 10),
-                          TextField(controller: _direccionCtrl, style: const TextStyle(color: TemaContador.textoFuerte), decoration: _decoracion("Dirección")),
+                          TextField(
+                            controller: _direccionCtrl,
+                            style: const TextStyle(color: TemaContador.textoFuerte),
+                            decoration: _decoracion("Dirección", ayuda: "Dirección exacta donde vivís"),
+                          ),
                           const SizedBox(height: 10),
                           Row(children: [
                             Expanded(child: TextField(controller: _telefonoCtrl, style: const TextStyle(color: TemaContador.textoFuerte), decoration: _decoracion("Teléfono de contacto"))),
@@ -416,12 +455,34 @@ class _SolicitudPublicaScreenState extends State<SolicitudPublicaScreen> {
                       titulo: "Actividad económica",
                       child: Column(
                         children: [
-                          TextField(controller: _actividadCtrl, style: const TextStyle(color: TemaContador.textoFuerte), decoration: _decoracion("A qué te dedicás *")),
+                          TextField(
+                            controller: _actividadCtrl,
+                            style: const TextStyle(color: TemaContador.textoFuerte),
+                            decoration: _decoracion(
+                              "A qué te dedicás *",
+                              ayuda: "Ej: venta de ropa, taxi informal, servicios de consultoría...",
+                              error: _errorSiVacio(_actividadCtrl),
+                            ),
+                            onChanged: (_) => setState(() {}),
+                          ),
                           const SizedBox(height: 10),
                           Row(children: [
-                            Expanded(child: TextField(controller: _numeroActividadCtrl, style: const TextStyle(color: TemaContador.textoFuerte), decoration: _decoracion("N.° de actividad (si lo sabés)"))),
+                            Expanded(
+                              child: TextField(
+                                controller: _numeroActividadCtrl,
+                                style: const TextStyle(color: TemaContador.textoFuerte),
+                                decoration: _decoracion("N.° de actividad (si lo sabés)", ayuda: "Código de 6 dígitos que te dio Hacienda, si lo tenés a mano"),
+                              ),
+                            ),
                             const SizedBox(width: 10),
-                            Expanded(child: TextField(controller: _anosCtrl, keyboardType: TextInputType.number, style: const TextStyle(color: TemaContador.textoFuerte), decoration: _decoracion("Años ejerciendo"))),
+                            Expanded(
+                              child: TextField(
+                                controller: _anosCtrl,
+                                keyboardType: TextInputType.number,
+                                style: const TextStyle(color: TemaContador.textoFuerte),
+                                decoration: _decoracion("Años ejerciendo", ayuda: "Hace cuántos años hacés esta actividad"),
+                              ),
+                            ),
                           ]),
                         ],
                       ),
@@ -431,9 +492,31 @@ class _SolicitudPublicaScreenState extends State<SolicitudPublicaScreen> {
                       child: Column(
                         children: [
                           Row(children: [
-                            Expanded(child: TextField(controller: _propositoCtrl, style: const TextStyle(color: TemaContador.textoFuerte), decoration: _decoracion("Propósito (ej: trámite bancario) *"))),
+                            Expanded(
+                              child: TextField(
+                                controller: _propositoCtrl,
+                                style: const TextStyle(color: TemaContador.textoFuerte),
+                                decoration: _decoracion(
+                                  "Propósito *",
+                                  ayuda: "Para qué la necesitás (ej: trámite bancario, visa, alquiler)",
+                                  error: _errorSiVacio(_propositoCtrl),
+                                ),
+                                onChanged: (_) => setState(() {}),
+                              ),
+                            ),
                             const SizedBox(width: 10),
-                            Expanded(child: TextField(controller: _dirigidoACtrl, style: const TextStyle(color: TemaContador.textoFuerte), decoration: _decoracion("Dirigida a (ej: Banco Nacional) *"))),
+                            Expanded(
+                              child: TextField(
+                                controller: _dirigidoACtrl,
+                                style: const TextStyle(color: TemaContador.textoFuerte),
+                                decoration: _decoracion(
+                                  "Dirigida a *",
+                                  ayuda: "Entidad o persona que te la pidió (ej: Banco Nacional)",
+                                  error: _errorSiVacio(_dirigidoACtrl),
+                                ),
+                                onChanged: (_) => setState(() {}),
+                              ),
+                            ),
                           ]),
                           const SizedBox(height: 10),
                           Row(children: [
@@ -441,7 +524,7 @@ class _SolicitudPublicaScreenState extends State<SolicitudPublicaScreen> {
                               child: InkWell(
                                 onTap: () => _elegirFecha(esInicio: true),
                                 child: InputDecorator(
-                                  decoration: _decoracion("Periodo desde (opcional)"),
+                                  decoration: _decoracion("Periodo desde (opcional)", ayuda: "Solo si te pidieron que cubra fechas específicas"),
                                   child: Text(_fechaInicio == null ? "Elegir" : "${_fechaInicio!.day}/${_fechaInicio!.month}/${_fechaInicio!.year}", style: const TextStyle(color: TemaContador.textoFuerte)),
                                 ),
                               ),
@@ -451,7 +534,7 @@ class _SolicitudPublicaScreenState extends State<SolicitudPublicaScreen> {
                               child: InkWell(
                                 onTap: () => _elegirFecha(esInicio: false),
                                 child: InputDecorator(
-                                  decoration: _decoracion("Periodo hasta (opcional)"),
+                                  decoration: _decoracion("Periodo hasta (opcional)", ayuda: "Solo si te pidieron que cubra fechas específicas"),
                                   child: Text(_fechaFin == null ? "Elegir" : "${_fechaFin!.day}/${_fechaFin!.month}/${_fechaFin!.year}", style: const TextStyle(color: TemaContador.textoFuerte)),
                                 ),
                               ),

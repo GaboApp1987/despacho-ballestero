@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'api_service.dart';
 import 'chat_service.dart';
 import 'theme/app_theme.dart';
@@ -25,6 +27,7 @@ class _ChatDetalleScreenState extends State<ChatDetalleScreen> {
   final _scrollCtrl = ScrollController();
   late final ChatService _chat;
   bool _cargando = true;
+  bool _subiendoArchivo = false;
 
   Color get _colorFondo => widget.esContador ? TemaContador.fondo : AppColors.background;
   Color get _colorSuperficie => widget.esContador ? TemaContador.superficie : AppColors.surface;
@@ -91,6 +94,134 @@ class _ChatDetalleScreenState extends State<ChatDetalleScreen> {
     _inputCtrl.clear();
   }
 
+  String? _mimeTypePorExtension(String? extension) {
+    switch ((extension ?? '').toLowerCase()) {
+      case 'pdf':
+        return 'application/pdf';
+      case 'doc':
+        return 'application/msword';
+      case 'docx':
+        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'xls':
+        return 'application/vnd.ms-excel';
+      case 'xlsx':
+        return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      default:
+        return null;
+    }
+  }
+
+  // El archivo se manda por REST (no por el WebSocket -- JSON no es
+  // práctico para binarios) y el propio backend lo reenvía al grupo de
+  // Channels de la conversación (ver subir_adjunto en el backend), así que
+  // acá no se agrega nada "optimista" a la lista: llega solo por el mismo
+  // stream _chat.mensajes que ya escucha initState, igual que un mensaje de
+  // texto normal.
+  Future<void> _elegirYEnviarArchivo() async {
+    final resultado = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'doc', 'docx', 'xls', 'xlsx'],
+      withData: true,
+    );
+    final archivos = resultado?.files ?? [];
+    if (archivos.isEmpty || archivos.first.bytes == null) return;
+    final archivo = archivos.first;
+
+    setState(() => _subiendoArchivo = true);
+    try {
+      final response = await ApiService.postMultipartBytes(
+        '/chat/conversaciones/${widget.conversacionId}/mensajes/adjunto/',
+        {},
+        'archivo',
+        archivo.bytes!,
+        archivo.name,
+        contentType: _mimeTypePorExtension(archivo.extension),
+      );
+      if (response.statusCode != 201 && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("No se pudo subir el archivo.")),
+        );
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo subir el archivo: $e")));
+    } finally {
+      if (mounted) setState(() => _subiendoArchivo = false);
+    }
+  }
+
+  Future<void> _abrirArchivo(String url) async {
+    final uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo abrir el archivo: $url")));
+    }
+  }
+
+  Widget _burbujaMensaje(MensajeChat m, bool esMio) {
+    final colorTexto = esMio ? Colors.white : _colorFuerte;
+    if (!m.tieneArchivo) {
+      return Text(m.texto, style: TextStyle(color: colorTexto, fontSize: 14, height: 1.35));
+    }
+    final adjunto = m.archivoEsImagen
+        ? ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: InkWell(
+              onTap: () => _abrirArchivo(m.archivoUrl!),
+              child: Image.network(
+                m.archivoUrl!,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  width: 200, height: 140, color: _colorBorde,
+                  child: const Icon(Icons.broken_image_outlined, color: Colors.grey),
+                ),
+              ),
+            ),
+          )
+        : InkWell(
+            onTap: () => _abrirArchivo(m.archivoUrl!),
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: (esMio ? Colors.white : _colorAcento).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.insert_drive_file_outlined, color: colorTexto, size: 22),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      m.archivoNombre,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: colorTexto, fontSize: 13, decoration: TextDecoration.underline),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+    if (m.texto.isEmpty) return adjunto;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        adjunto,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(6, 6, 6, 2),
+          child: Text(m.texto, style: TextStyle(color: colorTexto, fontSize: 14, height: 1.35)),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -122,12 +253,14 @@ class _ChatDetalleScreenState extends State<ChatDetalleScreen> {
                             child: Container(
                               constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
                               margin: const EdgeInsets.only(bottom: 10),
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              padding: m.tieneArchivo && m.archivoEsImagen
+                                  ? const EdgeInsets.all(6)
+                                  : const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                               decoration: BoxDecoration(
                                 color: esMio ? _colorAcento : _colorSuperficie,
                                 borderRadius: BorderRadius.circular(14),
                               ),
-                              child: Text(m.texto, style: TextStyle(color: esMio ? Colors.white : _colorFuerte, fontSize: 14, height: 1.35)),
+                              child: _burbujaMensaje(m, esMio),
                             ),
                           );
                         },
@@ -138,6 +271,16 @@ class _ChatDetalleScreenState extends State<ChatDetalleScreen> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               child: Row(
                 children: [
+                  _subiendoArchivo
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2)),
+                        )
+                      : IconButton(
+                          icon: Icon(Icons.attach_file, color: _colorFuerte.withOpacity(0.7)),
+                          tooltip: "Adjuntar foto o documento",
+                          onPressed: _elegirYEnviarArchivo,
+                        ),
                   Expanded(
                     // En Flutter Web, onSubmitted del TextField no siempre
                     // dispara con el Enter físico del teclado (sí funciona

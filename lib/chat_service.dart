@@ -11,14 +11,33 @@ class MensajeChat {
   final String texto;
   final bool enviadoPorSocio;
   final DateTime creadoEn;
+  final String? archivoUrl;
+  final String archivoNombre;
 
-  MensajeChat({required this.id, required this.texto, required this.enviadoPorSocio, required this.creadoEn});
+  MensajeChat({
+    required this.id,
+    required this.texto,
+    required this.enviadoPorSocio,
+    required this.creadoEn,
+    this.archivoUrl,
+    this.archivoNombre = '',
+  });
+
+  bool get tieneArchivo => archivoUrl != null && archivoUrl!.isNotEmpty;
+
+  static const _extensionesImagen = {'jpg', 'jpeg', 'png', 'webp', 'gif'};
+  bool get archivoEsImagen {
+    final ext = archivoNombre.split('.').last.toLowerCase();
+    return _extensionesImagen.contains(ext);
+  }
 
   factory MensajeChat.fromJson(Map<String, dynamic> json) => MensajeChat(
         id: json['id'],
         texto: json['texto'] ?? '',
         enviadoPorSocio: json['enviado_por_socio'] ?? false,
         creadoEn: DateTime.parse(json['creado_en']),
+        archivoUrl: json['archivo_url'],
+        archivoNombre: json['archivo_nombre'] ?? '',
       );
 }
 
