@@ -98,6 +98,11 @@ class _NegociosScreenState extends State<NegociosScreen> {
   // Solo aplica en pantallas anchas -- en móvil se sigue mostrando todo
   // junto en un solo scroll, como antes.
   int _pestanaContador = 0;
+  // Solicitudes de Certificación pendientes -- se muestra como badge sobre
+  // el ícono de "Certificaciones" en la sidebar, igual que en el menú de
+  // Certificaciones (ver DocumentosContadorScreen), para que se note desde
+  // afuera sin tener que entrar.
+  int? _pendientesCertificaciones;
 
   static const Map<String, String> _tiposCedula = {
     '01': 'Física',
@@ -122,6 +127,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
     if (widget.puedeCrear) {
       _cargarMiSocio();
       _dashboardFuture = _cargarDashboard();
+      _cargarPendientesCertificaciones();
     }
     if (_puedeReasignar) {
       _cargarSociosDisponibles();
@@ -129,6 +135,16 @@ class _NegociosScreenState extends State<NegociosScreen> {
     _busquedaCtrl.addListener(() {
       setState(() => _filtro = _busquedaCtrl.text.trim().toLowerCase());
     });
+  }
+
+  Future<void> _cargarPendientesCertificaciones() async {
+    try {
+      final r = await ApiService.get('/solicitudes-certificacion/?estado=pendiente');
+      if (r.statusCode == 200) {
+        final data = json.decode(utf8.decode(r.bodyBytes)) as List;
+        if (mounted) setState(() => _pendientesCertificaciones = data.length);
+      }
+    } catch (_) {}
   }
 
   Future<void> _cargarSociosDisponibles() async {
@@ -1341,11 +1357,19 @@ class _NegociosScreenState extends State<NegociosScreen> {
   Widget _sidebarContador(BuildContext context) {
     final ancho = _sidebarColapsada ? 72.0 : 240.0;
 
-    Widget item({required IconData icono, required String etiqueta, required VoidCallback onTap, bool activo = false}) {
+    Widget item({required IconData icono, required String etiqueta, required VoidCallback onTap, bool activo = false, int? badge}) {
+      final iconoWidget = Icon(icono, size: 22, color: activo ? _PaletaContador.sidebarTextoActivo : _PaletaContador.sidebarTexto);
       final contenido = Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icono, size: 22, color: activo ? _PaletaContador.sidebarTextoActivo : _PaletaContador.sidebarTexto),
+          badge == null || badge <= 0
+              ? iconoWidget
+              : Badge(
+                  label: Text(badge > 99 ? '99+' : '$badge', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                  backgroundColor: Colors.red,
+                  offset: const Offset(4, -4),
+                  child: iconoWidget,
+                ),
           if (!_sidebarColapsada) ...[
             const SizedBox(width: 14),
             Expanded(
@@ -1449,7 +1473,11 @@ class _NegociosScreenState extends State<NegociosScreen> {
             item(
               icono: Icons.badge_outlined,
               etiqueta: "Certificaciones",
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DocumentosContadorScreen())),
+              badge: _pendientesCertificaciones,
+              onTap: () async {
+                await Navigator.push(context, MaterialPageRoute(builder: (context) => const DocumentosContadorScreen()));
+                _cargarPendientesCertificaciones();
+              },
             ),
             item(
               icono: Icons.menu_book_outlined,
