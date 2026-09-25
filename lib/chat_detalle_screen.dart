@@ -1,9 +1,11 @@
 import 'dart:convert';
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'api_service.dart';
+import 'avatar_logo.dart';
 import 'chat_service.dart';
 import 'theme/app_theme.dart';
 
@@ -13,9 +15,16 @@ import 'theme/app_theme.dart';
 class ChatDetalleScreen extends StatefulWidget {
   final int conversacionId;
   final String nombreOtraParte;
+  final String? otraParteLogo;
   final bool esContador;
 
-  const ChatDetalleScreen({super.key, required this.conversacionId, required this.nombreOtraParte, this.esContador = false});
+  const ChatDetalleScreen({
+    super.key,
+    required this.conversacionId,
+    required this.nombreOtraParte,
+    this.otraParteLogo,
+    this.esContador = false,
+  });
 
   @override
   State<ChatDetalleScreen> createState() => _ChatDetalleScreenState();
@@ -24,10 +33,12 @@ class ChatDetalleScreen extends StatefulWidget {
 class _ChatDetalleScreenState extends State<ChatDetalleScreen> {
   final List<MensajeChat> _mensajes = [];
   final _inputCtrl = TextEditingController();
+  final _inputFocus = FocusNode();
   final _scrollCtrl = ScrollController();
   late final ChatService _chat;
   bool _cargando = true;
   bool _subiendoArchivo = false;
+  bool _mostrarEmojis = false;
 
   Color get _colorFondo => widget.esContador ? TemaContador.fondo : AppColors.background;
   Color get _colorSuperficie => widget.esContador ? TemaContador.superficie : AppColors.surface;
@@ -53,6 +64,7 @@ class _ChatDetalleScreenState extends State<ChatDetalleScreen> {
   void dispose() {
     _chat.cerrar();
     _inputCtrl.dispose();
+    _inputFocus.dispose();
     _scrollCtrl.dispose();
     super.dispose();
   }
@@ -92,6 +104,22 @@ class _ChatDetalleScreenState extends State<ChatDetalleScreen> {
     if (texto.isEmpty) return;
     _chat.enviar(texto);
     _inputCtrl.clear();
+  }
+
+  void _insertarEmoji(Emoji emoji) {
+    final seleccion = _inputCtrl.selection;
+    final texto = _inputCtrl.text;
+    final cursor = seleccion.start >= 0 ? seleccion.start : texto.length;
+    final nuevoTexto = texto.replaceRange(cursor, seleccion.end >= 0 ? seleccion.end : cursor, emoji.emoji);
+    _inputCtrl.value = TextEditingValue(
+      text: nuevoTexto,
+      selection: TextSelection.collapsed(offset: cursor + emoji.emoji.length),
+    );
+  }
+
+  void _alternarEmojis() {
+    if (!_mostrarEmojis) _inputFocus.unfocus();
+    setState(() => _mostrarEmojis = !_mostrarEmojis);
   }
 
   String? _mimeTypePorExtension(String? extension) {
@@ -228,7 +256,27 @@ class _ChatDetalleScreenState extends State<ChatDetalleScreen> {
       backgroundColor: _colorFondo,
       appBar: AppBar(
         leading: IconButton(icon: Icon(Icons.arrow_back, color: _colorFuerte), tooltip: "Volver", onPressed: () => Navigator.pop(context)),
-        title: Text(widget.nombreOtraParte, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: _colorFuerte)),
+        titleSpacing: 0,
+        title: Row(
+          children: [
+            avatarConLogo(
+              logoUrl: widget.otraParteLogo,
+              nombre: widget.nombreOtraParte,
+              icono: widget.esContador ? Icons.storefront_outlined : Icons.badge_outlined,
+              radius: 18,
+              color: _colorAcento,
+              fondo: _colorAcento.withOpacity(0.14),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                widget.nombreOtraParte,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: _colorFuerte),
+              ),
+            ),
+          ],
+        ),
         backgroundColor: _colorSuperficie,
         foregroundColor: _colorFuerte,
         iconTheme: IconThemeData(color: _colorFuerte),
@@ -267,10 +315,16 @@ class _ChatDetalleScreenState extends State<ChatDetalleScreen> {
                       ),
           ),
           SafeArea(
+            top: false,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               child: Row(
                 children: [
+                  IconButton(
+                    icon: Icon(_mostrarEmojis ? Icons.keyboard_outlined : Icons.emoji_emotions_outlined, color: _colorFuerte.withOpacity(0.7)),
+                    tooltip: "Emojis",
+                    onPressed: _alternarEmojis,
+                  ),
                   _subiendoArchivo
                       ? const Padding(
                           padding: EdgeInsets.all(12),
@@ -297,8 +351,16 @@ class _ChatDetalleScreenState extends State<ChatDetalleScreen> {
                       },
                       child: TextField(
                         controller: _inputCtrl,
+                        focusNode: _inputFocus,
                         textInputAction: TextInputAction.send,
                         onSubmitted: (_) => _enviar(),
+                        onTap: () {
+                          // Al tocar el campo de texto se cierra el panel de
+                          // emojis y sube el teclado normal -- mismo
+                          // comportamiento que WhatsApp, nunca los dos abiertos
+                          // a la vez.
+                          if (_mostrarEmojis) setState(() => _mostrarEmojis = false);
+                        },
                         style: TextStyle(color: _colorFuerte),
                         decoration: InputDecoration(
                           hintText: "Escribí un mensaje...",
@@ -319,6 +381,21 @@ class _ChatDetalleScreenState extends State<ChatDetalleScreen> {
                     style: IconButton.styleFrom(backgroundColor: _colorAcento, foregroundColor: Colors.white),
                   ),
                 ],
+              ),
+            ),
+          ),
+          Offstage(
+            offstage: !_mostrarEmojis,
+            child: SizedBox(
+              height: 280,
+              child: EmojiPicker(
+                onEmojiSelected: (category, emoji) => _insertarEmoji(emoji),
+                config: Config(
+                  emojiViewConfig: EmojiViewConfig(backgroundColor: _colorSuperficie, columns: 8),
+                  categoryViewConfig: CategoryViewConfig(backgroundColor: _colorSuperficie, iconColorSelected: _colorAcento),
+                  bottomActionBarConfig: BottomActionBarConfig(backgroundColor: _colorSuperficie, buttonColor: _colorSuperficie),
+                  searchViewConfig: SearchViewConfig(backgroundColor: _colorSuperficie),
+                ),
               ),
             ),
           ),

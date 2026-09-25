@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'api_service.dart';
+import 'avatar_logo.dart';
 import 'chat_detalle_screen.dart';
 import 'negocio.dart';
 import 'theme/app_theme.dart';
@@ -9,6 +10,7 @@ class _ConversacionResumen {
   final int id;
   final int negocioId;
   final String negocioNombre;
+  final String? negocioLogo;
   final String ultimoMensaje;
   final int noLeidos;
 
@@ -16,6 +18,7 @@ class _ConversacionResumen {
     required this.id,
     required this.negocioId,
     required this.negocioNombre,
+    this.negocioLogo,
     required this.ultimoMensaje,
     required this.noLeidos,
   });
@@ -24,6 +27,7 @@ class _ConversacionResumen {
         id: j['id'],
         negocioId: j['negocio_id'],
         negocioNombre: j['negocio_nombre'] ?? '',
+        negocioLogo: j['negocio_logo'],
         ultimoMensaje: j['ultimo_mensaje'] ?? '',
         noLeidos: j['no_leidos'] ?? 0,
       );
@@ -65,7 +69,14 @@ class _ChatsContadorScreenState extends State<ChatsContadorScreen> {
   Future<void> _abrirConversacion(_ConversacionResumen c) async {
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => ChatDetalleScreen(conversacionId: c.id, nombreOtraParte: c.negocioNombre, esContador: true)),
+      MaterialPageRoute(
+        builder: (context) => ChatDetalleScreen(
+          conversacionId: c.id,
+          nombreOtraParte: c.negocioNombre,
+          otraParteLogo: c.negocioLogo,
+          esContador: true,
+        ),
+      ),
     );
     _cargar();
   }
@@ -111,7 +122,13 @@ class _ChatsContadorScreenState extends State<ChatsContadorScreen> {
             }
             final n = disponibles[index - 1];
             return ListTile(
-              leading: const CircleAvatar(backgroundColor: Color(0x1A1D4ED8), child: Icon(Icons.storefront_outlined, color: TemaContador.acento)),
+              leading: avatarConLogo(
+                logoUrl: n.logoUrl,
+                nombre: n.nombreComercial,
+                icono: Icons.storefront_outlined,
+                color: TemaContador.acento,
+                fondo: const Color(0x1A1D4ED8),
+              ),
               title: Text(n.nombreComercial, style: const TextStyle(color: TemaContador.textoFuerte, fontWeight: FontWeight.w600)),
               onTap: () => Navigator.pop(context, n),
             );
@@ -184,7 +201,13 @@ class _ChatsContadorScreenState extends State<ChatsContadorScreen> {
                             backgroundColor: Colors.red,
                             isLabelVisible: c.noLeidos > 0,
                             offset: const Offset(4, -4),
-                            child: const CircleAvatar(backgroundColor: Color(0x1A1D4ED8), child: Icon(Icons.storefront_outlined, color: TemaContador.acento)),
+                            child: avatarConLogo(
+                              logoUrl: c.negocioLogo,
+                              nombre: c.negocioNombre,
+                              icono: Icons.storefront_outlined,
+                              color: TemaContador.acento,
+                              fondo: const Color(0x1A1D4ED8),
+                            ),
                           ),
                           title: Text(c.negocioNombre, style: const TextStyle(fontWeight: FontWeight.w700, color: TemaContador.textoFuerte)),
                           subtitle: Text(

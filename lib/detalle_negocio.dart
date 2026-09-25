@@ -237,6 +237,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
   // crearla), 0 o más no-leídos una vez que existe.
   int? _conversacionChatId;
   int _noLeidosChat = 0;
+  String? _socioLogo;
 
   Future<void> _cargarChat() async {
     try {
@@ -247,6 +248,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
           setState(() {
             _conversacionChatId = data.isNotEmpty ? data.first['id'] : null;
             _noLeidosChat = data.isNotEmpty ? (data.first['no_leidos'] ?? 0) : 0;
+            _socioLogo = data.isNotEmpty ? data.first['socio_logo'] : null;
           });
         }
       }
@@ -266,6 +268,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         builder: (context) => ChatDetalleScreen(
           conversacionId: _conversacionChatId!,
           nombreOtraParte: widget.negocio.nombreSocio ?? 'Mi contador',
+          otraParteLogo: _socioLogo,
         ),
       ),
     );
