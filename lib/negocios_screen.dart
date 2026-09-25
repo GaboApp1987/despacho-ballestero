@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'api_service.dart';
 import 'avatar_logo.dart';
+import 'chats_contador_screen.dart';
 import 'dashboard_despacho_widgets.dart';
 import 'negocio.dart';
 import 'onvo_cobro_automatico_screen.dart';
@@ -103,6 +104,9 @@ class _NegociosScreenState extends State<NegociosScreen> {
   // Certificaciones (ver DocumentosContadorScreen), para que se note desde
   // afuera sin tener que entrar.
   int? _pendientesCertificaciones;
+  // No-leídos de TODOS sus chats sumados -- mismo badge, ver item "Chats"
+  // en la sidebar.
+  int? _noLeidosChat;
 
   static const Map<String, String> _tiposCedula = {
     '01': 'Física',
@@ -128,6 +132,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
       _cargarMiSocio();
       _dashboardFuture = _cargarDashboard();
       _cargarPendientesCertificaciones();
+      _cargarNoLeidosChat();
     }
     if (_puedeReasignar) {
       _cargarSociosDisponibles();
@@ -143,6 +148,17 @@ class _NegociosScreenState extends State<NegociosScreen> {
       if (r.statusCode == 200) {
         final data = json.decode(utf8.decode(r.bodyBytes)) as List;
         if (mounted) setState(() => _pendientesCertificaciones = data.length);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _cargarNoLeidosChat() async {
+    try {
+      final r = await ApiService.get('/chat/conversaciones/');
+      if (r.statusCode == 200) {
+        final data = json.decode(utf8.decode(r.bodyBytes)) as List;
+        final total = data.fold<int>(0, (suma, c) => suma + ((c['no_leidos'] ?? 0) as int));
+        if (mounted) setState(() => _noLeidosChat = total);
       }
     } catch (_) {}
   }
@@ -1477,6 +1493,15 @@ class _NegociosScreenState extends State<NegociosScreen> {
               onTap: () async {
                 await Navigator.push(context, MaterialPageRoute(builder: (context) => const DocumentosContadorScreen()));
                 _cargarPendientesCertificaciones();
+              },
+            ),
+            item(
+              icono: Icons.chat_bubble_outline,
+              etiqueta: "Chats",
+              badge: _noLeidosChat,
+              onTap: () async {
+                await Navigator.push(context, MaterialPageRoute(builder: (context) => const ChatsContadorScreen()));
+                _cargarNoLeidosChat();
               },
             ),
             item(

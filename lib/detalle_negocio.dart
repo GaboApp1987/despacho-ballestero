@@ -33,6 +33,7 @@ import 'tarjeta_lealtad_screen.dart';
 import 'addons_screen.dart';
 import 'login.dart';
 import 'formato.dart';
+import 'chat_detalle_screen.dart';
 import 'perfil_usuario_screen.dart';
 import 'widgets/bloqueo_salida_raiz.dart';
 import 'widgets/soporte_chat.dart';
@@ -170,6 +171,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     _cargarNombreUsuario();
     _cargarTipoCambio();
     _cargarNegocioActualizado();
+    _cargarChat();
     _busquedaClientesCtrl.addListener(() {
       setState(() => _busquedaClientes = _busquedaClientesCtrl.text.trim().toLowerCase());
     });
@@ -229,6 +231,46 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
   }
 
   Negocio get _negocioConCuota => _negocioActualizado ?? widget.negocio;
+
+  // Chat con el contador -- null hasta que el contador inicia la
+  // conversación (ver ConversacionChatViewSet.create, solo el socio puede
+  // crearla), 0 o más no-leídos una vez que existe.
+  int? _conversacionChatId;
+  int _noLeidosChat = 0;
+
+  Future<void> _cargarChat() async {
+    try {
+      final r = await ApiService.get('/chat/conversaciones/');
+      if (r.statusCode == 200) {
+        final data = json.decode(utf8.decode(r.bodyBytes)) as List;
+        if (mounted) {
+          setState(() {
+            _conversacionChatId = data.isNotEmpty ? data.first['id'] : null;
+            _noLeidosChat = data.isNotEmpty ? (data.first['no_leidos'] ?? 0) : 0;
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _abrirChat() async {
+    if (_conversacionChatId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Tu contador todavía no inició un chat con vos.")),
+      );
+      return;
+    }
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChatDetalleScreen(
+          conversacionId: _conversacionChatId!,
+          nombreOtraParte: widget.negocio.nombreSocio ?? 'Mi contador',
+        ),
+      ),
+    );
+    _cargarChat();
+  }
 
   Future<void> _cargarNombreUsuario() async {
     try {
@@ -622,6 +664,17 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
             icon: const Icon(Icons.support_agent),
             tooltip: "Soporte",
             onPressed: () => mostrarSoporteChat(context, contexto: 'usuario', negocioId: widget.negocio.id),
+          ),
+          IconButton(
+            icon: Badge(
+              label: Text(_noLeidosChat > 99 ? '99+' : '$_noLeidosChat', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+              backgroundColor: Colors.red,
+              isLabelVisible: _noLeidosChat > 0,
+              offset: const Offset(4, -4),
+              child: const Icon(Icons.chat_bubble_outline),
+            ),
+            tooltip: "Chat con mi contador",
+            onPressed: _abrirChat,
           ),
           IconButton(
             icon: const Icon(Icons.account_circle_rounded),
