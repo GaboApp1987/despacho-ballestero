@@ -58,6 +58,9 @@ class Negocio {
   final bool tieneUsuario;
   final String? logoUrl;
   final String? direccion;
+  final String? provincia;
+  final String? canton;
+  final String? distrito;
   final String? telefono;
   final String? correoHacienda;
   final String? alanubeEconomicActivity;
@@ -86,6 +89,9 @@ class Negocio {
     this.tieneUsuario = false,
     this.logoUrl,
     this.direccion,
+    this.provincia,
+    this.canton,
+    this.distrito,
     this.telefono,
     this.correoHacienda,
     this.alanubeEconomicActivity,
@@ -118,6 +124,9 @@ class Negocio {
       tieneUsuario: json['tiene_usuario'] ?? false,
       logoUrl: json['logo'],
       direccion: json['direccion'],
+      provincia: json['provincia'],
+      canton: json['canton'],
+      distrito: json['distrito'],
       telefono: json['telefono'],
       correoHacienda: json['correo_hacienda'],
       alanubeEconomicActivity: json['alanube_economic_activity'],

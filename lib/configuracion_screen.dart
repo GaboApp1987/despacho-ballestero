@@ -7,6 +7,7 @@ import 'negocio.dart';
 import 'api_service.dart';
 import 'logo_screen.dart';
 import 'actividad_economica.dart';
+import 'ubicacion_cr.dart';
 
 class ConfiguracionScreen extends StatefulWidget {
   final Negocio negocio;
@@ -40,10 +41,21 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
   List<ActividadEconomica> _actividades = [];
   bool _cargandoActividades = true;
 
+  // Ubicación exigida por Hacienda desde la v4.4 (Provincia/Cantón/Distrito
+  // como código, ver Negocio en el backend) -- se muestra por nombre para
+  // que el negocio elija sin tener que saber el código de memoria, pero lo
+  // que se guarda y se manda en el XML es el código.
+  List<ProvinciaCR> _ubicaciones = [];
+  bool _cargandoUbicaciones = true;
+  String? _provinciaSel;
+  String? _cantonSel;
+  String? _distritoSel;
+
   @override
   void initState() {
     super.initState();
     _cargarActividades();
+    _cargarUbicaciones();
     _usuarioController = TextEditingController(text: widget.negocio.usuarioApi ?? '');
     _pinController = TextEditingController(text: widget.negocio.pinLlave ?? '');
     _entornoSeleccionado = widget.negocio.entornoHacienda ?? 'STAGING';
@@ -134,6 +146,30 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
     } catch (_) {
       if (mounted) setState(() => _cargandoActividades = false);
     }
+  }
+
+  Future<void> _cargarUbicaciones() async {
+    final ubicaciones = await UbicacionCR.cargar();
+    if (!mounted) return;
+    setState(() {
+      _ubicaciones = ubicaciones;
+      _provinciaSel = widget.negocio.provincia;
+      _cantonSel = widget.negocio.canton;
+      _distritoSel = widget.negocio.distrito;
+      _cargandoUbicaciones = false;
+    });
+  }
+
+  List<CantonCR> get _cantonesDisponibles {
+    if (_provinciaSel == null) return [];
+    final prov = _ubicaciones.where((p) => p.codigo == _provinciaSel);
+    return prov.isEmpty ? [] : prov.first.cantones;
+  }
+
+  List<DistritoCR> get _distritosDisponibles {
+    if (_cantonSel == null) return [];
+    final cant = _cantonesDisponibles.where((c) => c.codigo == _cantonSel);
+    return cant.isEmpty ? [] : cant.first.distritos;
   }
 
   void _mostrarFormularioActividad() {
@@ -285,6 +321,9 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
         'entorno_hacienda': _entornoSeleccionado,
         'nombre_comercial': _nombreComercialController.text.trim(),
         'direccion': _direccionController.text.trim(),
+        'provincia': _provinciaSel ?? '',
+        'canton': _cantonSel ?? '',
+        'distrito': _distritoSel ?? '',
         'telefono': _telefonoController.text.trim(),
         'correo_hacienda': _correoController.text.trim(),
         'alanube_economic_activity': _alanubeActividadController.text.trim(),
@@ -411,11 +450,70 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
                           maxLines: 2,
                           decoration: const InputDecoration(
                             labelText: "Dirección",
+                            helperText: "Señas exactas (ej: 200m norte del parque) -- la provincia/cantón/distrito van abajo",
                             prefixIcon: Icon(Icons.location_on_outlined),
                             border: OutlineInputBorder(),
                           ),
                         ),
                       ),
+                      const SizedBox(height: 12),
+                      if (_cargandoUbicaciones)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Ubicación exigida por Hacienda",
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey[700]),
+                              ),
+                              const SizedBox(height: 8),
+                              DropdownButtonFormField<String>(
+                                initialValue: _provinciaSel,
+                                isExpanded: true,
+                                decoration: const InputDecoration(labelText: "Provincia", border: OutlineInputBorder()),
+                                items: _ubicaciones
+                                    .map((p) => DropdownMenuItem(value: p.codigo, child: Text("${p.codigo} - ${p.nombre}")))
+                                    .toList(),
+                                onChanged: (v) => setState(() {
+                                  _provinciaSel = v;
+                                  _cantonSel = null;
+                                  _distritoSel = null;
+                                }),
+                              ),
+                              const SizedBox(height: 12),
+                              DropdownButtonFormField<String>(
+                                initialValue: _cantonSel,
+                                isExpanded: true,
+                                decoration: const InputDecoration(labelText: "Cantón", border: OutlineInputBorder()),
+                                items: _cantonesDisponibles
+                                    .map((c) => DropdownMenuItem(value: c.codigo, child: Text("${c.codigo} - ${c.nombre}")))
+                                    .toList(),
+                                onChanged: _provinciaSel == null
+                                    ? null
+                                    : (v) => setState(() {
+                                          _cantonSel = v;
+                                          _distritoSel = null;
+                                        }),
+                              ),
+                              const SizedBox(height: 12),
+                              DropdownButtonFormField<String>(
+                                initialValue: _distritoSel,
+                                isExpanded: true,
+                                decoration: const InputDecoration(labelText: "Distrito", border: OutlineInputBorder()),
+                                items: _distritosDisponibles
+                                    .map((d) => DropdownMenuItem(value: d.codigo, child: Text("${d.codigo} - ${d.nombre}")))
+                                    .toList(),
+                                onChanged: _cantonSel == null ? null : (v) => setState(() => _distritoSel = v),
+                              ),
+                            ],
+                          ),
+                        ),
                       const SizedBox(height: 12),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),

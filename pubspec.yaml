@@ -59,3 +59,4 @@ flutter:
   assets:
     - assets/fonts/arial.ttf
     - assets/fonts/arialbd.ttf
+    - assets/data/ubicaciones_cr.json

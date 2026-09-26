@@ -90,7 +90,14 @@ class _ReportesScreenState extends State<ReportesScreen> {
           final r = await ApiService.get('/facturas/?negocio=${widget.negocio.id}&fecha_inicio=$inicioStr&fecha_fin=$finStr');
           if (r.statusCode == 200) {
             final data = json.decode(utf8.decode(r.bodyBytes)) as List;
-            _facturas = data.map((j) => Factura.fromJson(j)).toList();
+            // Una factura Rechazada (4) o con Error Técnico (5) nunca quedó
+            // validada por Hacienda -- no es una venta real y no debe
+            // sumarse ni aparecer en este reporte (mismo criterio que ya
+            // usa el resto de la app: solo estado_hacienda '3' cuenta).
+            _facturas = data
+                .map((j) => Factura.fromJson(j))
+                .where((f) => f.estadoHacienda != '4' && f.estadoHacienda != '5')
+                .toList();
           }
           break;
         case _TipoReporte.ingresos:
@@ -104,7 +111,12 @@ class _ReportesScreenState extends State<ReportesScreen> {
           final r = await ApiService.get('/compras/?negocio=${widget.negocio.id}&fecha_inicio=$inicioStr&fecha_fin=$finStr');
           if (r.statusCode == 200) {
             final data = json.decode(utf8.decode(r.bodyBytes)) as List;
-            _compras = data.map((j) => Compra.fromJson(j)).toList();
+            // Una compra que este negocio le Rechazó a Hacienda (Mensaje
+            // Receptor tipo '3') no es una compra real, no debe sumarse.
+            _compras = data
+                .map((j) => Compra.fromJson(j))
+                .where((c) => c.mensajeReceptorTipo != '3')
+                .toList();
           }
           break;
         case _TipoReporte.gastos:
