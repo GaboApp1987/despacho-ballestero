@@ -6,6 +6,7 @@ import 'formato.dart';
 import 'login.dart';
 import 'plan.dart';
 import 'theme/app_theme.dart';
+import 'ubicacion_cr.dart';
 
 /// Alta pública desde el login (sin sesión previa): despacho contable,
 /// contador independiente, o negocio directo. La cuenta queda creada pero
@@ -47,6 +48,28 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
   final _codigoPromocionalCtrl = TextEditingController();
   String _tipoCedula = '02';
 
+  // Ubicación exigida por Hacienda (Provincia/Cantón/Distrito) -- opcional
+  // acá igual que correo_hacienda/codigo_actividad: quien ya la tiene a
+  // mano deja la cuenta completa de una vez, quien no, la completa después
+  // desde Ajustes (ver configuracion_screen.dart).
+  List<ProvinciaCR> _ubicaciones = [];
+  bool _cargandoUbicaciones = true;
+  String? _provinciaSel;
+  String? _cantonSel;
+  String? _distritoSel;
+
+  List<CantonCR> get _cantonesDisponibles {
+    if (_provinciaSel == null) return [];
+    final prov = _ubicaciones.where((p) => p.codigo == _provinciaSel);
+    return prov.isEmpty ? [] : prov.first.cantones;
+  }
+
+  List<DistritoCR> get _distritosDisponibles {
+    if (_cantonSel == null) return [];
+    final cant = _cantonesDisponibles.where((c) => c.codigo == _cantonSel);
+    return cant.isEmpty ? [] : cant.first.distritos;
+  }
+
   bool _cargandoPlanes = true;
   List<_PlanOption> _planes = [];
   int? _planSeleccionadoId;
@@ -81,6 +104,9 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
   void initState() {
     super.initState();
     _cargarPlanes();
+    UbicacionCR.cargar().then((u) {
+      if (mounted) setState(() { _ubicaciones = u; _cargandoUbicaciones = false; });
+    });
     _emailCtrl.addListener(() {
       final correo = _emailCtrl.text.trim();
       final usernameActual = _usernameCtrl.text.trim();
@@ -189,6 +215,9 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
         'tipo_cedula': _tipoCedula,
         'correo_hacienda': _correoHaciendaCtrl.text.trim(),
         'codigo_actividad': _codigoActividadCtrl.text.trim(),
+        if (_provinciaSel != null) 'provincia': _provinciaSel,
+        if (_cantonSel != null) 'canton': _cantonSel,
+        if (_distritoSel != null) 'distrito': _distritoSel,
       },
     };
 
@@ -403,6 +432,54 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                           border: OutlineInputBorder(),
                         ),
                       ),
+                      const SizedBox(height: 12),
+                      Text(
+                        "Ubicación (opcional -- Provincia, Cantón y Distrito que exige Hacienda)",
+                        style: TextStyle(fontSize: 12.5, color: AppColors.textMuted),
+                      ),
+                      const SizedBox(height: 8),
+                      if (_cargandoUbicaciones)
+                        const Center(child: CircularProgressIndicator())
+                      else ...[
+                        DropdownButtonFormField<String>(
+                          initialValue: _provinciaSel,
+                          isExpanded: true,
+                          decoration: const InputDecoration(labelText: "Provincia", border: OutlineInputBorder()),
+                          items: _ubicaciones
+                              .map((p) => DropdownMenuItem(value: p.codigo, child: Text("${p.codigo} - ${p.nombre}")))
+                              .toList(),
+                          onChanged: (v) => setState(() {
+                            _provinciaSel = v;
+                            _cantonSel = null;
+                            _distritoSel = null;
+                          }),
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          initialValue: _cantonSel,
+                          isExpanded: true,
+                          decoration: const InputDecoration(labelText: "Cantón", border: OutlineInputBorder()),
+                          items: _cantonesDisponibles
+                              .map((c) => DropdownMenuItem(value: c.codigo, child: Text("${c.codigo} - ${c.nombre}")))
+                              .toList(),
+                          onChanged: _provinciaSel == null
+                              ? null
+                              : (v) => setState(() {
+                                    _cantonSel = v;
+                                    _distritoSel = null;
+                                  }),
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          initialValue: _distritoSel,
+                          isExpanded: true,
+                          decoration: const InputDecoration(labelText: "Distrito", border: OutlineInputBorder()),
+                          items: _distritosDisponibles
+                              .map((d) => DropdownMenuItem(value: d.codigo, child: Text("${d.codigo} - ${d.nombre}")))
+                              .toList(),
+                          onChanged: _cantonSel == null ? null : (v) => setState(() => _distritoSel = v),
+                        ),
+                      ],
                     ],
                     if (_requierePago) ...[
                       const SizedBox(height: 20),
