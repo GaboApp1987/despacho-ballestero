@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:url_launcher/url_launcher.dart';
 import 'theme/app_theme.dart';
 import 'factura.dart';
@@ -360,14 +361,27 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
                                   children: [
                                     const Icon(Icons.error_outline, color: Colors.red, size: 18),
                                     const SizedBox(width: 6),
-                                    Text(
-                                      factura.estadoHacienda == '5' ? "Motivo del error" : "Motivo del rechazo",
-                                      style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 13),
+                                    Expanded(
+                                      child: Text(
+                                        factura.estadoHacienda == '5' ? "Motivo del error" : "Motivo del rechazo",
+                                        style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 13),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.copy, size: 18, color: Colors.red),
+                                      tooltip: "Copiar",
+                                      visualDensity: VisualDensity.compact,
+                                      onPressed: () {
+                                        Clipboard.setData(ClipboardData(text: factura.motivoRechazo!));
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text("Motivo copiado al portapapeles")),
+                                        );
+                                      },
                                     ),
                                   ],
                                 ),
                                 const SizedBox(height: 6),
-                                Text(factura.motivoRechazo!, style: const TextStyle(fontSize: 13, color: Colors.black87)),
+                                SelectableText(factura.motivoRechazo!, style: const TextStyle(fontSize: 13, color: Colors.black87)),
                               ],
                             ),
                           ),
