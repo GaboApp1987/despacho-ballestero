@@ -51,11 +51,26 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
   String? _cantonSel;
   String? _distritoSel;
 
+  // Numeración de comprobantes -- para un negocio que ya facturaba
+  // electrónicamente con OTRO sistema antes de pasarse a Equilibra: si no
+  // adelanta el contador acá, Equilibra reusa un número que Hacienda ya
+  // tiene archivado y lo rechaza (ver NegocioViewSet.ajustar_numeracion).
+  final _consecutivoFacturaController = TextEditingController();
+  final _consecutivoTiqueteController = TextEditingController();
+  final _consecutivoNotaCreditoController = TextEditingController();
+  int _ultimoConsecutivoFactura = 0;
+  int _ultimoConsecutivoTiquete = 0;
+  int _ultimoConsecutivoNotaCredito = 0;
+  final Set<String> _ajustandoNumeracion = {};
+
   @override
   void initState() {
     super.initState();
     _cargarActividades();
     _cargarUbicaciones();
+    _ultimoConsecutivoFactura = widget.negocio.ultimoConsecutivoFactura;
+    _ultimoConsecutivoTiquete = widget.negocio.ultimoConsecutivoTiquete;
+    _ultimoConsecutivoNotaCredito = widget.negocio.ultimoConsecutivoNotaCredito;
     _usuarioController = TextEditingController(text: widget.negocio.usuarioApi ?? '');
     _pinController = TextEditingController(text: widget.negocio.pinLlave ?? '');
     _entornoSeleccionado = widget.negocio.entornoHacienda ?? 'STAGING';
@@ -304,7 +319,101 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
     _telefonoController.dispose();
     _correoController.dispose();
     _alanubeActividadController.dispose();
+    _consecutivoFacturaController.dispose();
+    _consecutivoTiqueteController.dispose();
+    _consecutivoNotaCreditoController.dispose();
     super.dispose();
+  }
+
+  static const Map<String, String> _etiquetaTipoNumeracion = {
+    'factura': 'Factura',
+    'tiquete': 'Tiquete Electrónico',
+    'nota_credito': 'Nota de Crédito',
+  };
+
+  Future<void> _ajustarNumeracion(String tipo, TextEditingController controller) async {
+    final valor = controller.text.trim();
+    if (valor.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Ingresá el último consecutivo usado.")),
+      );
+      return;
+    }
+    setState(() => _ajustandoNumeracion.add(tipo));
+    try {
+      final response = await ApiService.post(
+        '/negocios/${widget.negocio.id}/ajustar-numeracion/',
+        {'tipo': tipo, 'ultimo_consecutivo': valor},
+      );
+      final datos = json.decode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200) {
+        setState(() {
+          final nuevoValor = datos['valor'] as int;
+          switch (tipo) {
+            case 'factura':
+              _ultimoConsecutivoFactura = nuevoValor;
+              break;
+            case 'tiquete':
+              _ultimoConsecutivoTiquete = nuevoValor;
+              break;
+            case 'nota_credito':
+              _ultimoConsecutivoNotaCredito = nuevoValor;
+              break;
+          }
+          controller.clear();
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Numeración de ${_etiquetaTipoNumeracion[tipo]} actualizada -- el próximo comprobante va a salir con el número siguiente."),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        throw Exception(datos['detail'] ?? 'Error desconocido');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo actualizar: $e"), backgroundColor: Colors.red));
+      }
+    } finally {
+      if (mounted) setState(() => _ajustandoNumeracion.remove(tipo));
+    }
+  }
+
+  Widget _filaNumeracion(String tipo, int valorActual, TextEditingController controller) {
+    final ajustando = _ajustandoNumeracion.contains(tipo);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: TextFormField(
+              controller: controller,
+              decoration: InputDecoration(
+                labelText: _etiquetaTipoNumeracion[tipo],
+                helperText: "Actual en Equilibra: $valorActual",
+                hintText: "Ej: 00100002010000000004 o solo 4",
+                border: const OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: ajustando
+                ? const SizedBox(height: 36, width: 36, child: Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator(strokeWidth: 2)))
+                : ElevatedButton(
+                    onPressed: () => _ajustarNumeracion(tipo, controller),
+                    child: const Text("Actualizar"),
+                  ),
+          ),
+        ],
+      ),
+    );
   }
 
   // 🌐 FUNCIÓN DE RED DIRECTA A TU VIEWSET PARCIAL DE DJANGO
@@ -631,6 +740,43 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
                         subtitle: Text(_logoUrl != null && _logoUrl!.isNotEmpty ? "Logo cargado" : "Sin logo"),
                         trailing: TextButton(onPressed: _abrirLogo, child: const Text("Cambiar")),
                       ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // 🔢 NUMERACIÓN DE COMPROBANTES (migración desde otro sistema)
+              Card(
+                elevation: 2,
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("🔢 Numeración de Comprobantes", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                      const Divider(),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        child: Text(
+                          "Si este negocio ya facturaba electrónicamente con OTRO sistema antes de pasarse a Equilibra, indicá acá el último "
+                          "consecutivo que usó de cada tipo -- así Equilibra arranca después de ese número y nunca choca con uno que Hacienda "
+                          "ya tenga archivado (podés pegar el consecutivo completo de 20 dígitos tal como sale impreso, o solo el número).",
+                          style: TextStyle(fontSize: 12.5, color: Colors.grey[600]),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Column(
+                          children: [
+                            _filaNumeracion('factura', _ultimoConsecutivoFactura, _consecutivoFacturaController),
+                            _filaNumeracion('tiquete', _ultimoConsecutivoTiquete, _consecutivoTiqueteController),
+                            _filaNumeracion('nota_credito', _ultimoConsecutivoNotaCredito, _consecutivoNotaCreditoController),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
                     ],
                   ),
                 ),

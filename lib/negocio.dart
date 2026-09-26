@@ -72,6 +72,9 @@ class Negocio {
   final int? suscripcionId;
   final String? suscripcionEstado;
   final bool suscripcionCobroAutomatico;
+  final int ultimoConsecutivoFactura;
+  final int ultimoConsecutivoTiquete;
+  final int ultimoConsecutivoNotaCredito;
 
   // 🔥 2. LOS AGREGAMOS AL CONSTRUCTOR (AQUÍ ERA DONDE FALLABA)
   Negocio({
@@ -103,6 +106,9 @@ class Negocio {
     this.suscripcionId,
     this.suscripcionEstado,
     this.suscripcionCobroAutomatico = false,
+    this.ultimoConsecutivoFactura = 0,
+    this.ultimoConsecutivoTiquete = 0,
+    this.ultimoConsecutivoNotaCredito = 0,
   });
 
   // 🔥 3. MAPEAMOS CORRECTAMENTE EL CONSTRUCTOR FROMJSON
@@ -138,6 +144,9 @@ class Negocio {
       suscripcionId: json['suscripcion_id'],
       suscripcionEstado: json['suscripcion_estado'],
       suscripcionCobroAutomatico: json['suscripcion_cobro_automatico'] ?? false,
+      ultimoConsecutivoFactura: json['ultimo_consecutivo_factura'] ?? 0,
+      ultimoConsecutivoTiquete: json['ultimo_consecutivo_tiquete'] ?? 0,
+      ultimoConsecutivoNotaCredito: json['ultimo_consecutivo_nota_credito'] ?? 0,
     );
   }
 }
