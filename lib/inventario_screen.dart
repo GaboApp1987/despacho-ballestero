@@ -420,49 +420,77 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
             separatorBuilder: (context, i) => Divider(height: 1, indent: 16, endIndent: 16, color: AppColors.border),
             itemBuilder: (context, i) {
               final p = filtrados[i];
+              final bool tieneImagen = p.imagenUrl != null && p.imagenUrl!.isNotEmpty;
               return ListTile(
                 dense: true,
                 visualDensity: VisualDensity.compact,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                leading: CircleAvatar(
-                  radius: 16,
-                  backgroundColor: p.stock > 0 ? AppColors.primary : Colors.red.shade400,
-                  child: Text(
-                    "${p.stock}",
-                    style: TextStyle(color: p.stock > 0 ? Colors.black : Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                leading: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    color: AppColors.primary.withOpacity(0.12),
+                    child: tieneImagen
+                        ? Image.network(
+                            p.imagenUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Icon(Icons.inventory_2_outlined, color: AppColors.primary, size: 20),
+                          )
+                        : Icon(Icons.inventory_2_outlined, color: AppColors.primary, size: 20),
                   ),
                 ),
                 title: Text(p.nombre, style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
                 subtitle: Text(
-                  "${formatearColones(p.precioUnitario)} · ${formatearNumero(p.stock, decimales: 0)} ${p.unidadMedida} · ${p.nombreCategoria ?? 'Sin Categoría'}",
+                  "${formatearColones(p.precioUnitario)} · ${p.nombreCategoria ?? 'Sin Categoría'}",
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: AppColors.textMuted, fontSize: 12.5),
                 ),
                 onTap: () => _abrirEditarProducto(p),
-                trailing: PopupMenuButton<String>(
-                  icon: Icon(Icons.more_vert, color: AppColors.textMuted),
-                  onSelected: (valor) {
-                    if (valor == 'editar') {
-                      _abrirEditarProducto(p);
-                    } else if (valor == 'stock') {
-                      _mostrarDialogoEditarStock(p);
-                    } else if (valor == 'movimientos') {
-                      Future.microtask(() {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => MovimientosProductoScreen(producto: p)),
-                        );
-                      });
-                    } else if (valor == 'eliminar') {
-                      _eliminarProducto(p);
-                    }
-                  },
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(value: 'editar', child: Text("Editar producto")),
-                    PopupMenuItem(value: 'stock', child: Text("Editar solo stock")),
-                    PopupMenuItem(value: 'movimientos', child: Text("Movimientos")),
-                    PopupMenuItem(value: 'eliminar', child: Text("Eliminar")),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: (p.stock > 0 ? AppColors.primary : Colors.red.shade400).withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        "${formatearNumero(p.stock, decimales: 0)} ${p.unidadMedida}",
+                        style: TextStyle(
+                          color: p.stock > 0 ? AppColors.primary : Colors.red.shade400,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                    ),
+                    PopupMenuButton<String>(
+                      icon: Icon(Icons.more_vert, color: AppColors.textMuted),
+                      onSelected: (valor) {
+                        if (valor == 'editar') {
+                          _abrirEditarProducto(p);
+                        } else if (valor == 'stock') {
+                          _mostrarDialogoEditarStock(p);
+                        } else if (valor == 'movimientos') {
+                          Future.microtask(() {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => MovimientosProductoScreen(producto: p)),
+                            );
+                          });
+                        } else if (valor == 'eliminar') {
+                          _eliminarProducto(p);
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(value: 'editar', child: Text("Editar producto")),
+                        PopupMenuItem(value: 'stock', child: Text("Editar solo stock")),
+                        PopupMenuItem(value: 'movimientos', child: Text("Movimientos")),
+                        PopupMenuItem(value: 'eliminar', child: Text("Eliminar")),
+                      ],
+                    ),
                   ],
                 ),
               );
