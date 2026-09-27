@@ -129,6 +129,28 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     (id: 5, icono: Icons.settings_outlined, titulo: "Ajustes"),
   ];
 
+  // Agrupación de las secciones de arriba en categorías -- con 19 secciones
+  // la barra de pildoras horizontal ya no entraba en pantalla (obligaba a
+  // desplazarse para encontrar cualquier cosa). Ahora la barra muestra solo
+  // estas 5 categorías como pildoras, y cada una despliega un menú con sus
+  // secciones (ver _pildoraCategoria); el Drawer móvil usa el mismo mapeo
+  // como ExpansionTile por categoría (ver _buildDrawerMovil).
+  static const List<({String categoria, IconData icono})> _categorias = [
+    (categoria: "Principal", icono: Icons.home_outlined),
+    (categoria: "Ventas", icono: Icons.point_of_sale_outlined),
+    (categoria: "Compras", icono: Icons.shopping_cart_outlined),
+    (categoria: "Finanzas", icono: Icons.account_balance_outlined),
+    (categoria: "Administración", icono: Icons.admin_panel_settings_outlined),
+  ];
+
+  static const Map<String, List<int>> _idsPorCategoria = {
+    "Principal": [1, 2, 3],
+    "Ventas": [0, 4, 15, 11, 16, 6],
+    "Compras": [8, 17, 13, 9],
+    "Finanzas": [18, 10, 7],
+    "Administración": [14, 12, 5],
+  };
+
   // Secciones ocultas para un empleado con rol 'cajero' -- el backend ya
   // bloquea la escritura/lectura correspondiente de todas formas (ver
   // BloqueaCajeroMixin y los chequeos de es_cajero en views.py), esto es
@@ -752,19 +774,6 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     );
   }
 
-  /// Lista de secciones del menú, reutilizada tanto por la columna lateral
-  /// fija (escritorio/web ancho) como por el Drawer deslizable (móvil).
-  List<Widget> _itemsMenu({bool cerrarAlSeleccionar = false}) {
-    return _menuItemsVisibles
-        .map((it) => _buildItemMenu(
-              id: it.id,
-              icono: it.icono,
-              titulo: it.titulo,
-              cerrarAlSeleccionar: cerrarAlSeleccionar,
-            ))
-        .toList();
-  }
-
   Widget _buildDrawerMovil() {
     return Drawer(
       backgroundColor: AppColors.surface,
@@ -776,12 +785,40 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Divider(color: AppColors.border, height: 1),
             ),
-            const SizedBox(height: 14),
-            ..._itemsMenu(cerrarAlSeleccionar: true),
+            const SizedBox(height: 6),
+            for (final c in _categorias) ..._buildGrupoCategoriaDrawer(c.categoria, c.icono),
           ],
         ),
       ),
     );
+  }
+
+  /// Una categoría como ExpansionTile en el Drawer móvil, con sus secciones
+  /// visibles adentro -- ya expandida si la sección activa pertenece a ella.
+  /// Devuelve una lista vacía si el rol del usuario no ve ninguna sección de
+  /// esta categoría (ej. "Administración" para un cajero).
+  List<Widget> _buildGrupoCategoriaDrawer(String categoria, IconData icono) {
+    final ids = _idsPorCategoria[categoria]!;
+    final items = _menuItemsVisibles.where((m) => ids.contains(m.id)).toList();
+    if (items.isEmpty) return const [];
+    final bool categoriaActiva = ids.contains(_seccionActiva);
+    return [
+      Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: categoriaActiva,
+          leading: Icon(icono, size: 20, color: AppColors.textMuted),
+          title: Text(
+            categoria,
+            style: TextStyle(color: AppColors.textStrong, fontWeight: FontWeight.bold, fontSize: 13.5),
+          ),
+          childrenPadding: const EdgeInsets.only(bottom: 4),
+          children: items
+              .map((it) => _buildItemMenu(id: it.id, icono: it.icono, titulo: it.titulo, cerrarAlSeleccionar: true))
+              .toList(),
+        ),
+      ),
+    ];
   }
 
   Widget _buildSidebarHeader() {
@@ -881,42 +918,67 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     );
   }
 
-  /// Cada seccion de la app como pastilla horizontal en la barra de
-  /// navegacion superior (estilo del diseño de referencia: "Dashboard /
-  /// Structure / Costs / Budget" como pildoras junto al logo, en vez de un
-  /// menu lateral vertical). Se recorre con scroll horizontal porque esta
-  /// app tiene bastantes mas secciones que el diseño original.
-  Widget _pildoraNav({required int id, required IconData icono, required String titulo}) {
-    final bool seleccionado = _seccionActiva == id;
+  /// Cada categoría como pastilla horizontal en la barra de navegación
+  /// superior -- al tocarla despliega un menú con las secciones visibles de
+  /// esa categoría (ver _idsPorCategoria). Antes cada una de las 19
+  /// secciones era su propia pildora y no entraban todas en pantalla; ahora
+  /// solo hay una pildora por categoría (5 en total).
+  Widget _pildoraCategoria({required String categoria, required IconData icono}) {
+    final ids = _idsPorCategoria[categoria]!;
+    final itemsCategoria = _menuItemsVisibles.where((m) => ids.contains(m.id)).toList();
+    if (itemsCategoria.isEmpty) return const SizedBox.shrink();
+    final bool categoriaActiva = ids.contains(_seccionActiva);
+
     return Padding(
       padding: const EdgeInsets.only(right: 8),
-      child: Material(
-        color: seleccionado ? AppColors.primary : Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: () => _cambiarSeccion(id),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              border: seleccionado ? null : Border.all(color: AppColors.border),
-            ),
+      child: PopupMenuButton<int>(
+        tooltip: categoria,
+        offset: const Offset(0, 44),
+        color: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: AppColors.border)),
+        onSelected: _cambiarSeccion,
+        itemBuilder: (context) => itemsCategoria.map((it) {
+          final bool seleccionado = _seccionActiva == it.id;
+          return PopupMenuItem<int>(
+            value: it.id,
             child: Row(
-              mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icono, size: 16, color: seleccionado ? Colors.black : AppColors.textMuted),
-                const SizedBox(width: 6),
+                Icon(it.icono, size: 18, color: seleccionado ? AppColors.primary : AppColors.textMuted),
+                const SizedBox(width: 10),
                 Text(
-                  titulo,
+                  it.titulo,
                   style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: seleccionado ? Colors.black : AppColors.textMuted,
+                    color: seleccionado ? AppColors.primary : AppColors.textStrong,
+                    fontWeight: seleccionado ? FontWeight.w600 : FontWeight.normal,
                   ),
                 ),
               ],
             ),
+          );
+        }).toList(),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+          decoration: BoxDecoration(
+            color: categoriaActiva ? AppColors.primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            border: categoriaActiva ? null : Border.all(color: AppColors.border),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icono, size: 16, color: categoriaActiva ? Colors.black : AppColors.textMuted),
+              const SizedBox(width: 6),
+              Text(
+                categoria,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: categoriaActiva ? Colors.black : AppColors.textMuted,
+                ),
+              ),
+              const SizedBox(width: 2),
+              Icon(Icons.arrow_drop_down, size: 18, color: categoriaActiva ? Colors.black : AppColors.textMuted),
+            ],
           ),
         ),
       ),
@@ -955,8 +1017,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
-                children: _menuItemsVisibles
-                    .map((it) => _pildoraNav(id: it.id, icono: it.icono, titulo: it.titulo))
+                children: _categorias
+                    .map((c) => _pildoraCategoria(categoria: c.categoria, icono: c.icono))
                     .toList(),
               ),
             ),
