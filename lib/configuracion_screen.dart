@@ -386,24 +386,22 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
     final ajustando = _ajustandoNumeracion.contains(tipo);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: TextFormField(
-              controller: controller,
-              decoration: InputDecoration(
-                labelText: _etiquetaTipoNumeracion[tipo],
-                helperText: "Actual en Equilibra: $valorActual",
-                hintText: "Ej: 00100002010000000004 o solo 4",
-                border: const OutlineInputBorder(),
-                isDense: true,
-              ),
+          TextFormField(
+            controller: controller,
+            decoration: InputDecoration(
+              labelText: _etiquetaTipoNumeracion[tipo],
+              helperText: "Actual en Equilibra: $valorActual",
+              hintText: "Ej: 00100002010000000004 o solo 4",
+              border: const OutlineInputBorder(),
+              isDense: true,
             ),
           ),
-          const SizedBox(width: 10),
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
             child: ajustando
                 ? const SizedBox(height: 36, width: 36, child: Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator(strokeWidth: 2)))
                 : ElevatedButton(
