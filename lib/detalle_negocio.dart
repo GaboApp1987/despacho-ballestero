@@ -488,63 +488,107 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     }
   }
 
-  Widget _pillAppBar({required IconData icono, required String texto, required String tooltip, Color? colorTexto}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Tooltip(
-        message: tooltip,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: AppColors.textMuted.withOpacity(0.15),
+  /// Un segmento dentro de la cápsula de "datos del período" del AppBar
+  /// (ver _grupoDatosAppBar) -- sin fondo propio porque ya vive adentro de
+  /// esa cápsula, con resaltado al pasar el cursor igual que el resto de
+  /// los controles interactivos del AppBar.
+  Widget _segmentoDatosAppBar({
+    required IconData icono,
+    required String texto,
+    required String tooltip,
+    Color? colorTexto,
+    VoidCallback? onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: _Resaltable(
+        builder: (context, hover) {
+          final bool destacar = hover && onTap != null;
+          return InkWell(
+            onTap: onTap,
             borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icono, size: 16, color: colorTexto ?? Colors.white),
-              const SizedBox(width: 6),
-              Text(texto, style: TextStyle(color: colorTexto ?? Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
-            ],
-          ),
-        ),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: destacar ? AppColors.primary.withOpacity(0.14) : Colors.transparent,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icono, size: 16, color: colorTexto ?? (destacar ? AppColors.primary : AppColors.textStrong)),
+                  const SizedBox(width: 6),
+                  Text(
+                    texto,
+                    style: TextStyle(
+                      color: colorTexto ?? (destacar ? AppColors.primary : AppColors.textStrong),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildPillTipoCambio() {
-    final venta = (_tipoCambio!['venta'] as num?)?.toDouble() ?? 0;
-    final compra = (_tipoCambio!['compra'] as num?)?.toDouble() ?? 0;
-    return _pillAppBar(
-      icono: Icons.attach_money,
-      texto: "₡${formatearNumero(venta)}",
-      tooltip: "Tipo de cambio USD (BCCR) — Compra: ₡${formatearNumero(compra)} · Venta: ₡${formatearNumero(venta)}",
-    );
-  }
+  /// Agrupa Período, Tipo de cambio y Cuota de facturas en una sola cápsula
+  /// con separadores -- antes eran 3 elementos sueltos flotando en el
+  /// AppBar (un botón y dos pastillas con su propio fondo cada una), lo que
+  /// se sentía desordenado; ahora se leen como un solo bloque de "datos del
+  /// período actual".
+  Widget _grupoDatosAppBar() {
+    final segmentos = <Widget>[
+      _segmentoDatosAppBar(
+        icono: Icons.calendar_month_outlined,
+        texto: "Período",
+        tooltip: "Cambiar período (actual: ${_fechaInicio.day}/${_fechaInicio.month} al ${_fechaFin.day}/${_fechaFin.month})",
+        onTap: () async {
+          final DateTimeRange? rango = await showDateRangePicker(
+            context: context,
+            firstDate: DateTime(2023),
+            lastDate: DateTime(2030),
+            initialDateRange: DateTimeRange(start: _fechaInicio, end: _fechaFin),
+          );
+          if (rango != null) {
+            setState(() {
+              _fechaInicio = rango.start;
+              _fechaFin = rango.end;
+            });
+            _recargarDatos();
+          }
+        },
+      ),
+    ];
 
-  Widget _buildPillCuotaFacturas() {
-    final disponibles = _negocioConCuota.facturasDisponibles ?? 0;
-    final limite = _negocioConCuota.limiteFacturasMensual ?? 0;
-    Color? color;
-    if (limite > 0) {
-      final proporcion = disponibles / limite;
-      if (proporcion <= 0.1) {
-        color = Colors.redAccent.shade100;
-      } else if (proporcion <= 0.3) {
-        color = Colors.amber.shade100;
-      }
+    if (_tipoCambio != null && _tipoCambio!['disponible'] == true) {
+      final venta = (_tipoCambio!['venta'] as num?)?.toDouble() ?? 0;
+      final compra = (_tipoCambio!['compra'] as num?)?.toDouble() ?? 0;
+      segmentos.add(_segmentoDatosAppBar(
+        icono: Icons.attach_money,
+        texto: "₡${formatearNumero(venta)}",
+        tooltip: "Tipo de cambio USD (BCCR) — Compra: ₡${formatearNumero(compra)} · Venta: ₡${formatearNumero(venta)}",
+      ));
     }
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: () async {
-        final actualizo = await Navigator.push<bool>(
-          context,
-          MaterialPageRoute(builder: (_) => CambiarPlanScreen(negocio: _negocioConCuota)),
-        );
-        if (actualizo == true) _recargarDatos();
-      },
-      child: _pillAppBar(
-        icono: Icons.receipt_long,
+
+    if (_negocioConCuota.planNombre != null && _negocioConCuota.planNombre!.isNotEmpty) {
+      final disponibles = _negocioConCuota.facturasDisponibles ?? 0;
+      final limite = _negocioConCuota.limiteFacturasMensual ?? 0;
+      Color? color;
+      if (limite > 0) {
+        final proporcion = disponibles / limite;
+        if (proporcion <= 0.1) {
+          color = Colors.redAccent;
+        } else if (proporcion <= 0.3) {
+          color = Colors.amber.shade800;
+        }
+      }
+      segmentos.add(_segmentoDatosAppBar(
+        icono: Icons.receipt_long_outlined,
         // Solo el numero disponible -- "$disponibles/$limite" confundia
         // cuando disponibles supera el limite del plan (ej. despues de
         // comprar mas facturas antes de que se acabaran, algo valido y
@@ -553,6 +597,73 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         tooltip: "Plan ${_negocioConCuota.planNombre} ($limite facturas/mes): $disponibles disponibles "
             "ahora -- tocá para cambiar o sumar más",
         colorTexto: color,
+        onTap: () async {
+          final actualizo = await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(builder: (_) => CambiarPlanScreen(negocio: _negocioConCuota)),
+          );
+          if (actualizo == true) _recargarDatos();
+        },
+      ));
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (int i = 0; i < segmentos.length; i++) ...[
+              if (i > 0) Container(width: 1, height: 18, margin: const EdgeInsets.symmetric(horizontal: 2), color: AppColors.border),
+              segmentos[i],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Menú de comunicación (Soporte + Chat con mi contador) -- antes eran
+  /// dos IconButton sueltos; agruparlos bajo un solo ícono con desplegable
+  /// sigue el mismo patrón que el menú de cuenta, y el aviso de no-leídos
+  /// se muestra como Badge en el propio ícono disparador.
+  Widget _menuComunicacionAppBar() {
+    return PopupMenuButton<String>(
+      tooltip: "Comunicación",
+      offset: const Offset(0, 46),
+      color: AppColors.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: AppColors.border)),
+      onSelected: (opcion) {
+        if (opcion == 'soporte') {
+          mostrarSoporteChat(context, contexto: 'usuario', negocioId: widget.negocio.id);
+        } else if (opcion == 'chat') {
+          _abrirChat();
+        }
+      },
+      itemBuilder: (context) => [
+        _itemMenuCuenta(value: 'soporte', icono: Icons.support_agent, titulo: "Soporte"),
+        _itemMenuCuenta(
+          value: 'chat',
+          icono: Icons.chat_bubble_outline,
+          titulo: _noLeidosChat > 0
+              ? "Chat con mi contador (${_noLeidosChat > 99 ? '99+' : _noLeidosChat})"
+              : "Chat con mi contador",
+        ),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Badge(
+          label: Text(_noLeidosChat > 99 ? '99+' : '$_noLeidosChat', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+          backgroundColor: Colors.red,
+          isLabelVisible: _noLeidosChat > 0,
+          offset: const Offset(2, -2),
+          child: Icon(Icons.forum_outlined, color: AppColors.textMuted),
+        ),
       ),
     );
   }
@@ -696,69 +807,34 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         ),
         bottom: esMovil ? null : PreferredSize(preferredSize: const Size.fromHeight(56), child: _buildPillTabsBar()),
         actions: [
-          // Con hasta 7 elementos (2 fijos + hasta 2 pastillas condicionales
-          // + 3 mas), en un telefono angosto esto se salia del ancho del
-          // AppBar -- un RenderFlex overflow que dejaba lo que sobraba (a
-          // veces la pastilla de cuota de facturas, recien vuelta tocable)
-          // fuera del area realmente tocable, aunque se alcanzara a ver
-          // parcialmente. Envuelto en scroll horizontal, nunca queda nada
-          // inalcanzable sin importar cuan angosta sea la pantalla.
+          // Antes esto eran hasta 7 elementos sueltos (refresh, tema, 2
+          // pastillas condicionales, periodo, soporte, chat) mas la cuenta
+          // -- en un telefono angosto se salia del ancho del AppBar (ver
+          // scroll horizontal). Ahora se agrupan en 3 bloques (datos del
+          // periodo, comunicacion, cuenta) mas refresh/tema, bastante mas
+          // compacto y ordenado; el scroll horizontal se deja igual como
+          // red de seguridad para pantallas muy angostas.
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: "Actualizar",
-            onPressed: () => _recargarDatos(clientes: true),
-          ),
-          ValueListenableBuilder<bool>(
-            valueListenable: themeController,
-            builder: (context, esOscuro, _) => IconButton(
-              icon: Icon(esOscuro ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
-              tooltip: esOscuro ? "Cambiar a modo claro" : "Cambiar a modo oscuro",
-              onPressed: themeController.alternar,
-            ),
-          ),
-          if (_tipoCambio != null && _tipoCambio!['disponible'] == true) _buildPillTipoCambio(),
-          if (_negocioConCuota.planNombre != null && _negocioConCuota.planNombre!.isNotEmpty) _buildPillCuotaFacturas(),
-          IconButton(
-            icon: const Icon(Icons.date_range),
-            tooltip: "Cambiar Periodo",
-            onPressed: () async {
-              final DateTimeRange? rango = await showDateRangePicker(
-                context: context,
-                firstDate: DateTime(2023),
-                lastDate: DateTime(2030),
-                initialDateRange: DateTimeRange(start: _fechaInicio, end: _fechaFin),
-              );
-              if (rango != null) {
-                setState(() {
-                  _fechaInicio = rango.start;
-                  _fechaFin = rango.end;
-                });
-                _recargarDatos();
-              }
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.support_agent),
-            tooltip: "Soporte",
-            onPressed: () => mostrarSoporteChat(context, contexto: 'usuario', negocioId: widget.negocio.id),
-          ),
-          IconButton(
-            icon: Badge(
-              label: Text(_noLeidosChat > 99 ? '99+' : '$_noLeidosChat', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-              backgroundColor: Colors.red,
-              isLabelVisible: _noLeidosChat > 0,
-              offset: const Offset(4, -4),
-              child: const Icon(Icons.chat_bubble_outline),
-            ),
-            tooltip: "Chat con mi contador",
-            onPressed: _abrirChat,
-          ),
-          _menuCuentaAppBar(),
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  tooltip: "Actualizar",
+                  onPressed: () => _recargarDatos(clientes: true),
+                ),
+                ValueListenableBuilder<bool>(
+                  valueListenable: themeController,
+                  builder: (context, esOscuro, _) => IconButton(
+                    icon: Icon(esOscuro ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
+                    tooltip: esOscuro ? "Cambiar a modo claro" : "Cambiar a modo oscuro",
+                    onPressed: themeController.alternar,
+                  ),
+                ),
+                _grupoDatosAppBar(),
+                _menuComunicacionAppBar(),
+                _menuCuentaAppBar(),
               ],
             ),
           ),
