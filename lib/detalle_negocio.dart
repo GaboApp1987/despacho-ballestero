@@ -119,6 +119,111 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     _pillTabsScrollController.animateTo(destino, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
   }
 
+  // Menu desplegable de cada categoria (ver _pildoraCategoria) armado a
+  // mano con un OverlayEntry propio en vez de PopupMenuButton -- con
+  // PopupMenuButton, si ya había un menú abierto (ej. Finanzas) y se tocaba
+  // OTRA pildora (ej. Compras), el primer click solo cerraba el barrier
+  // modal de Finanzas y hacía falta un segundo click para recién abrir
+  // Compras. Con un overlay propio, tocar otra categoría cierra la actual
+  // y abre la nueva en el mismo click -- ver _alternarMenuCategoria.
+  final Map<String, LayerLink> _linksCategoria = {
+    for (final c in _categorias) c.categoria: LayerLink(),
+  };
+  OverlayEntry? _overlayCategoria;
+  String? _categoriaMenuAbierta;
+
+  void _cerrarMenuCategoria() {
+    _overlayCategoria?.remove();
+    _overlayCategoria = null;
+    if (mounted && _categoriaMenuAbierta != null) setState(() => _categoriaMenuAbierta = null);
+  }
+
+  void _alternarMenuCategoria(String categoria, List<({int id, IconData icono, String titulo})> items) {
+    if (_categoriaMenuAbierta == categoria) {
+      _cerrarMenuCategoria();
+      return;
+    }
+    // Si ya había otro menú de categoría abierto, se reemplaza directo acá
+    // mismo (mismo gesto) en vez de depender de que su propio barrier lo
+    // cierre primero.
+    _overlayCategoria?.remove();
+    final link = _linksCategoria[categoria]!;
+    final entry = OverlayEntry(builder: (context) => _buildOverlayMenuCategoria(items, link));
+    Overlay.of(context).insert(entry);
+    _overlayCategoria = entry;
+    setState(() => _categoriaMenuAbierta = categoria);
+  }
+
+  Widget _buildOverlayMenuCategoria(List<({int id, IconData icono, String titulo})> items, LayerLink link) {
+    return Stack(
+      children: [
+        // Cierra al tocar afuera -- arranca DEBAJO del AppBar + la barra de
+        // pildoras (nunca las cubre) para que tocar OTRA pildora la reciba
+        // directo en vez de que este barrier se la trague primero.
+        Positioned(
+          top: MediaQuery.of(context).padding.top + kToolbarHeight + 56,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _cerrarMenuCategoria,
+            child: const SizedBox.expand(),
+          ),
+        ),
+        CompositedTransformFollower(
+          link: link,
+          showWhenUnlinked: false,
+          offset: const Offset(0, 46),
+          child: Material(
+            color: AppColors.surface,
+            elevation: 6,
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 210),
+              decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: items.map((it) {
+                  final bool seleccionado = _seccionActiva == it.id;
+                  return _Resaltable(
+                    builder: (context, hover) => InkWell(
+                      onTap: () {
+                        _cambiarSeccion(it.id);
+                        _cerrarMenuCategoria();
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 120),
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        color: hover ? AppColors.primary.withOpacity(0.12) : Colors.transparent,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(it.icono, size: 18, color: seleccionado || hover ? AppColors.primary : AppColors.textMuted),
+                            const SizedBox(width: 10),
+                            Text(
+                              it.titulo,
+                              style: TextStyle(
+                                color: seleccionado || hover ? AppColors.primary : AppColors.textStrong,
+                                fontWeight: seleccionado ? FontWeight.w600 : FontWeight.normal,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   // Por debajo de este ancho la navegacion pasa a un Drawer deslizable (con
   // la lista vertical de siempre) en vez de la barra de pildoras horizontal
   // de escritorio, que en un telefono no entra.
@@ -245,6 +350,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
   void dispose() {
     _busquedaClientesCtrl.dispose();
     _pillTabsScrollController.dispose();
+    _overlayCategoria?.remove();
     super.dispose();
   }
 
@@ -1145,71 +1251,50 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     final itemsCategoria = _menuItemsVisibles.where((m) => ids.contains(m.id)).toList();
     if (itemsCategoria.isEmpty) return const SizedBox.shrink();
     final bool categoriaActiva = ids.contains(_seccionActiva);
+    final bool menuAbierto = _categoriaMenuAbierta == categoria;
 
     return Padding(
       padding: const EdgeInsets.only(right: 8),
-      child: PopupMenuButton<int>(
-        tooltip: categoria,
-        offset: const Offset(0, 44),
-        color: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: AppColors.border)),
-        onSelected: _cambiarSeccion,
-        itemBuilder: (context) => itemsCategoria.map((it) {
-          final bool seleccionado = _seccionActiva == it.id;
-          return PopupMenuItem<int>(
-            value: it.id,
-            padding: EdgeInsets.zero,
-            child: _Resaltable(
-              builder: (context, hover) => AnimatedContainer(
+      child: CompositedTransformTarget(
+        link: _linksCategoria[categoria]!,
+        child: Tooltip(
+          message: categoria,
+          child: _Resaltable(
+            builder: (context, hover) => InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () => _alternarMenuCategoria(categoria, itemsCategoria),
+              child: AnimatedContainer(
                 duration: const Duration(milliseconds: 120),
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                color: hover ? AppColors.primary.withOpacity(0.12) : Colors.transparent,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                decoration: BoxDecoration(
+                  color: categoriaActiva
+                      ? AppColors.primary
+                      : ((hover || menuAbierto) ? AppColors.primary.withOpacity(0.14) : Colors.transparent),
+                  borderRadius: BorderRadius.circular(20),
+                  border: categoriaActiva ? null : Border.all(color: (hover || menuAbierto) ? AppColors.primary : AppColors.border),
+                ),
                 child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(it.icono, size: 18, color: seleccionado || hover ? AppColors.primary : AppColors.textMuted),
-                    const SizedBox(width: 10),
+                    Icon(icono, size: 16, color: categoriaActiva ? Colors.black : ((hover || menuAbierto) ? AppColors.primary : AppColors.textMuted)),
+                    const SizedBox(width: 6),
                     Text(
-                      it.titulo,
+                      categoria,
                       style: TextStyle(
-                        color: seleccionado || hover ? AppColors.primary : AppColors.textStrong,
-                        fontWeight: seleccionado ? FontWeight.w600 : FontWeight.normal,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: categoriaActiva ? Colors.black : ((hover || menuAbierto) ? AppColors.primary : AppColors.textMuted),
                       ),
+                    ),
+                    const SizedBox(width: 2),
+                    Icon(
+                      menuAbierto ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+                      size: 18,
+                      color: categoriaActiva ? Colors.black : ((hover || menuAbierto) ? AppColors.primary : AppColors.textMuted),
                     ),
                   ],
                 ),
               ),
-            ),
-          );
-        }).toList(),
-        child: _Resaltable(
-          builder: (context, hover) => AnimatedContainer(
-            duration: const Duration(milliseconds: 120),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-            decoration: BoxDecoration(
-              color: categoriaActiva
-                  ? AppColors.primary
-                  : (hover ? AppColors.primary.withOpacity(0.14) : Colors.transparent),
-              borderRadius: BorderRadius.circular(20),
-              border: categoriaActiva ? null : Border.all(color: hover ? AppColors.primary : AppColors.border),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icono, size: 16, color: categoriaActiva ? Colors.black : (hover ? AppColors.primary : AppColors.textMuted)),
-                const SizedBox(width: 6),
-                Text(
-                  categoria,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: categoriaActiva ? Colors.black : (hover ? AppColors.primary : AppColors.textMuted),
-                  ),
-                ),
-                const SizedBox(width: 2),
-                Icon(Icons.arrow_drop_down,
-                    size: 18, color: categoriaActiva ? Colors.black : (hover ? AppColors.primary : AppColors.textMuted)),
-              ],
             ),
           ),
         ),
