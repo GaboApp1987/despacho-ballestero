@@ -9,6 +9,7 @@ import 'negocio.dart';
 import 'producto.dart';
 import 'formato.dart';
 import 'actualizar_precios_screen.dart' show PantallaActualizarPrecios;
+import 'importar_externo_dialog.dart';
 
 class InventarioScreen extends StatefulWidget {
   final Negocio negocio;
@@ -350,6 +351,37 @@ class _InventarioScreenState extends State<InventarioScreen> {
                   icon: const Icon(Icons.price_change_outlined),
                   label: const Text(
                     "Actualizar Precios",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: BorderSide(color: AppColors.primary),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  // Reutiliza el mismo importador con IA de Compras/Ingresos
+                  // (cualquier formato: Excel, CSV, PDF, foto de una lista
+                  // de precios) -- para cada producto detectado busca su
+                  // código CABYS real en el catálogo de Hacienda, nunca
+                  // inventa uno (ver ProductoViewSet.importar_externo).
+                  onPressed: () => importarArchivoExterno(
+                    context: context,
+                    negocio: widget.negocio,
+                    endpoint: '/productos/importar-externo/',
+                    tipoLabel: 'productos',
+                    onImportado: _cargarDatos,
+                  ),
+                  icon: const Icon(Icons.upload_file_outlined),
+                  label: const Text(
+                    "Cargar Productos Masivamente",
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
