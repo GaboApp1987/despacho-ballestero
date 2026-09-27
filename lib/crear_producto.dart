@@ -466,8 +466,8 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
                 child: Column(
                   children: [
                     Container(
-                      width: 120,
-                      height: 120,
+                      width: 180,
+                      height: 180,
                       decoration: BoxDecoration(
                         color: AppColors.surfaceSubtle,
                         borderRadius: BorderRadius.circular(14),
@@ -481,9 +481,9 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
                                   _imagenUrlActual!,
                                   fit: BoxFit.cover,
                                   errorBuilder: (context, error, stackTrace) =>
-                                      const Icon(Icons.image_outlined, size: 40, color: Colors.grey),
+                                      const Icon(Icons.image_outlined, size: 56, color: Colors.grey),
                                 )
-                              : const Icon(Icons.image_outlined, size: 40, color: Colors.grey),
+                              : const Icon(Icons.image_outlined, size: 56, color: Colors.grey),
                     ),
                     const SizedBox(height: 10),
                     Wrap(
