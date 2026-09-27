@@ -31,6 +31,12 @@ class _ResumenFiscalNegocioScreenState extends State<ResumenFiscalNegocioScreen>
   late Future<Map<String, dynamic>> _declaracionRentaFuture;
   bool _exportandoIva = false;
   bool _exportandoRenta = false;
+  // Controla la animacion del "interruptor" de Gestionar Cliente
+  // Internamente -- se prende (thumb se desliza a la derecha, cambia de
+  // color) apenas se toca, y recien despues de que se ve esa animacion
+  // navega a DetalleNegocio con una transicion propia (ver
+  // _gestionarClienteInternamente).
+  bool _entrandoAGestionInterna = false;
 
   @override
   void initState() {
@@ -263,10 +269,97 @@ class _ResumenFiscalNegocioScreenState extends State<ResumenFiscalNegocioScreen>
     }
   }
 
-  void _gestionarClienteInternamente() {
-    Navigator.push(
+  Future<void> _gestionarClienteInternamente() async {
+    if (_entrandoAGestionInterna) return;
+    setState(() => _entrandoAGestionInterna = true);
+    // Deja ver la animacion del interruptor prendiendose antes de arrancar
+    // la transicion de pantalla -- si se navega en el mismo frame, el
+    // usuario nunca alcanza a percibir el cambio.
+    await Future.delayed(const Duration(milliseconds: 320));
+    if (!mounted) return;
+    await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => DetalleNegocio(negocio: widget.negocio)),
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 420),
+        reverseTransitionDuration: const Duration(milliseconds: 300),
+        pageBuilder: (context, animation, secondaryAnimation) => DetalleNegocio(negocio: widget.negocio),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          final curva = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+          return FadeTransition(
+            opacity: curva,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.94, end: 1.0).animate(curva),
+              child: child,
+            ),
+          );
+        },
+      ),
+    );
+    if (mounted) setState(() => _entrandoAGestionInterna = false);
+  }
+
+  /// Fila con el label + un control tipo "interruptor" (track + thumb que se
+  /// desliza, como un Switch) en vez del boton grande de siempre -- antes
+  /// quedaba hasta abajo de toda la pantalla, obligando a hacer scroll para
+  /// encontrarlo; ahora esta justo debajo de los datos del negocio.
+  Widget _botonGestionarInterno() {
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: _entrandoAGestionInterna ? null : _gestionarClienteInternamente,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.settings_suggest_outlined, color: AppColors.primary, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  "Gestionar cliente internamente",
+                  style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textStrong, fontSize: 14.5),
+                ),
+              ),
+              const SizedBox(width: 12),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 280),
+                curve: Curves.easeOut,
+                width: 52,
+                height: 30,
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  color: _entrandoAGestionInterna ? const Color(0xFF1E1B4B) : AppColors.textMuted.withOpacity(0.28),
+                ),
+                child: AnimatedAlign(
+                  duration: const Duration(milliseconds: 280),
+                  curve: Curves.easeOut,
+                  alignment: _entrandoAGestionInterna ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Container(
+                    width: 24,
+                    height: 24,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white,
+                      boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 3, offset: Offset(0, 1))],
+                    ),
+                    child: Icon(
+                      _entrandoAGestionInterna ? Icons.check : Icons.arrow_forward_ios_rounded,
+                      size: 13,
+                      color: const Color(0xFF1E1B4B),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -312,6 +405,8 @@ class _ResumenFiscalNegocioScreenState extends State<ResumenFiscalNegocioScreen>
                 ],
               ),
             ),
+            const SizedBox(height: 14),
+            _botonGestionarInterno(),
             const SizedBox(height: 26),
 
             Row(
@@ -451,23 +546,6 @@ class _ResumenFiscalNegocioScreenState extends State<ResumenFiscalNegocioScreen>
               },
             ),
 
-            const SizedBox(height: 36),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _gestionarClienteInternamente,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1E1B4B),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                icon: const Icon(Icons.settings_suggest_outlined, color: Colors.white),
-                label: const Text(
-                  "GESTIONAR CLIENTE INTERNAMENTE",
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
-                ),
-              ),
-            ),
             const SizedBox(height: 20),
           ],
         ),
