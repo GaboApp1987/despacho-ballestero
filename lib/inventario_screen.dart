@@ -283,15 +283,26 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
             ),
           ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: AppColors.primary,
-          labelColor: AppColors.textStrong,
-          unselectedLabelColor: AppColors.textMuted,
-          tabs: const [
-            Tab(icon: Icon(Icons.inventory_2), text: "Productos"),
-            Tab(icon: Icon(Icons.category), text: "Categorías"),
-          ],
+        bottom: PreferredSize(
+          // Antes cada Tab tenia icono arriba + texto abajo (mas alto, mas
+          // "gritado") y el indicador ocupaba todo el ancho de la pestaña
+          // -- version mas chica y discreta: solo texto, subrayado fino
+          // debajo de la palabra en vez de toda la pestaña.
+          preferredSize: const Size.fromHeight(38),
+          child: TabBar(
+            controller: _tabController,
+            indicatorColor: AppColors.primary,
+            indicatorWeight: 2,
+            indicatorSize: TabBarIndicatorSize.label,
+            labelColor: AppColors.textStrong,
+            unselectedLabelColor: AppColors.textMuted,
+            labelStyle: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+            unselectedLabelStyle: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.normal),
+            tabs: const [
+              Tab(height: 38, text: "Productos"),
+              Tab(height: 38, text: "Categorías"),
+            ],
+          ),
         ),
       ),
       body: _cargando
@@ -396,61 +407,63 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
                   child: Text(_filtro.isEmpty 
                     ? "No hay productos registrados." 
                     : "No se encontraron productos con '$_filtro'"))
-              : ListView.builder(
+              // Antes cada fila era una Card con 3 lineas de subtitulo + 3
+              // botones de accion separados (~110px de alto cada una) --
+              // con un catalogo de decenas/cientos de productos (como el
+              // que ahora se puede cargar masivamente) eso obligaba a
+              // scrollear muchisimo para ver algo. Una fila delgada de una
+              // sola linea de subtitulo + un solo menu de acciones deja
+              // ver varias veces mas productos por pantalla sin scrollear.
+              : ListView.separated(
             itemCount: filtrados.length,
-            padding: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            separatorBuilder: (context, i) => Divider(height: 1, indent: 16, endIndent: 16, color: AppColors.border),
             itemBuilder: (context, i) {
               final p = filtrados[i];
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: p.stock > 0 ? AppColors.primary : Colors.red.shade400,
-                    child: Text(
-                      "${p.stock}",
-                      style: TextStyle(color: p.stock > 0 ? Colors.black : Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                    ),
+              return ListTile(
+                dense: true,
+                visualDensity: VisualDensity.compact,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                leading: CircleAvatar(
+                  radius: 16,
+                  backgroundColor: p.stock > 0 ? AppColors.primary : Colors.red.shade400,
+                  child: Text(
+                    "${p.stock}",
+                    style: TextStyle(color: p.stock > 0 ? Colors.black : Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
                   ),
-                  title: Text(p.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text("Disponible: ${formatearNumero(p.stock, decimales: 0)} ${p.unidadMedida}\nPrecio: ${formatearColones(p.precioUnitario)}\nCat: ${p.nombreCategoria ?? 'Sin Categoría'}"),
-                  isThreeLine: true,
-                  onTap: () => _abrirEditarProducto(p),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: Icon(Icons.edit_note, color: AppColors.primary),
-                        tooltip: "Editar producto",
-                        onPressed: () => _abrirEditarProducto(p),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.numbers, color: Colors.teal),
-                        tooltip: "Editar solo stock",
-                        onPressed: () => _mostrarDialogoEditarStock(p),
-                      ),
-                      PopupMenuButton<String>(
-                        icon: const Icon(Icons.more_vert, color: Colors.grey),
-                        onSelected: (valor) {
-                          if (valor == 'movimientos') {
-                            Future.microtask(() {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => MovimientosProductoScreen(producto: p),
-                                ),
-                              );
-                            });
-                          } else if (valor == 'eliminar') {
-                            _eliminarProducto(p);
-                          }
-                        },
-                        itemBuilder: (context) => const [
-                          PopupMenuItem(value: 'movimientos', child: Text("Movimientos")),
-                          PopupMenuItem(value: 'eliminar', child: Text("Eliminar")),
-                        ],
-                      ),
-                    ],
-                  ),
+                ),
+                title: Text(p.nombre, style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text(
+                  "${formatearColones(p.precioUnitario)} · ${formatearNumero(p.stock, decimales: 0)} ${p.unidadMedida} · ${p.nombreCategoria ?? 'Sin Categoría'}",
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 12.5),
+                ),
+                onTap: () => _abrirEditarProducto(p),
+                trailing: PopupMenuButton<String>(
+                  icon: Icon(Icons.more_vert, color: AppColors.textMuted),
+                  onSelected: (valor) {
+                    if (valor == 'editar') {
+                      _abrirEditarProducto(p);
+                    } else if (valor == 'stock') {
+                      _mostrarDialogoEditarStock(p);
+                    } else if (valor == 'movimientos') {
+                      Future.microtask(() {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => MovimientosProductoScreen(producto: p)),
+                        );
+                      });
+                    } else if (valor == 'eliminar') {
+                      _eliminarProducto(p);
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(value: 'editar', child: Text("Editar producto")),
+                    PopupMenuItem(value: 'stock', child: Text("Editar solo stock")),
+                    PopupMenuItem(value: 'movimientos', child: Text("Movimientos")),
+                    PopupMenuItem(value: 'eliminar', child: Text("Eliminar")),
+                  ],
                 ),
               );
             },
