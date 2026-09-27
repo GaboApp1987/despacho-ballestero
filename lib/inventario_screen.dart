@@ -19,7 +19,7 @@ class InventarioScreen extends StatefulWidget {
   State<InventarioScreen> createState() => _InventarioScreenState();
 }
 
-class _InventarioScreenState extends State<InventarioScreen> {
+class _InventarioScreenState extends State<InventarioScreen> with SingleTickerProviderStateMixin {
   bool _cargando = true;
   String? _error;
   List<Producto> _productos = [];
@@ -29,9 +29,19 @@ class _InventarioScreenState extends State<InventarioScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _filtro = "";
 
+  // Antes "Crear Nuevo Producto"/"Actualizar Precios"/"Cargar Productos
+  // Masivamente"/"Crear Nueva Categoría" eran botones enteros apilados
+  // arriba de la lista -- con eso, en una pantalla angosta la lista de
+  // productos quedaba casi sin espacio (había que scrollear adentro de un
+  // area chiquita para ver algo). Ahora "Crear..." es un FAB (que cambia
+  // segun la pestaña activa) y las acciones secundarias pasan al AppBar,
+  // dejando practicamente toda la pantalla para la lista.
+  late final TabController _tabController;
+
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this)..addListener(() => setState(() {}));
     // Escuchar cambios en el buscador para filtrar en tiempo real
     _searchCtrl.addListener(() {
       setState(() {
@@ -44,6 +54,7 @@ class _InventarioScreenState extends State<InventarioScreen> {
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -250,55 +261,81 @@ class _InventarioScreenState extends State<InventarioScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text("Gestión de Inventario"),
-          backgroundColor: AppColors.surface,
-          foregroundColor: AppColors.textStrong,
-          bottom: TabBar(
-            indicatorColor: AppColors.primary,
-            labelColor: AppColors.textStrong,
-            unselectedLabelColor: AppColors.textMuted,
-            tabs: const [
-              Tab(icon: Icon(Icons.inventory_2), text: "Productos"),
-              Tab(icon: Icon(Icons.category), text: "Categorías"),
-            ],
+    final bool enProductos = _tabController.index == 0;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Gestión de Inventario"),
+        backgroundColor: AppColors.surface,
+        foregroundColor: AppColors.textStrong,
+        actions: [
+          IconButton(
+            tooltip: "Actualizar Precios",
+            icon: const Icon(Icons.price_change_outlined),
+            onPressed: _productos.isEmpty ? null : _abrirActualizarPrecios,
           ),
-        ),
-        body: _cargando
-            ? const Center(child: CircularProgressIndicator())
-            : _error != null
-            ? Center(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error_outline, color: Colors.red, size: 48),
-                const SizedBox(height: 10),
-                Text(
-                  "Error al cargar inventario:\n$_error",
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.red),
-                ),
-                const SizedBox(height: 15),
-                ElevatedButton(
-                  onPressed: _cargarDatos,
-                  child: const Text("Reintentar"),
-                )
-              ],
+          IconButton(
+            tooltip: "Cargar Productos Masivamente",
+            icon: const Icon(Icons.upload_file_outlined),
+            onPressed: () => importarProductosMasivo(
+              context: context,
+              negocio: widget.negocio,
+              onImportado: _cargarDatos,
             ),
           ),
-        )
-            : TabBarView(
-          children: [
-            _buildVistaProductos(),
-            _buildListaCategorias(),
+        ],
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: AppColors.primary,
+          labelColor: AppColors.textStrong,
+          unselectedLabelColor: AppColors.textMuted,
+          tabs: const [
+            Tab(icon: Icon(Icons.inventory_2), text: "Productos"),
+            Tab(icon: Icon(Icons.category), text: "Categorías"),
           ],
         ),
       ),
+      body: _cargando
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+          ? Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, color: Colors.red, size: 48),
+              const SizedBox(height: 10),
+              Text(
+                "Error al cargar inventario:\n$_error",
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.red),
+              ),
+              const SizedBox(height: 15),
+              ElevatedButton(
+                onPressed: _cargarDatos,
+                child: const Text("Reintentar"),
+              )
+            ],
+          ),
+        ),
+      )
+          : TabBarView(
+        controller: _tabController,
+        children: [
+          _buildVistaProductos(),
+          _buildListaCategorias(),
+        ],
+      ),
+      floatingActionButton: (_cargando || _error != null)
+          ? null
+          : FloatingActionButton.extended(
+              heroTag: 'crear-inventario',
+              onPressed: enProductos ? _abrirCrearProducto : () => _mostrarFormularioCategoria(),
+              icon: const Icon(Icons.add),
+              label: Text(enProductos ? "Nuevo Producto" : "Nueva Categoría"),
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.black,
+            ),
     );
   }
 
@@ -314,95 +351,40 @@ class _InventarioScreenState extends State<InventarioScreen> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Column(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+          child: Row(
             children: [
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+              Expanded(
+                child: TextField(
+                  controller: _searchCtrl,
+                  decoration: InputDecoration(
+                    hintText: "Buscar producto por nombre...",
+                    prefixIcon: Icon(Icons.search, color: AppColors.primary),
+                    filled: true,
+                    fillColor: Colors.white,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
                     ),
-                  ),
-                  onPressed: _abrirCrearProducto,
-                  icon: const Icon(Icons.add_circle_outline, color: Colors.black),
-                  label: const Text(
-                    "Crear Nuevo Producto",
-                    style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.primary,
-                    side: BorderSide(color: AppColors.primary),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  onPressed: _productos.isEmpty ? null : _abrirActualizarPrecios,
-                  icon: const Icon(Icons.price_change_outlined),
-                  label: const Text(
-                    "Actualizar Precios",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.primary,
-                    side: BorderSide(color: AppColors.primary),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  // Cualquier formato (Excel, CSV, PDF, foto de una lista
-                  // de precios) -- si el archivo ya trae un código CABYS
-                  // (ej. un export de otro sistema) lo usa tal cual, y solo
-                  // busca con IA el de los que no traen uno, nunca inventa
-                  // (ver ProductoViewSet.importar_externo). Corre en
-                  // segundo plano con el conteo avanzando en vivo.
-                  onPressed: () => importarProductosMasivo(
-                    context: context,
-                    negocio: widget.negocio,
-                    onImportado: _cargarDatos,
-                  ),
-                  icon: const Icon(Icons.upload_file_outlined),
-                  label: const Text(
-                    "Cargar Productos Masivamente",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              // BARRA DE BÚSQUEDA
-              TextField(
-                controller: _searchCtrl,
-                decoration: InputDecoration(
-                  hintText: "Buscar producto por nombre...",
-                  prefixIcon: Icon(Icons.search, color: AppColors.primary),
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
+                child: Text(
+                  "${filtrados.length}",
+                  style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -596,25 +578,7 @@ class _InventarioScreenState extends State<InventarioScreen> {
   Widget _buildListaCategorias() {
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              onPressed: () => _mostrarFormularioCategoria(),
-              icon: const Icon(Icons.add_circle_outline, color: Colors.black),
-              label: const Text(
-                "Crear Nueva Categoría",
-                style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-        ),
+        const SizedBox(height: 8),
         Expanded(
           child: _categorias.isEmpty
               ? const Center(child: Text("No hay categorías registradas."))
