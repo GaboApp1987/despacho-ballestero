@@ -282,9 +282,10 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
 
   Negocio get _negocioConCuota => _negocioActualizado ?? widget.negocio;
 
-  // Chat con el contador -- null hasta que el contador inicia la
-  // conversación (ver ConversacionChatViewSet.create, solo el socio puede
-  // crearla), 0 o más no-leídos una vez que existe.
+  // Chat con el contador -- null hasta que alguno de los dos lados inicia la
+  // conversación (ver ConversacionChatViewSet.create: el negocio puede
+  // iniciarla con su propio contador, o el contador con cualquier negocio de
+  // su cartera), 0 o más no-leídos una vez que existe.
   int? _conversacionChatId;
   int _noLeidosChat = 0;
   String? _socioLogo;
@@ -307,11 +308,33 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
 
   Future<void> _abrirChat() async {
     if (_conversacionChatId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Tu contador todavía no inició un chat con vos.")),
-      );
-      return;
+      // Todavia no existe la conversacion -- el negocio tambien puede
+      // iniciarla con su propio contador (POST sin body: el backend deriva
+      // el negocio del usuario logueado), no hace falta esperar a que el
+      // contador escriba primero.
+      try {
+        final r = await ApiService.post('/chat/conversaciones/', {});
+        if (r.statusCode == 201) {
+          final data = json.decode(utf8.decode(r.bodyBytes));
+          if (mounted) {
+            setState(() {
+              _conversacionChatId = data['id'];
+              _socioLogo = data['socio_logo'];
+            });
+          }
+        } else {
+          throw Exception('status ${r.statusCode}');
+        }
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("No se pudo iniciar el chat con tu contador. Probá de nuevo.")),
+          );
+        }
+        return;
+      }
     }
+    if (!mounted) return;
     await Navigator.push(
       context,
       MaterialPageRoute(
