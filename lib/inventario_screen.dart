@@ -367,16 +367,15 @@ class _InventarioScreenState extends State<InventarioScreen> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  // Reutiliza el mismo importador con IA de Compras/Ingresos
-                  // (cualquier formato: Excel, CSV, PDF, foto de una lista
-                  // de precios) -- para cada producto detectado busca su
-                  // código CABYS real en el catálogo de Hacienda, nunca
-                  // inventa uno (ver ProductoViewSet.importar_externo).
-                  onPressed: () => importarArchivoExterno(
+                  // Cualquier formato (Excel, CSV, PDF, foto de una lista
+                  // de precios) -- si el archivo ya trae un código CABYS
+                  // (ej. un export de otro sistema) lo usa tal cual, y solo
+                  // busca con IA el de los que no traen uno, nunca inventa
+                  // (ver ProductoViewSet.importar_externo). Corre en
+                  // segundo plano con el conteo avanzando en vivo.
+                  onPressed: () => importarProductosMasivo(
                     context: context,
                     negocio: widget.negocio,
-                    endpoint: '/productos/importar-externo/',
-                    tipoLabel: 'productos',
                     onImportado: _cargarDatos,
                   ),
                   icon: const Icon(Icons.upload_file_outlined),

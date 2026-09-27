@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
@@ -163,8 +164,8 @@ Future<void> _subirYProcesar({
             children: [
               Text(
                 creados > 0
-                    ? "Se cargaron $creados movimiento(s) de $tipoLabel."
-                    : "No se encontró ningún movimiento para cargar en ese archivo.",
+                    ? "Se cargaron $creados $tipoLabel."
+                    : "No se encontró información de $tipoLabel en ese archivo.",
               ),
               if (omitidos.isNotEmpty) ...[
                 const SizedBox(height: 12),
@@ -200,5 +201,193 @@ Future<void> _subirYProcesar({
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
     }
+  }
+}
+
+/// Igual que [importarArchivoExterno] pero para productos (Inventario) --
+/// a diferencia de compras/ingresos, acá el backend corre la carga en un
+/// hilo de fondo y devuelve un job_id de inmediato (ver
+/// ProductoViewSet.importar_externo), porque buscar el código CABYS de
+/// varios productos puede tardar bastante. Este diálogo consulta el
+/// progreso con polling y muestra el conteo avanzando en vivo en vez de
+/// solo un spinner indefinido.
+Future<void> importarProductosMasivo({
+  required BuildContext context,
+  required Negocio negocio,
+  required VoidCallback onImportado,
+}) async {
+  final resultado = await FilePicker.platform.pickFiles(
+    type: FileType.custom,
+    allowedExtensions: ['xlsx', 'xls', 'csv', 'pdf', 'jpg', 'jpeg', 'png'],
+    withData: true,
+  );
+  if (resultado == null || resultado.files.single.bytes == null) return;
+  final bytes = resultado.files.single.bytes!;
+  final nombre = resultado.files.single.name;
+
+  String jobId;
+  try {
+    final response = await ApiService.postMultipartBytes(
+      '/productos/importar-externo/',
+      {'negocio': negocio.id.toString()},
+      'archivo',
+      bytes,
+      nombre,
+    );
+    if (response.statusCode != 202) {
+      String detalle = 'No se pudo iniciar la carga.';
+      try {
+        detalle = (json.decode(utf8.decode(response.bodyBytes))['detail'] ?? detalle).toString();
+      } catch (_) {}
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(detalle)));
+      return;
+    }
+    jobId = json.decode(utf8.decode(response.bodyBytes))['job_id'];
+  } catch (e) {
+    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+    return;
+  }
+
+  if (!context.mounted) return;
+  final Map<String, dynamic>? estadoFinal = await showDialog<Map<String, dynamic>>(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => _DialogoProgresoImportacionProductos(jobId: jobId),
+  );
+  if (estadoFinal == null) return; // se cerro solo/cancelado
+
+  if (estadoFinal['estado'] == 'error') {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error al importar: ${estadoFinal['error']}")),
+      );
+    }
+    return;
+  }
+
+  final creados = estadoFinal['creados'] ?? 0;
+  final omitidos = (estadoFinal['omitidos'] as List?) ?? [];
+  if (!context.mounted) return;
+  await showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(creados > 0 ? "¡Listo!" : "Nada para importar"),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              creados > 0
+                  ? "Se cargaron $creados productos."
+                  : "No se encontró información de productos en ese archivo.",
+            ),
+            if (omitidos.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text("Se omitieron ${omitidos.length}:", style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 200),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: omitidos
+                        .map((o) => Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Text(
+                                "${o['referencia'] ?? 'Sin referencia'}: ${o['motivo']}",
+                                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                              ),
+                            ))
+                        .toList(),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cerrar"))],
+    ),
+  );
+  if (creados > 0) onImportado();
+}
+
+class _DialogoProgresoImportacionProductos extends StatefulWidget {
+  final String jobId;
+  const _DialogoProgresoImportacionProductos({required this.jobId});
+
+  @override
+  State<_DialogoProgresoImportacionProductos> createState() => _DialogoProgresoImportacionProductosState();
+}
+
+class _DialogoProgresoImportacionProductosState extends State<_DialogoProgresoImportacionProductos> {
+  Timer? _timer;
+  Map<String, dynamic> _estado = {"estado": "leyendo", "total": 0, "creados": 0, "procesados": 0};
+
+  @override
+  void initState() {
+    super.initState();
+    _consultar();
+    _timer = Timer.periodic(const Duration(milliseconds: 700), (_) => _consultar());
+  }
+
+  Future<void> _consultar() async {
+    try {
+      final r = await ApiService.get('/productos/importar-externo-estado/?job_id=${widget.jobId}');
+      if (r.statusCode != 200 || !mounted) return;
+      final datos = json.decode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
+      setState(() => _estado = datos);
+      if (datos['estado'] == 'listo' || datos['estado'] == 'error') {
+        _timer?.cancel();
+        Navigator.of(context).pop(datos);
+      }
+    } catch (_) {
+      // Se sigue intentando en el proximo tick -- un fallo puntual de red
+      // no debe cortar el polling.
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final total = (_estado['total'] ?? 0) as int;
+    final procesados = (_estado['procesados'] ?? 0) as int;
+    final creados = (_estado['creados'] ?? 0) as int;
+    final estado = _estado['estado'] as String? ?? 'leyendo';
+    final double? progreso = total > 0 ? procesados / total : null;
+
+    String mensaje;
+    switch (estado) {
+      case 'leyendo':
+        mensaje = "Leyendo el archivo con IA...";
+        break;
+      case 'resolviendo_cabys':
+        mensaje = "Buscando códigos CABYS...";
+        break;
+      case 'creando':
+        mensaje = "Cargando productos: $procesados de $total ($creados creados)";
+        break;
+      default:
+        mensaje = "Procesando...";
+    }
+
+    return AlertDialog(
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(mensaje),
+          const SizedBox(height: 16),
+          LinearProgressIndicator(value: progreso),
+        ],
+      ),
+    );
   }
 }
