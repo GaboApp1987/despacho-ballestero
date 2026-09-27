@@ -280,6 +280,47 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
     }
   }
 
+  /// Busca fotos de referencia en internet (Openverse, con licencia que
+  /// permite uso comercial) y deja elegir una entre varias opciones -- la
+  /// descarga la trae el backend (ver DescargarImagenExternaView, evita
+  /// depender de si el navegador puede leer los bytes de un origen
+  /// externo) y queda en _imagenBytes exactamente igual que si se hubiera
+  /// elegido con el selector de archivos de siempre.
+  Future<void> _buscarImagenEnInternet() async {
+    final urlElegida = await showDialog<String>(
+      context: context,
+      builder: (ctx) => _DialogoBuscarImagen(consultaInicial: _nombreCtrl.text.trim()),
+    );
+    if (urlElegida == null || !mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const AlertDialog(
+        content: Row(children: [CircularProgressIndicator(), SizedBox(width: 16), Expanded(child: Text("Descargando imagen..."))]),
+      ),
+    );
+    try {
+      final resp = await ApiService.post('/productos/descargar-imagen-externa/', {'url': urlElegida});
+      if (mounted) Navigator.pop(context); // cierra "Descargando..."
+      if (resp.statusCode != 200) {
+        final detalle = jsonDecode(utf8.decode(resp.bodyBytes))['detail'] ?? 'No se pudo descargar la imagen.';
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(detalle)));
+        return;
+      }
+      final data = jsonDecode(utf8.decode(resp.bodyBytes));
+      setState(() {
+        _imagenBytes = base64Decode(data['bytes_base64']);
+        _imagenNombre = data['nombre_archivo'];
+      });
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      }
+    }
+  }
+
   Future<void> _guardarProducto() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -445,12 +486,24 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
                               : const Icon(Icons.image_outlined, size: 40, color: Colors.grey),
                     ),
                     const SizedBox(height: 10),
-                    OutlinedButton.icon(
-                      onPressed: _elegirImagen,
-                      icon: const Icon(Icons.upload_outlined),
-                      label: Text(_imagenBytes == null && (_imagenUrlActual == null || _imagenUrlActual!.isEmpty)
-                          ? "Agregar imagen"
-                          : "Cambiar imagen"),
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: _elegirImagen,
+                          icon: const Icon(Icons.upload_outlined),
+                          label: Text(_imagenBytes == null && (_imagenUrlActual == null || _imagenUrlActual!.isEmpty)
+                              ? "Agregar imagen"
+                              : "Cambiar imagen"),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _buscarImagenEnInternet,
+                          icon: const Icon(Icons.travel_explore_outlined),
+                          label: const Text("Buscar en internet"),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -643,6 +696,145 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Dialogo de busqueda: texto + grilla de miniaturas para elegir. Devuelve
+/// (via Navigator.pop) la URL completa de la imagen elegida, o null si se
+/// cancela -- quien llama (_buscarImagenEnInternet) es quien realmente la
+/// descarga.
+class _DialogoBuscarImagen extends StatefulWidget {
+  final String consultaInicial;
+  const _DialogoBuscarImagen({required this.consultaInicial});
+
+  @override
+  State<_DialogoBuscarImagen> createState() => _DialogoBuscarImagenState();
+}
+
+class _DialogoBuscarImagenState extends State<_DialogoBuscarImagen> {
+  late final TextEditingController _consultaCtrl;
+  bool _buscando = false;
+  String? _error;
+  List<Map<String, dynamic>> _resultados = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _consultaCtrl = TextEditingController(text: widget.consultaInicial);
+    if (widget.consultaInicial.isNotEmpty) _buscar();
+  }
+
+  @override
+  void dispose() {
+    _consultaCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _buscar() async {
+    final q = _consultaCtrl.text.trim();
+    if (q.length < 2) return;
+    setState(() {
+      _buscando = true;
+      _error = null;
+    });
+    try {
+      final resp = await ApiService.get('/productos/buscar-imagen/?q=${Uri.encodeQueryComponent(q)}');
+      if (!mounted) return;
+      if (resp.statusCode != 200) {
+        final detalle = jsonDecode(utf8.decode(resp.bodyBytes))['detail'] ?? 'No se pudo buscar.';
+        setState(() {
+          _error = detalle;
+          _resultados = [];
+        });
+        return;
+      }
+      final data = jsonDecode(utf8.decode(resp.bodyBytes));
+      setState(() {
+        _resultados = List<Map<String, dynamic>>.from(data['resultados'] ?? []);
+        if (_resultados.isEmpty) _error = "No se encontraron imágenes para \"$q\".";
+      });
+    } catch (e) {
+      if (mounted) setState(() => _error = "Error: $e");
+    } finally {
+      if (mounted) setState(() => _buscando = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text("Buscar imagen en internet"),
+      content: SizedBox(
+        width: 480,
+        height: 420,
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _consultaCtrl,
+                    decoration: const InputDecoration(
+                      hintText: "Ej: canela en polvo",
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    onSubmitted: (_) => _buscar(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filled(
+                  onPressed: _buscando ? null : _buscar,
+                  icon: const Icon(Icons.search),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                "Fotos con licencia de uso comercial (Openverse).",
+                style: TextStyle(fontSize: 11, color: Colors.grey),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Expanded(
+              child: _buscando
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                      ? Center(child: Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.grey)))
+                      : GridView.builder(
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            crossAxisSpacing: 8,
+                            mainAxisSpacing: 8,
+                          ),
+                          itemCount: _resultados.length,
+                          itemBuilder: (context, i) {
+                            final r = _resultados[i];
+                            return InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () => Navigator.pop(context, r['url'] as String),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  (r['miniatura'] ?? r['url']) as String,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      Container(color: Colors.grey.shade200, child: const Icon(Icons.broken_image_outlined, color: Colors.grey)),
+                                  loadingBuilder: (context, child, progreso) =>
+                                      progreso == null ? child : const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+            ),
+          ],
+        ),
+      ),
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar"))],
     );
   }
 }
