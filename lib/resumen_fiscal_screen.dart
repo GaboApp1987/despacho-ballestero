@@ -303,55 +303,87 @@ class _ResumenFiscalNegocioScreenState extends State<ResumenFiscalNegocioScreen>
   /// quedaba hasta abajo de toda la pantalla, obligando a hacer scroll para
   /// encontrarlo; ahora esta justo debajo de los datos del negocio.
   Widget _botonGestionarInterno() {
+    final activo = _entrandoAGestionInterna;
     return Material(
-      color: AppColors.surface,
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onTap: _entrandoAGestionInterna ? null : _gestionarClienteInternamente,
-        child: Container(
+        onTap: activo ? null : _gestionarClienteInternamente,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeOut,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.border),
+            color: activo ? AppColors.primary.withOpacity(0.10) : AppColors.surface,
+            border: Border.all(color: activo ? AppColors.primary : AppColors.border, width: activo ? 1.6 : 1),
+            boxShadow: activo
+                ? [BoxShadow(color: AppColors.primary.withOpacity(0.35), blurRadius: 14, spreadRadius: 1)]
+                : const [],
           ),
           child: Row(
             children: [
               Icon(Icons.settings_suggest_outlined, color: AppColors.primary, size: 20),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  "Gestionar cliente internamente",
-                  style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textStrong, fontSize: 14.5),
+                child: AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 280),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: activo ? AppColors.primary : AppColors.textStrong,
+                    fontSize: 14.5,
+                  ),
+                  child: const Text("Gestionar cliente internamente"),
                 ),
               ),
               const SizedBox(width: 12),
               AnimatedContainer(
-                duration: const Duration(milliseconds: 280),
+                duration: const Duration(milliseconds: 320),
                 curve: Curves.easeOut,
-                width: 52,
+                width: 54,
                 height: 30,
                 padding: const EdgeInsets.all(3),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(20),
-                  color: _entrandoAGestionInterna ? const Color(0xFF1E1B4B) : AppColors.textMuted.withOpacity(0.28),
+                  gradient: LinearGradient(
+                    colors: activo
+                        ? [AppColors.primary, const Color(0xFF1E1B4B)]
+                        : [AppColors.textMuted.withOpacity(0.30), AppColors.textMuted.withOpacity(0.20)],
+                  ),
+                  boxShadow: activo
+                      ? [BoxShadow(color: AppColors.primary.withOpacity(0.5), blurRadius: 8)]
+                      : const [],
                 ),
                 child: AnimatedAlign(
-                  duration: const Duration(milliseconds: 280),
+                  duration: const Duration(milliseconds: 320),
                   curve: Curves.easeOut,
-                  alignment: _entrandoAGestionInterna ? Alignment.centerRight : Alignment.centerLeft,
-                  child: Container(
-                    width: 24,
-                    height: 24,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white,
-                      boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 3, offset: Offset(0, 1))],
-                    ),
-                    child: Icon(
-                      _entrandoAGestionInterna ? Icons.check : Icons.arrow_forward_ios_rounded,
-                      size: 13,
-                      color: const Color(0xFF1E1B4B),
+                  alignment: activo ? Alignment.centerRight : Alignment.centerLeft,
+                  child: AnimatedScale(
+                    duration: const Duration(milliseconds: 260),
+                    curve: Curves.easeOutBack,
+                    scale: activo ? 1.15 : 1.0,
+                    child: Container(
+                      width: 24,
+                      height: 24,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white,
+                        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 1))],
+                      ),
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 220),
+                        transitionBuilder: (child, anim) => ScaleTransition(
+                          scale: anim,
+                          child: RotationTransition(turns: anim, child: child),
+                        ),
+                        child: Icon(
+                          activo ? Icons.check_rounded : Icons.arrow_forward_ios_rounded,
+                          key: ValueKey(activo),
+                          size: 13,
+                          color: activo ? AppColors.primary : const Color(0xFF1E1B4B),
+                        ),
+                      ),
                     ),
                   ),
                 ),
