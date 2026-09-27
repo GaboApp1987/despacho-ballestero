@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'theme/app_theme.dart';
 import 'api_service.dart';
 import 'negocio.dart';
@@ -354,6 +355,46 @@ class _NotasCreditoDebitoScreenState extends State<NotasCreditoDebitoScreen> wit
                     decoration: BoxDecoration(color: colorEstado.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
                     child: Text(textoEstado, style: TextStyle(color: colorEstado, fontWeight: FontWeight.w600, fontSize: 11.5)),
                   ),
+                  if (n.motivoRechazo != null && n.motivoRechazo!.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red.withOpacity(0.3)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.error_outline, color: Colors.red, size: 16),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  n.estadoHacienda == '5' ? "Motivo del error" : "Motivo del rechazo",
+                                  style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                              ),
+                              InkWell(
+                                onTap: () {
+                                  Clipboard.setData(ClipboardData(text: n.motivoRechazo!));
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text("Motivo copiado al portapapeles")),
+                                  );
+                                },
+                                child: const Icon(Icons.copy, size: 16, color: Colors.red),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          SelectableText(n.motivoRechazo!, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
               isThreeLine: true,

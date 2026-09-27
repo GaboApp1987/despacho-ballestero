@@ -56,6 +56,9 @@ class NotaCredito {
   final String facturaMoneda;
   final double facturaTipoCambio;
   final bool correoEnviado;
+  // ver NotaCredito.get_motivo_rechazo en el backend (mismo criterio que
+  // Factura.motivoRechazo).
+  final String? motivoRechazo;
 
   NotaCredito({
     required this.id,
@@ -79,6 +82,7 @@ class NotaCredito {
     this.facturaMoneda = 'CRC',
     this.facturaTipoCambio = 1.0,
     this.correoEnviado = false,
+    this.motivoRechazo,
   });
 
   factory NotaCredito.fromJson(Map<String, dynamic> json) {
@@ -106,6 +110,7 @@ class NotaCredito {
       facturaMoneda: json['factura_moneda'] ?? 'CRC',
       facturaTipoCambio: double.tryParse(json['factura_tipo_cambio']?.toString() ?? '') ?? 1.0,
       correoEnviado: json['correo_enviado'] == true,
+      motivoRechazo: json['motivo_rechazo'],
     );
   }
 }
