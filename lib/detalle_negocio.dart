@@ -38,6 +38,34 @@ import 'perfil_usuario_screen.dart';
 import 'widgets/bloqueo_salida_raiz.dart';
 import 'widgets/soporte_chat.dart';
 
+/// Envuelve a un hijo y le avisa a [builder] si el cursor está encima
+/// (hover) -- solo tiene efecto real con mouse (escritorio/web), en touch no
+/// pasa nada porque nunca dispara onEnter/onExit. Se usa en las pildoras de
+/// categoría y en las opciones del menú desplegable para resaltarlas al
+/// pasar el cursor, sin tener que convertir toda la pantalla en Stateful
+/// solo para eso.
+class _Resaltable extends StatefulWidget {
+  final Widget Function(BuildContext context, bool hover) builder;
+  const _Resaltable({required this.builder});
+
+  @override
+  State<_Resaltable> createState() => _ResaltableState();
+}
+
+class _ResaltableState extends State<_Resaltable> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: widget.builder(context, _hover),
+    );
+  }
+}
+
 class DetalleNegocio extends StatefulWidget {
   final Negocio negocio;
   // null = dueño del negocio (o socio/despacho administrandolo): acceso
@@ -600,6 +628,15 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         flexibleSpace: Container(
           decoration: BoxDecoration(color: AppColors.surface),
         ),
+        // Antes el AppBar quedaba pegado al contenido sin ninguna
+        // separación visual (misma superficie plana) -- una sombra sutil
+        // más un color de superficie explícito (surfaceTintColor:
+        // transparent evita que Material 3 le encima un tinte automático al
+        // dar elevación) le da la jerarquía visual de un panel "flotando"
+        // sobre el contenido, más parecido a un dashboard profesional.
+        elevation: 2,
+        shadowColor: Colors.black.withOpacity(0.12),
+        surfaceTintColor: Colors.transparent,
         // En escritorio la navegacion ya esta siempre visible como pildoras
         // (ver bottom: mas abajo), asi que no hace falta un boton de menu
         // ahi -- solo en movil, para abrir el Drawer con la lista vertical.
@@ -626,15 +663,35 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
                     onPressed: () => _scaffoldKey.currentState?.openDrawer(),
                   )
                 : null),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        // Antes el título repetía "PANEL DEL NEGOCIO" en genérico en las 19
+        // secciones -- ahora el logo+nombre del negocio (su identidad real)
+        // es lo prominente, con la sección activa como subtítulo chico, más
+        // parecido a como un dashboard profesional encabeza cada pantalla.
+        title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              "PANEL DEL NEGOCIO",
-              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 1.4, color: AppColors.primary),
+            _avatarNegocio(diametro: 34, iconoSize: 16),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    widget.negocio.nombreComercial,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textStrong),
+                  ),
+                  Text(
+                    _tituloSeccionActiva(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, letterSpacing: 0.3, color: AppColors.primary),
+                  ),
+                ],
+              ),
             ),
-            Text(_tituloSeccionActiva()),
           ],
         ),
         bottom: esMovil ? null : PreferredSize(preferredSize: const Size.fromHeight(56), child: _buildPillTabsBar()),
@@ -701,38 +758,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
             tooltip: "Chat con mi contador",
             onPressed: _abrirChat,
           ),
-          IconButton(
-            icon: const Icon(Icons.account_circle_rounded),
-            tooltip: "Mi Perfil",
-            onPressed: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => PerfilUsuarioScreen(
-                    nombre: _negocioConCuota.nombreComercial,
-                    subtitulo: "Negocio",
-                    logoEndpoint: '/negocios/${widget.negocio.id}/',
-                    logoUrlInicial: _negocioConCuota.logoUrl,
-                  ),
-                ),
-              );
-              _cargarNegocioActualizado();
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: "Cerrar sesión",
-            onPressed: () async {
-              await ApiService.logout();
-              if (context.mounted) {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (context) => const LoginScreen()),
-                  (route) => false,
-                );
-              }
-            },
-          ),
+          _menuCuentaAppBar(),
               ],
             ),
           ),
@@ -821,10 +847,13 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     ];
   }
 
-  Widget _buildSidebarHeader() {
+  /// Logo circular del negocio (o un icono genérico si no tiene uno
+  /// cargado) -- se reutiliza en el header del Drawer móvil, en el título
+  /// del AppBar de escritorio y como disparador del menú de cuenta, para que
+  /// la identidad del negocio se vea consistente en toda la pantalla.
+  Widget _avatarNegocio({double diametro = 40, double iconoSize = 19}) {
     final tieneLogo = widget.negocio.logoUrl != null && widget.negocio.logoUrl!.isNotEmpty;
-    const double diametro = 40;
-    final avatar = Container(
+    return Container(
       width: diametro,
       height: diametro,
       decoration: BoxDecoration(
@@ -841,16 +870,18 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
               widget.negocio.logoUrl!,
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) =>
-                  Icon(Icons.business_center_rounded, color: AppColors.textStrong, size: 19),
+                  Icon(Icons.business_center_rounded, color: AppColors.textStrong, size: iconoSize),
             )
-          : Icon(Icons.business_center_rounded, color: AppColors.textStrong, size: 19),
+          : Icon(Icons.business_center_rounded, color: AppColors.textStrong, size: iconoSize),
     );
+  }
 
+  Widget _buildSidebarHeader() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 22, 14, 18),
       child: Row(
         children: [
-          avatar,
+          _avatarNegocio(),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -861,6 +892,89 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Menú de cuenta (avatar del negocio como disparador) con "Mi Perfil" y
+  /// "Cerrar sesión" -- antes eran dos IconButton sueltos en el AppBar junto
+  /// a otros 7 controles, lo que se sentía saturado; agruparlos bajo un solo
+  /// avatar con desplegable es el patrón estándar de apps profesionales
+  /// (Slack, Gmail, etc.) y deja el AppBar mucho más limpio.
+  Widget _menuCuentaAppBar() {
+    return PopupMenuButton<String>(
+      tooltip: "Mi cuenta",
+      offset: const Offset(0, 46),
+      color: AppColors.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: AppColors.border)),
+      onSelected: (opcion) async {
+        if (opcion == 'perfil') {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => PerfilUsuarioScreen(
+                nombre: _negocioConCuota.nombreComercial,
+                subtitulo: "Negocio",
+                logoEndpoint: '/negocios/${widget.negocio.id}/',
+                logoUrlInicial: _negocioConCuota.logoUrl,
+              ),
+            ),
+          );
+          _cargarNegocioActualizado();
+        } else if (opcion == 'logout') {
+          await ApiService.logout();
+          if (context.mounted) {
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => const LoginScreen()),
+              (route) => false,
+            );
+          }
+        }
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem<String>(
+          enabled: false,
+          padding: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+            child: Text(
+              widget.negocio.nombreComercial,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: AppColors.textStrong, fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+          ),
+        ),
+        const PopupMenuDivider(height: 1),
+        _itemMenuCuenta(value: 'perfil', icono: Icons.account_circle_rounded, titulo: "Mi Perfil"),
+        _itemMenuCuenta(value: 'logout', icono: Icons.logout, titulo: "Cerrar sesión"),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: _avatarNegocio(diametro: 34, iconoSize: 16),
+      ),
+    );
+  }
+
+  PopupMenuItem<String> _itemMenuCuenta({required String value, required IconData icono, required String titulo}) {
+    return PopupMenuItem<String>(
+      value: value,
+      padding: EdgeInsets.zero,
+      child: _Resaltable(
+        builder: (context, hover) => AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          color: hover ? AppColors.primary.withOpacity(0.12) : Colors.transparent,
+          child: Row(
+            children: [
+              Icon(icono, size: 18, color: hover ? AppColors.primary : AppColors.textMuted),
+              const SizedBox(width: 10),
+              Text(titulo, style: TextStyle(color: hover ? AppColors.primary : AppColors.textStrong)),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -941,44 +1055,59 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
           final bool seleccionado = _seccionActiva == it.id;
           return PopupMenuItem<int>(
             value: it.id,
-            child: Row(
-              children: [
-                Icon(it.icono, size: 18, color: seleccionado ? AppColors.primary : AppColors.textMuted),
-                const SizedBox(width: 10),
-                Text(
-                  it.titulo,
-                  style: TextStyle(
-                    color: seleccionado ? AppColors.primary : AppColors.textStrong,
-                    fontWeight: seleccionado ? FontWeight.w600 : FontWeight.normal,
-                  ),
+            padding: EdgeInsets.zero,
+            child: _Resaltable(
+              builder: (context, hover) => AnimatedContainer(
+                duration: const Duration(milliseconds: 120),
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                color: hover ? AppColors.primary.withOpacity(0.12) : Colors.transparent,
+                child: Row(
+                  children: [
+                    Icon(it.icono, size: 18, color: seleccionado || hover ? AppColors.primary : AppColors.textMuted),
+                    const SizedBox(width: 10),
+                    Text(
+                      it.titulo,
+                      style: TextStyle(
+                        color: seleccionado || hover ? AppColors.primary : AppColors.textStrong,
+                        fontWeight: seleccionado ? FontWeight.w600 : FontWeight.normal,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           );
         }).toList(),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-          decoration: BoxDecoration(
-            color: categoriaActiva ? AppColors.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
-            border: categoriaActiva ? null : Border.all(color: AppColors.border),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icono, size: 16, color: categoriaActiva ? Colors.black : AppColors.textMuted),
-              const SizedBox(width: 6),
-              Text(
-                categoria,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: categoriaActiva ? Colors.black : AppColors.textMuted,
+        child: _Resaltable(
+          builder: (context, hover) => AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+            decoration: BoxDecoration(
+              color: categoriaActiva
+                  ? AppColors.primary
+                  : (hover ? AppColors.primary.withOpacity(0.14) : Colors.transparent),
+              borderRadius: BorderRadius.circular(20),
+              border: categoriaActiva ? null : Border.all(color: hover ? AppColors.primary : AppColors.border),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icono, size: 16, color: categoriaActiva ? Colors.black : (hover ? AppColors.primary : AppColors.textMuted)),
+                const SizedBox(width: 6),
+                Text(
+                  categoria,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: categoriaActiva ? Colors.black : (hover ? AppColors.primary : AppColors.textMuted),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 2),
-              Icon(Icons.arrow_drop_down, size: 18, color: categoriaActiva ? Colors.black : AppColors.textMuted),
-            ],
+                const SizedBox(width: 2),
+                Icon(Icons.arrow_drop_down,
+                    size: 18, color: categoriaActiva ? Colors.black : (hover ? AppColors.primary : AppColors.textMuted)),
+              ],
+            ),
           ),
         ),
       ),
