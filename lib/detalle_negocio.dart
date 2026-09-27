@@ -814,16 +814,16 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
           // periodo, comunicacion, cuenta) mas refresh/tema, bastante mas
           // compacto y ordenado; el scroll horizontal se deja igual como
           // red de seguridad para pantallas muy angostas.
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: "Actualizar",
+            onPressed: () => _recargarDatos(clientes: true),
+          ),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  tooltip: "Actualizar",
-                  onPressed: () => _recargarDatos(clientes: true),
-                ),
                 ValueListenableBuilder<bool>(
                   valueListenable: themeController,
                   builder: (context, esOscuro, _) => IconButton(
@@ -848,7 +848,11 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         child: _construirCuerpoSeccion(),
       ),
       floatingActionButton: () {
-        if ([3, 4, 5, 6, 7, 8, 9, 10, 11, 12].contains(_seccionActiva)) return null;
+        // 15 (Notas de Credito/Debito) y 18 (Ingresos) tienen su propio FAB
+        // de "crear" adentro de la pantalla -- sin ocultar el de "Emitir
+        // Factura" de aca quedaban los dos FAB superpuestos en la misma
+        // esquina (ver captura de pantalla del usuario).
+        if ([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 18].contains(_seccionActiva)) return null;
         if (_seccionActiva == 2) {
           return FloatingActionButton(
             heroTag: "fab_negocio_cliente",
