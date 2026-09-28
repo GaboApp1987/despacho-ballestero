@@ -59,7 +59,7 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al cargar empleados: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al cargar colaboradores: $e")));
       }
     }
   }
@@ -75,7 +75,7 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setStateDialog) => AlertDialog(
-          title: const Text("Nuevo Empleado"),
+          title: const Text("Nuevo Colaborador"),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -176,7 +176,7 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("Eliminar Empleado"),
+        title: const Text("Eliminar Colaborador"),
         content: Text("¿Seguro que querés eliminar el acceso de \"${empleado.nombre}\"? Esto borra su login permanentemente."),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
@@ -219,13 +219,13 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                   children: [
                     Icon(Icons.badge_outlined, color: AppColors.primary),
                     const SizedBox(width: 10),
-                    const Text("Empleados", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const Text("Colaboradores", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   ],
                 ),
                 ElevatedButton.icon(
                   onPressed: _mostrarDialogoNuevoEmpleado,
                   icon: const Icon(Icons.add, color: Colors.black),
-                  label: const Text("Nuevo Empleado", style: TextStyle(color: Colors.black)),
+                  label: const Text("Nuevo Colaborador", style: TextStyle(color: Colors.black)),
                   style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
                 ),
               ],
@@ -235,7 +235,7 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _empleados.isEmpty
-                    ? const Center(child: Text("No hay empleados registrados todavía."))
+                    ? const Center(child: Text("No hay colaboradores registrados todavía."))
                     : ListView.builder(
                         padding: const EdgeInsets.all(16),
                         itemCount: _empleados.length,

@@ -257,7 +257,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     (id: 10, icono: Icons.bar_chart_outlined, titulo: "Reportes"),
     (id: 7, icono: Icons.percent, titulo: "Impuestos"),
     // -- Administración --
-    (id: 14, icono: Icons.badge_outlined, titulo: "Empleados"),
+    (id: 14, icono: Icons.badge_outlined, titulo: "Colaboradores"),
     (id: 12, icono: Icons.extension_outlined, titulo: "Add-ons"),
     (id: 5, icono: Icons.settings_outlined, titulo: "Ajustes"),
   ];
@@ -291,8 +291,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
   static const Set<int> _idsOcultosParaCajero = {6, 8, 13, 9, 7, 10, 11, 12, 5, 15, 16, 17, 18};
 
   List<({int id, IconData icono, String titulo})> get _menuItemsVisibles {
-    // "Empleados" (id 14) es exclusivo del dueño real -- ni 'cajero' ni
-    // 'completo' pueden gestionar otros empleados (ver
+    // "Colaboradores" (id 14) es exclusivo del dueño real -- ni 'cajero' ni
+    // 'completo' pueden gestionar otros colaboradores (ver
     // SoloDuenoDelNegocioMixin en el backend).
     var items = widget.rolEmpleado == null ? _menuItems : _menuItems.where((m) => m.id != 14).toList();
     if (widget.rolEmpleado == 'cajero') {
@@ -601,7 +601,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
       case 13:
         return "Cuentas por Pagar";
       case 14:
-        return "Empleados";
+        return "Colaboradores";
       case 15:
         return "Notas de Crédito/Débito";
       case 10:
@@ -977,11 +977,13 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         child: _construirCuerpoSeccion(),
       ),
       floatingActionButton: () {
-        // 15 (Notas de Credito/Debito) y 18 (Ingresos) tienen su propio FAB
-        // de "crear" adentro de la pantalla -- sin ocultar el de "Emitir
-        // Factura" de aca quedaban los dos FAB superpuestos en la misma
-        // esquina (ver captura de pantalla del usuario).
-        if ([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 18].contains(_seccionActiva)) return null;
+        // 14 (Colaboradores), 15 (Notas de Credito/Debito) y 18 (Ingresos)
+        // tienen su propio boton de "crear" adentro de la pantalla -- sin
+        // ocultar el de "Emitir Factura" de aca, en Colaboradores el unico
+        // "+" visible llevaba a hacer una factura en vez de agregar un
+        // colaborador (y en los otros dos quedaban los dos FAB
+        // superpuestos en la misma esquina).
+        if ([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 18].contains(_seccionActiva)) return null;
         if (_seccionActiva == 2) {
           return FloatingActionButton(
             heroTag: "fab_negocio_cliente",
