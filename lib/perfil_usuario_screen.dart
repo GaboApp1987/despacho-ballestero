@@ -43,6 +43,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
   bool _whatsappCargando = false;
   Map<String, dynamic>? _whatsappResultado;
 
+  final _nombreFirmanteCtrl = TextEditingController();
   final _carneCtrl = TextEditingController();
   final _especialidadCtrl = TextEditingController();
   final _direccionProfesionalCtrl = TextEditingController();
@@ -99,6 +100,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
     _actualCtrl.dispose();
     _nuevaCtrl.dispose();
     _confirmarCtrl.dispose();
+    _nombreFirmanteCtrl.dispose();
     _carneCtrl.dispose();
     _especialidadCtrl.dispose();
     _direccionProfesionalCtrl.dispose();
@@ -113,6 +115,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
       if (response.statusCode == 200 && mounted) {
         final data = json.decode(utf8.decode(response.bodyBytes));
         setState(() {
+          _nombreFirmanteCtrl.text = data['nombre_firmante'] ?? '';
           _carneCtrl.text = data['carne_cpa'] ?? '';
           _especialidadCtrl.text = data['especialidad'] ?? '';
           _direccionProfesionalCtrl.text = data['direccion_profesional'] ?? '';
@@ -144,6 +147,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
     setState(() => _guardandoDatosCpa = true);
     try {
       final response = await ApiService.patch(widget.logoEndpoint, {
+        'nombre_firmante': _nombreFirmanteCtrl.text.trim(),
         'carne_cpa': _carneCtrl.text.trim(),
         'especialidad': _especialidadCtrl.text.trim(),
         'direccion_profesional': _direccionProfesionalCtrl.text.trim(),
@@ -711,6 +715,15 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                     if (_cargandoDatosCpa)
                       const Center(child: CircularProgressIndicator())
                     else ...[
+                      // Nombre con el que se firman los documentos -- vacío =
+                      // se usa el nombre de la cuenta (ver Socio.nombre_firmante).
+                      TextField(
+                        controller: _nombreFirmanteCtrl,
+                        style: TextStyle(color: _colorFuerte),
+                        textCapitalization: TextCapitalization.words,
+                        decoration: _decoracionCampo("Nombre del contador firmante"),
+                      ),
+                      const SizedBox(height: 10),
                       TextField(controller: _carneCtrl, style: TextStyle(color: _colorFuerte), decoration: _decoracionCampo("Carné C.P.A.")),
                       const SizedBox(height: 10),
                       TextField(controller: _especialidadCtrl, style: TextStyle(color: _colorFuerte), decoration: _decoracionCampo("Especialidad (ej: Impuestos)")),
