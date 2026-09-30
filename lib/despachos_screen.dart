@@ -11,6 +11,7 @@ import 'login.dart';
 import 'widgets/bloqueo_salida_raiz.dart';
 import 'widgets/soporte_chat.dart';
 import 'whatsapp_bandeja_screen.dart';
+import 'estadisticas_screen.dart';
 
 /// Pantalla de nivel plataforma: solo la ve un superusuario (el dueño del programa).
 /// Desde acá se dan de alta los despachos contables (cada uno con su propio dueño/login),
@@ -454,6 +455,11 @@ class _DespachosScreenState extends State<DespachosScreen> {
               await Navigator.push(context, MaterialPageRoute(builder: (_) => const WhatsAppBandejaScreen()));
               _cargarPendientesWhatsApp();
             },
+          ),
+          IconButton(
+            icon: const Icon(Icons.insights_outlined),
+            tooltip: "Estadísticas del landing",
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EstadisticasScreen())),
           ),
           IconButton(
             icon: const Icon(Icons.workspace_premium_outlined),

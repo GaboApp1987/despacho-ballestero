@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'analitica.dart';
 import 'api_service.dart';
 import 'formato.dart';
 import 'login.dart';
@@ -117,6 +118,7 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
       _tipo = widget.tipoInicial!;
     }
     _pruebaGratis = widget.pruebaGratisInicial;
+    Analitica.evento('registro_abierto', detalle: _tipo);
     final promo = widget.codigoPromocionalInicial?.trim() ?? '';
     if (promo.isNotEmpty) _codigoPromocionalCtrl.text = promo.toUpperCase();
     _cargarPlanes();
@@ -214,8 +216,13 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
     }
 
     setState(() => _enviando = true);
+    Analitica.evento('registro_enviado', detalle: _tipo);
     final body = {
       'tipo': _tipo,
+      // Mismo ID anónimo del landing -- el backend lo guarda con la cuenta
+      // para completar el embudo (ver EventoAnalitica).
+      'visitante': Analitica.visitante,
+      'origen': Analitica.origen,
       'nombre': _nombreCtrl.text.trim(),
       'email': _emailCtrl.text.trim(),
       'username': _usernameCtrl.text.trim(),
