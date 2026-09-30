@@ -15,7 +15,14 @@ import 'ubicacion_cr.dart';
 /// y pagarlo (vía OnvoCobroAutomaticoScreen, ofrecido desde
 /// SuscripcionSuspendidaScreen apenas entran con la suscripción sin pagar).
 class RegistroPublicoScreen extends StatefulWidget {
-  const RegistroPublicoScreen({super.key});
+  /// Tipo de cuenta preseleccionado ('negocio' | 'contador' | 'despacho')
+  /// y código promocional precargado -- vienen del link directo del
+  /// landing (equilibracr.com/app/?registro=negocio&promo=BIENVENIDA15,
+  /// ver main.dart). Null = comportamiento de siempre.
+  final String? tipoInicial;
+  final String? codigoPromocionalInicial;
+
+  const RegistroPublicoScreen({super.key, this.tipoInicial, this.codigoPromocionalInicial});
 
   @override
   State<RegistroPublicoScreen> createState() => _RegistroPublicoScreenState();
@@ -103,6 +110,11 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
   @override
   void initState() {
     super.initState();
+    if (const ['negocio', 'contador', 'despacho'].contains(widget.tipoInicial)) {
+      _tipo = widget.tipoInicial!;
+    }
+    final promo = widget.codigoPromocionalInicial?.trim() ?? '';
+    if (promo.isNotEmpty) _codigoPromocionalCtrl.text = promo.toUpperCase();
     _cargarPlanes();
     UbicacionCR.cargar().then((u) {
       if (mounted) setState(() { _ubicaciones = u; _cargandoUbicaciones = false; });
@@ -274,6 +286,18 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
         title: const Text("Crear cuenta"),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
+        // Si se llegó por el link directo del landing, esta pantalla es la
+        // raíz (no hay flecha de "atrás") -- se ofrece ir al login.
+        actions: [
+          if (!Navigator.canPop(context))
+            TextButton(
+              onPressed: () => Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+              ),
+              child: const Text("Ya tengo cuenta"),
+            ),
+        ],
       ),
       body: SafeArea(
         child: Center(

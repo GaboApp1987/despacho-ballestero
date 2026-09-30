@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'login.dart'; // <--- Mantenemos tu importación del Login
 import 'theme/app_theme.dart';
 import 'theme/theme_controller.dart';
+import 'registro_publico_screen.dart';
 import 'solicitud_publica_screen.dart';
 
 // AUDITORIA.md hallazgo C4 -- antes, una excepción sin capturar en
@@ -63,6 +64,11 @@ class MyApp extends StatelessWidget {
     // Uri.base refleja la URL real del navegador en Flutter Web sin
     // necesitar ningún paquete de ruteo.
     final codigoSolicitud = Uri.base.queryParameters['solicitud'];
+    // Link directo al registro desde el landing (botones "Probar gratis"):
+    // ?registro=negocio|contador|despacho[&promo=CODIGO] abre el alta con
+    // ese tipo de cuenta elegido y el código promocional ya puesto.
+    final tipoRegistro = Uri.base.queryParameters['registro'];
+    final codigoPromo = Uri.base.queryParameters['promo'];
 
     // ValueListenableBuilder reconstruye MaterialApp (y por lo tanto TODA
     // la app debajo) cada vez que se toca el botón de tema -- ver
@@ -78,7 +84,9 @@ class MyApp extends StatelessWidget {
           theme: esOscuro ? AppTheme.dark : AppTheme.light,
           home: (codigoSolicitud != null && codigoSolicitud.trim().isNotEmpty)
               ? SolicitudPublicaScreen(codigoInicial: codigoSolicitud)
-              : const LoginScreen(), // <--- La App inicia aquí con el diseño completo
+              : (tipoRegistro != null)
+                  ? RegistroPublicoScreen(tipoInicial: tipoRegistro, codigoPromocionalInicial: codigoPromo)
+                  : const LoginScreen(), // <--- La App inicia aquí con el diseño completo
         );
       },
     );
