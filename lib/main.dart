@@ -69,6 +69,7 @@ class MyApp extends StatelessWidget {
     // ese tipo de cuenta elegido y el código promocional ya puesto.
     final tipoRegistro = Uri.base.queryParameters['registro'];
     final codigoPromo = Uri.base.queryParameters['promo'];
+    final pruebaGratis = Uri.base.queryParameters['prueba'] == '1';
 
     // ValueListenableBuilder reconstruye MaterialApp (y por lo tanto TODA
     // la app debajo) cada vez que se toca el botón de tema -- ver
@@ -85,7 +86,7 @@ class MyApp extends StatelessWidget {
           home: (codigoSolicitud != null && codigoSolicitud.trim().isNotEmpty)
               ? SolicitudPublicaScreen(codigoInicial: codigoSolicitud)
               : (tipoRegistro != null)
-                  ? RegistroPublicoScreen(tipoInicial: tipoRegistro, codigoPromocionalInicial: codigoPromo)
+                  ? RegistroPublicoScreen(tipoInicial: tipoRegistro, codigoPromocionalInicial: codigoPromo, pruebaGratisInicial: pruebaGratis)
                   : const LoginScreen(), // <--- La App inicia aquí con el diseño completo
         );
       },

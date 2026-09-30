@@ -21,8 +21,11 @@ class RegistroPublicoScreen extends StatefulWidget {
   /// ver main.dart). Null = comportamiento de siempre.
   final String? tipoInicial;
   final String? codigoPromocionalInicial;
+  /// true = "Empezar con días de prueba gratis" ya marcado (link del
+  /// landing con ?prueba=1).
+  final bool pruebaGratisInicial;
 
-  const RegistroPublicoScreen({super.key, this.tipoInicial, this.codigoPromocionalInicial});
+  const RegistroPublicoScreen({super.key, this.tipoInicial, this.codigoPromocionalInicial, this.pruebaGratisInicial = false});
 
   @override
   State<RegistroPublicoScreen> createState() => _RegistroPublicoScreenState();
@@ -113,6 +116,7 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
     if (const ['negocio', 'contador', 'despacho'].contains(widget.tipoInicial)) {
       _tipo = widget.tipoInicial!;
     }
+    _pruebaGratis = widget.pruebaGratisInicial;
     final promo = widget.codigoPromocionalInicial?.trim() ?? '';
     if (promo.isNotEmpty) _codigoPromocionalCtrl.text = promo.toUpperCase();
     _cargarPlanes();
@@ -549,8 +553,8 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                           value: _pruebaGratis,
                           onChanged: (v) => setState(() => _pruebaGratis = v ?? false),
                           controlAffinity: ListTileControlAffinity.leading,
-                          title: const Text("Empezar con 8 días de prueba gratis", style: TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: const Text("Usás Equilibra ya mismo y pagás la tarjeta más adelante, antes de que se acaben los 8 días."),
+                          title: const Text("Empezar con 10 días de prueba gratis", style: TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: const Text("Usás Equilibra ya mismo y pagás la tarjeta más adelante, antes de que se acaben los 10 días."),
                         ),
                       ),
                       const SizedBox(height: 4),
