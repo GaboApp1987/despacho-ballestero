@@ -10,6 +10,7 @@ import 'planes_screen.dart';
 import 'login.dart';
 import 'widgets/bloqueo_salida_raiz.dart';
 import 'widgets/soporte_chat.dart';
+import 'whatsapp_bandeja_screen.dart';
 
 /// Pantalla de nivel plataforma: solo la ve un superusuario (el dueño del programa).
 /// Desde acá se dan de alta los despachos contables (cada uno con su propio dueño/login),
@@ -24,11 +25,25 @@ class DespachosScreen extends StatefulWidget {
 class _DespachosScreenState extends State<DespachosScreen> {
   bool _isLoading = true;
   List<Despacho> _despachos = [];
+  // Conversaciones de WhatsApp sin atender (badge del botón de la bandeja).
+  int _whatsappPendientes = 0;
+
+  Future<void> _cargarPendientesWhatsApp() async {
+    try {
+      final r = await ApiService.get('/whatsapp/conversaciones/pendientes/');
+      if (r.statusCode == 200 && mounted) {
+        setState(() => _whatsappPendientes = (json.decode(r.body)['pendientes'] as num?)?.toInt() ?? 0);
+      }
+    } catch (_) {
+      // Sin badge si falla -- la bandeja igual se puede abrir.
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _cargarDespachos();
+    _cargarPendientesWhatsApp();
   }
 
   Future<void> _cargarDespachos() async {
@@ -428,6 +443,18 @@ class _DespachosScreenState extends State<DespachosScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: "Bandeja de WhatsApp",
+            icon: Badge(
+              isLabelVisible: _whatsappPendientes > 0,
+              label: Text('$_whatsappPendientes'),
+              child: const Icon(Icons.chat_outlined),
+            ),
+            onPressed: () async {
+              await Navigator.push(context, MaterialPageRoute(builder: (_) => const WhatsAppBandejaScreen()));
+              _cargarPendientesWhatsApp();
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.workspace_premium_outlined),
             tooltip: "Planes de suscripción",
