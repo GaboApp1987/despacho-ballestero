@@ -37,6 +37,7 @@ import 'chat_detalle_screen.dart';
 import 'perfil_usuario_screen.dart';
 import 'widgets/bloqueo_salida_raiz.dart';
 import 'widgets/soporte_chat.dart';
+import 'widgets/primeros_pasos_card.dart';
 
 /// Envuelve a un hijo y le avisa a [builder] si el cursor está encima
 /// (hover) -- solo tiene efecto real con mouse (escritorio/web), en touch no
@@ -1612,6 +1613,16 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         children: [
           _buildBannerBienvenida(),
           const SizedBox(height: 25),
+          // Guía para cuentas nuevas -- se oculta sola al completarla (y
+          // nunca la ve el contador ni un colaborador, ver backend).
+          PrimerosPasosCard(
+            negocioId: widget.negocio.id,
+            onIrASeccion: _cambiarSeccion,
+            onNuevaFactura: () async {
+              final guardado = await Navigator.push<bool>(context, MaterialPageRoute(builder: (context) => FormularioFactura(negocio: widget.negocio)));
+              if (guardado == true) _recargarDatos();
+            },
+          ),
           
           // 📊 RESUMEN FINANCIERO DEL PERIODO
           anchoCorto
