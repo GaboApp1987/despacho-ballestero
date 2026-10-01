@@ -345,17 +345,6 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
         title: Text("Documento F-${factura.consecutivo}"),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
-        actions: [
-          // Misma venta otra vez (ej. un alquiler mensual): abre una factura
-          // nueva con los mismos datos y la fecha de hoy, para revisar y emitir.
-          if (!factura.esInterno)
-            TextButton.icon(
-              onPressed: _isProcesando ? null : _repetirFactura,
-              icon: const Icon(Icons.replay_rounded, size: 18),
-              label: const Text("Repetir"),
-            ),
-          const SizedBox(width: 6),
-        ],
       ),
       backgroundColor: AppColors.background,
       body: Center(
@@ -570,161 +559,169 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
                     ),
                   ),
                 ),
+                // Acciones, en orden: (1) el documento -- PDF, compartir,
+                // repetir, XML --, (2) lo pendiente con Hacienda, solo si
+                // aplica, y (3) al final y aparte, lo que no tiene vuelta
+                // atrás (anular / eliminar).
                 Container(
+                  width: double.infinity,
                   padding: const EdgeInsets.all(16.0),
                   decoration: BoxDecoration(
                     color: AppColors.surfaceSubtle,
                     border: Border(top: BorderSide(color: AppColors.border)),
                   ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
+                      Row(
+                        children: [
+                          _accionDocumento(
+                            icono: Icons.picture_as_pdf,
+                            texto: "PDF",
+                            principal: true,
+                            ocupado: _isProcesando,
+                            onTap: () => _manejarAccion(
+                                () => ExportService.exportFacturaDetalleToPdf(factura, share: false, notasCredito: _notasCredito)),
+                          ),
+                          const SizedBox(width: 8),
+                          _accionDocumento(
+                            icono: Icons.share,
+                            texto: "Compartir",
+                            onTap: _isProcesando
+                                ? null
+                                : () => _manejarAccion(
+                                    () => ExportService.exportFacturaDetalleToPdf(factura, share: true, notasCredito: _notasCredito)),
+                          ),
+                          // Misma venta otra vez (ej. un alquiler mensual): una
+                          // factura nueva con los mismos datos y la fecha de hoy.
+                          if (!factura.esInterno) ...[
+                            const SizedBox(width: 8),
+                            _accionDocumento(
+                              icono: Icons.replay_rounded,
+                              texto: "Repetir",
+                              onTap: _isProcesando ? null : _repetirFactura,
+                            ),
+                          ],
+                          // Único documento que refleja EXACTAMENTE lo que
+                          // Hacienda recibió (moneda incluida) en el camino
+                          // directo -- ver FacturaViewSet._enviar_a_hacienda_directo.
+                          if (factura.xmlFirmado != null && factura.xmlFirmado!.isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            _accionDocumento(
+                              icono: Icons.code,
+                              texto: "Ver XML",
+                              onTap: () async {
+                                final uri = Uri.parse(factura.xmlFirmado!);
+                                if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text("No se pudo abrir el XML.")),
+                                    );
+                                  }
+                                }
+                              },
+                            ),
+                          ],
+                        ],
+                      ),
+                      // "Consultar estado" mientras sigue Enviando(2). Una vez
+                      // Aceptada(3), si el correo al cliente no salió
+                      // (correo_enviado en False), "Reenviar correo": el mismo
+                      // endpoint consultar-hacienda reintenta el correo cuando
+                      // ve estado '3' y correo_enviado=False (ver
+                      // _consultar_y_notificar_hacienda_directo en el backend).
+                      if (factura.estadoHacienda == '2' || (factura.estadoHacienda == '3' && !factura.correoEnviado)) ...[
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
-                            side: BorderSide(color: AppColors.primary),
+                            side: const BorderSide(color: Colors.orange),
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
-                          icon: Icon(Icons.share, color: AppColors.primary),
-                          label: Text("COMPARTIR", style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
-                          onPressed: _isProcesando
-                              ? null
-                              : () => _manejarAccion(
-                                  () => ExportService.exportFacturaDetalleToPdf(factura, share: true, notasCredito: _notasCredito)),
+                          icon: Icon(factura.estadoHacienda == '3' ? Icons.mail_outline : Icons.refresh, color: Colors.orange),
+                          label: Text(
+                            factura.estadoHacienda == '3' ? "REENVIAR CORREO" : "CONSULTAR ESTADO EN HACIENDA",
+                            style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                          ),
+                          onPressed: _isProcesando ? null : () => _manejarAccion(_consultarEstadoHacienda),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
+                      ],
+                      // Reintentar en cualquier estado que no sea Enviando(2)/
+                      // Aceptada(3) (ver FacturaViewSet.reenviar_hacienda_view),
+                      // incluido Rechazada(4).
+                      if (factura.estadoHacienda == '5' || factura.estadoHacienda == '1' || factura.estadoHacienda == '4') ...[
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.red),
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
-                          icon: _isProcesando
-                              ? const SizedBox(
-                                  height: 16,
-                                  width: 16,
-                                  child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
-                                )
-                              : const Icon(Icons.picture_as_pdf, color: Colors.black),
-                          label: const Text("EXPORTAR PDF", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-                          onPressed: _isProcesando
-                              ? null
-                              : () => _manejarAccion(
-                                  () => ExportService.exportFacturaDetalleToPdf(factura, share: false, notasCredito: _notasCredito)),
+                          icon: const Icon(Icons.send_outlined, color: Colors.red),
+                          label: const Text("REINTENTAR ENVÍO A HACIENDA", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                          onPressed: _isProcesando ? null : () => _manejarAccion(_reenviarHacienda),
                         ),
-                      ),
+                      ],
+                      if (puedeEliminar || puedeAnular) ...[
+                        const SizedBox(height: 16),
+                        Divider(height: 1, color: AppColors.border),
+                        const SizedBox(height: 12),
+                        puedeEliminar
+                            ? TextButton.icon(
+                                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                label: const Text("Eliminar factura", style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
+                                onPressed: _isProcesando ? null : _eliminarFactura,
+                              )
+                            : TextButton.icon(
+                                icon: const Icon(Icons.receipt_long_outlined, color: Colors.orange),
+                                label: const Text("Anular con nota de crédito", style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w600)),
+                                onPressed: _isProcesando ? null : _anularConNotaCredito,
+                              ),
+                      ],
                     ],
                   ),
                 ),
-                if (factura.xmlFirmado != null && factura.xmlFirmado!.isNotEmpty)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    color: AppColors.surfaceSubtle,
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        minimumSize: const Size(double.infinity, 0),
-                      ),
-                      icon: const Icon(Icons.code),
-                      // Único documento que refleja EXACTAMENTE lo que
-                      // Hacienda recibió (moneda incluida) cuando el negocio
-                      // usa el camino directo sin Alanube -- ver
-                      // FacturaViewSet._enviar_a_hacienda_directo.
-                      label: const Text("VER XML ENVIADO A HACIENDA", style: TextStyle(fontWeight: FontWeight.bold)),
-                      onPressed: () async {
-                        final uri = Uri.parse(factura.xmlFirmado!);
-                        if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("No se pudo abrir el XML.")),
-                            );
-                          }
-                        }
-                      },
-                    ),
-                  ),
-                // "Consultar estado" mientras sigue Enviando(2). Una vez
-                // Aceptada(3), si por lo que sea el correo al cliente no
-                // salió (correo_enviado en False -- ej. fallo puntual de
-                // Brevo), se ofrece "Reenviar correo" en su lugar: el mismo
-                // endpoint consultar-hacienda ya reintenta el correo cuando
-                // ve estado '3' y correo_enviado=False (ver
-                // _consultar_y_notificar_hacienda_directo en el backend) --
-                // antes este botón desaparecía apenas quedaba Aceptada y no
-                // había forma de reenviar el correo desde la app.
-                if (factura.estadoHacienda == '2' || (factura.estadoHacienda == '3' && !factura.correoEnviado))
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    color: AppColors.surfaceSubtle,
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.orange),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        minimumSize: const Size(double.infinity, 0),
-                      ),
-                      icon: Icon(factura.estadoHacienda == '3' ? Icons.mail_outline : Icons.refresh, color: Colors.orange),
-                      label: Text(
-                        factura.estadoHacienda == '3' ? "REENVIAR CORREO" : "CONSULTAR ESTADO EN HACIENDA",
-                        style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
-                      ),
-                      onPressed: _isProcesando ? null : () => _manejarAccion(_consultarEstadoHacienda),
-                    ),
-                  ),
-                // Backend permite reintentar en cualquier estado que no sea
-                // "Enviando"(2)/"Aceptada"(3) (ver
-                // FacturaViewSet.reenviar_hacienda_view) -- acá faltaba "4"
-                // Rechazada, el caso más común para usar este botón (corregir
-                // la causa del rechazo y reenviar la MISMA factura).
-                if (factura.estadoHacienda == '5' || factura.estadoHacienda == '1' || factura.estadoHacienda == '4')
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    color: AppColors.surfaceSubtle,
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.red),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        minimumSize: const Size(double.infinity, 0),
-                      ),
-                      icon: const Icon(Icons.send_outlined, color: Colors.red),
-                      label: const Text("REINTENTAR ENVÍO A HACIENDA", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                      onPressed: _isProcesando ? null : () => _manejarAccion(_reenviarHacienda),
-                    ),
-                  ),
-                if (puedeEliminar || puedeAnular)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    color: AppColors.surfaceSubtle,
-                    child: puedeEliminar
-                        ? OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Colors.red),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              minimumSize: const Size(double.infinity, 0),
-                            ),
-                            icon: const Icon(Icons.delete_outline, color: Colors.red),
-                            label: const Text("ELIMINAR FACTURA", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                            onPressed: _isProcesando ? null : _eliminarFactura,
-                          )
-                        : OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Colors.orange),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              minimumSize: const Size(double.infinity, 0),
-                            ),
-                            icon: const Icon(Icons.receipt_long_outlined, color: Colors.orange),
-                            label: const Text("ANULAR CON NOTA DE CRÉDITO", style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
-                            onPressed: _isProcesando ? null : _anularConNotaCredito,
-                          ),
-                  ),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+
+  /// Botón de la fila de acciones del documento: ícono arriba y el nombre
+  /// abajo, todos del mismo ancho (entran bien también en el celular).
+  Widget _accionDocumento({
+    required IconData icono,
+    required String texto,
+    required VoidCallback? onTap,
+    bool principal = false,
+    bool ocupado = false,
+  }) {
+    final color = principal ? Colors.black : AppColors.primary;
+    final contenido = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ocupado
+            ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: color))
+            : Icon(icono, color: color, size: 22),
+        const SizedBox(height: 4),
+        Text(texto, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12.5)),
+      ],
+    );
+    final estilo = principal
+        ? ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          )
+        : OutlinedButton.styleFrom(
+            side: BorderSide(color: AppColors.primary.withOpacity(0.6)),
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          );
+    return Expanded(
+      child: principal
+          ? ElevatedButton(style: estilo, onPressed: ocupado ? null : onTap, child: contenido)
+          : OutlinedButton(style: estilo, onPressed: onTap, child: contenido),
     );
   }
 
