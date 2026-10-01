@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../theme/app_theme.dart';
 import '../api_service.dart';
 import '../formato.dart';
+import 'adjuntos_ia.dart';
 
 /// Abre el chat de soporte con IA en una hoja modal -- se puede llamar desde
 /// cualquier pantalla (login, o ya adentro de la app). `contexto` cambia el
@@ -19,11 +19,17 @@ import '../formato.dart';
 /// pregunta ya enviada (`mensajeInicial`), las secciones de ese perfil
 /// (`secciones`, clave -> descripción) para que la IA pueda proponer abrir
 /// una, y `onNavegar` para llevar a la persona ahí al tocar el botón.
+/// `adjuntosIniciales`: nota de voz o archivos que ya vienen de la barra.
+///
+/// Se le puede hablar con notas de voz (la IA las escucha y contesta, sin
+/// mostrar la transcripción, y la respuesta se lee en voz alta) y mandarle
+/// fotos, PDF o Excel -- ver adjuntos_ia.dart y gestion/ia_adjuntos.py.
 Future<void> mostrarSoporteChat(
   BuildContext context, {
   required String contexto,
   int? negocioId,
   String? mensajeInicial,
+  List<AdjuntoIA> adjuntosIniciales = const [],
   Map<String, String>? secciones,
   void Function(String clave)? onNavegar,
 }) {
@@ -35,6 +41,7 @@ Future<void> mostrarSoporteChat(
       contexto: contexto,
       negocioId: negocioId,
       mensajeInicial: mensajeInicial,
+      adjuntosIniciales: adjuntosIniciales,
       secciones: secciones,
       onNavegar: onNavegar,
     ),
@@ -53,9 +60,18 @@ class _ChatMensaje {
   String estadoPropuesta = 'pendiente';
   // 'pendiente' | 'creando' | 'creada' -- aplica a `propuestaProducto`.
   String estadoPropuestaProducto = 'pendiente';
-  _ChatMensaje(this.role, this.content, {this.propuesta, this.propuestaProducto, this.navegar});
+  // Nota de voz / archivos que mandó la persona (solo se muestran acá).
+  final List<AdjuntoIA> adjuntos;
+  // Lo que el backend devuelve sobre esos adjuntos (ej. lo que dijo la nota
+  // de voz): nunca se muestra, pero viaja en el historial para que la IA
+  // lo recuerde en los turnos siguientes.
+  String? notaOculta;
+  _ChatMensaje(this.role, this.content, {this.propuesta, this.propuestaProducto, this.navegar, this.adjuntos = const []});
 
-  Map<String, String> toJson() => {'role': role, 'content': content};
+  Map<String, String> toJson() => {
+        'role': role,
+        'content': [content, notaOculta ?? ''].where((t) => t.trim().isNotEmpty).join('\n'),
+      };
 }
 
 /// Borrador de producto que arma el chat (herramienta preparar_producto del
@@ -142,9 +158,17 @@ class _SoporteChatSheet extends StatefulWidget {
   final String contexto;
   final int? negocioId;
   final String? mensajeInicial;
+  final List<AdjuntoIA> adjuntosIniciales;
   final Map<String, String>? secciones;
   final void Function(String clave)? onNavegar;
-  const _SoporteChatSheet({required this.contexto, this.negocioId, this.mensajeInicial, this.secciones, this.onNavegar});
+  const _SoporteChatSheet({
+    required this.contexto,
+    this.negocioId,
+    this.mensajeInicial,
+    this.adjuntosIniciales = const [],
+    this.secciones,
+    this.onNavegar,
+  });
 
   bool get modoAsistente => secciones != null;
 
@@ -168,39 +192,31 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
     // Viene de la barra del dashboard: la pregunta ya se escribió afuera,
     // se manda apenas se abre el panel.
     final inicial = widget.mensajeInicial?.trim() ?? '';
-    if (inicial.isNotEmpty) {
+    if (inicial.isNotEmpty || widget.adjuntosIniciales.isNotEmpty) {
       _inputCtrl.text = inicial;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _enviarMensaje());
+      WidgetsBinding.instance.addPostFrameCallback((_) => _enviarMensaje(adjuntos: widget.adjuntosIniciales));
     }
+    _inputCtrl.addListener(() => setState(() {}));
   }
   final TextEditingController _inputCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
   bool _enviando = false;
 
-  // Entrada por voz (mic -> texto -> se manda solo, como un comando de
-  // asistente de voz) -- ver _alternarEscucha. `_speech` se inicializa
-  // recien al primer toque del microfono (no pedimos permiso antes de que
-  // el usuario lo pida). `_pulseCtrl` anima el circulo rojo del boton
-  // mientras esta escuchando.
-  final stt.SpeechToText _speech = stt.SpeechToText();
-  bool _vozLista = false;
-  bool _escuchando = false;
-  String? _localeVoz;
+  // Notas de voz (ver adjuntos_ia.dart) y archivos pendientes de mandar.
+  // `_pulseCtrl` anima el aro del micrófono mientras la IA habla.
+  GrabadorVoz? _grabador;
+  bool _grabando = false;
+  final List<AdjuntoIA> _pendientes = [];
   late final AnimationController _pulseCtrl = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 900),
   )..repeat(reverse: true);
 
-  // Salida por voz (la respuesta se lee en voz alta) + modo manos libres:
-  // si el mensaje se mandó hablando, apenas la IA responde se lee la
-  // respuesta y, al terminar, el micrófono se reactiva solo para que
-  // sigas hablando sin tocar nada -- como un asistente tipo Alexa. Tocar
-  // el micrófono mientras está hablando la interrumpe (barge-in) y salir
-  // del modo se hace con el botón de "colgar" que aparece al lado.
+  // Salida por voz: si le hablaste con una nota de voz, la respuesta se
+  // lee en voz alta. Tocar el micrófono mientras habla la interrumpe.
   final FlutterTts _tts = FlutterTts();
   bool _ttsListo = false;
   bool _hablando = false;
-  bool _modoConversacion = false;
 
   Future<void> _prepararTts() async {
     if (_ttsListo) return;
@@ -222,9 +238,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
       if (mounted) setState(() => _hablando = true);
     });
     _tts.setCompletionHandler(() {
-      if (!mounted) return;
-      setState(() => _hablando = false);
-      if (_modoConversacion) _alternarEscucha();
+      if (mounted) setState(() => _hablando = false);
     });
     _tts.setCancelHandler(() {
       if (mounted) setState(() => _hablando = false);
@@ -242,116 +256,54 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
     await _tts.speak(texto);
   }
 
-  /// Sale del modo manos libres: corta la voz si está hablando y deja de
-  /// reactivar el micrófono solo. El chat sigue funcionando normal.
-  Future<void> _salirModoConversacion() async {
-    setState(() => _modoConversacion = false);
-    if (_hablando) await _tts.stop();
-    if (_escuchando) await _speech.stop();
-    if (mounted) setState(() => _escuchando = false);
-  }
-
   @override
   void dispose() {
     _inputCtrl.dispose();
     _scrollCtrl.dispose();
     _pulseCtrl.dispose();
-    if (_escuchando) _speech.stop();
+    _grabador?.cancelar();
+    _grabador?.dispose();
     if (_ttsListo) _tts.stop();
     super.dispose();
   }
 
-  /// Activa/desactiva el microfono. Al primer toque pide permiso e
-  /// inicializa el reconocimiento de voz (lazy, para no pedir permiso sin
-  /// que el usuario lo haya pedido); si el navegador/dispositivo no lo
-  /// soporta o el usuario lo negó, avisa con un SnackBar y no rompe nada --
-  /// el chat sigue funcionando por texto normal.
-  Future<void> _alternarEscucha() async {
-    if (_escuchando) {
-      await _speech.stop();
-      if (mounted) setState(() => _escuchando = false);
+  Future<void> _empezarAGrabar() async {
+    if (_hablando) {
+      await _tts.stop();
       return;
     }
-
-    // Tocar el micrófono mientras la IA está hablando la interrumpe
-    // (barge-in), para no quedar escuchando su propia voz.
-    if (_hablando) await _tts.stop();
-
+    final grabador = _grabador ??= GrabadorVoz();
     try {
-      if (!_vozLista) {
-        final disponible = await _speech
-            .initialize(
-              onStatus: (status) {
-                if ((status == 'done' || status == 'notListening') && mounted) {
-                  setState(() => _escuchando = false);
-                }
-              },
-              onError: (error) {
-                if (mounted) setState(() => _escuchando = false);
-                debugPrint('speech_to_text onError: ${error.errorMsg} (permanent: ${error.permanent})');
-              },
-            )
-            .timeout(const Duration(seconds: 10), onTimeout: () => false);
-        _vozLista = disponible;
-        if (!disponible) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                    'No se pudo activar el micrófono. En Windows: Configuración > Privacidad y seguridad > Micrófono, activá "Acceso al micrófono" y "Permitir que las aplicaciones de escritorio accedan al micrófono". En el navegador: revisá el permiso de micrófono del sitio (no funciona en Safari/iOS).'),
-                duration: Duration(seconds: 8),
-              ),
-            );
-          }
-          return;
-        }
-        final locales = await _speech.locales();
-        _localeVoz = locales
-            .firstWhere(
-              (l) => l.localeId.toLowerCase().startsWith('es'),
-              orElse: () => locales.isNotEmpty ? locales.first : stt.LocaleName('es_CR', 'Español'),
-            )
-            .localeId;
-      }
-
+      if (!await grabador.iniciar()) throw Exception('sin permiso');
+      if (mounted) setState(() => _grabando = true);
+    } catch (_) {
       if (!mounted) return;
-      setState(() => _escuchando = true);
-      await _speech.listen(
-        onResult: (resultado) {
-          if (!mounted) return;
-          setState(() => _inputCtrl.text = resultado.recognizedWords);
-          if (resultado.finalResult) _enviarMensajeDeVoz();
-        },
-        listenOptions: stt.SpeechListenOptions(
-          listenMode: stt.ListenMode.confirmation,
-          partialResults: true,
-          localeId: _localeVoz,
-          listenFor: const Duration(seconds: 30),
-          pauseFor: const Duration(seconds: 3),
-        ),
-      );
-    } catch (e) {
-      debugPrint('Error activando el micrófono: $e');
-      if (mounted) {
-        setState(() => _escuchando = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo activar el micrófono ($e).'), duration: const Duration(seconds: 6)),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No pude usar el micrófono. Revisá que el navegador o Windows le den permiso a Equilibra.'),
+        duration: Duration(seconds: 6),
+      ));
     }
   }
 
-  /// Al terminar de hablar (silencio detectado), manda solo lo transcrito --
-  /// igual que decirle un comando a un asistente de voz, sin tener que
-  /// tocar además el botón de enviar. Como vino por voz, activa el modo
-  /// conversación: cuando la IA responda, se lee en voz alta y el
-  /// micrófono se reactiva solo para seguir hablando.
-  void _enviarMensajeDeVoz() {
+  Future<void> _mandarNotaDeVoz() async {
+    if (!_grabando) return;
+    setState(() => _grabando = false);
+    final nota = await _grabador!.detener();
+    if (nota != null && mounted) _enviarMensaje(adjuntos: [..._pendientes, nota]);
+  }
+
+  Future<void> _descartarNotaDeVoz() async {
+    setState(() => _grabando = false);
+    await _grabador?.cancelar();
+  }
+
+  Future<void> _adjuntar() async {
+    final archivos = await elegirArchivosParaIA(context);
+    if (archivos.isEmpty || !mounted) return;
     setState(() {
-      _escuchando = false;
-      _modoConversacion = true;
+      _pendientes.addAll(archivos);
+      if (_pendientes.length > 5) _pendientes.removeRange(0, _pendientes.length - 5);
     });
-    if (_inputCtrl.text.trim().isNotEmpty) _enviarMensaje();
   }
 
   void _scrollAlFinal() {
@@ -362,12 +314,16 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
     });
   }
 
-  Future<void> _enviarMensaje() async {
+  Future<void> _enviarMensaje({List<AdjuntoIA>? adjuntos}) async {
     final texto = _inputCtrl.text.trim();
-    if (texto.isEmpty || _enviando) return;
+    final adj = adjuntos ?? List.of(_pendientes);
+    if ((texto.isEmpty && adj.isEmpty) || _enviando) return;
+    final porVoz = adj.any((a) => a.esAudio);
+    final mensajeUsuario = _ChatMensaje('user', texto, adjuntos: adj);
     setState(() {
-      _mensajes.add(_ChatMensaje('user', texto));
+      _mensajes.add(mensajeUsuario);
       _inputCtrl.clear();
+      _pendientes.clear();
       _enviando = true;
     });
     _scrollAlFinal();
@@ -378,6 +334,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
         'contexto': widget.contexto,
         if (widget.negocioId != null) 'negocio': widget.negocioId,
         if (widget.secciones != null) 'secciones': widget.secciones,
+        if (adj.isNotEmpty) 'adjuntos': adj.map((a) => a.toJson()).toList(),
       });
       final data = json.decode(utf8.decode(response.bodyBytes));
       if (response.statusCode != 200) {
@@ -386,6 +343,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
       final propuestaJson = data['propuesta_factura'];
       final propuestaProductoJson = data['propuesta_producto'];
       final respuesta = data['respuesta'] ?? '';
+      mensajeUsuario.notaOculta = data['nota_adjuntos'] as String?;
       setState(() => _mensajes.add(_ChatMensaje(
             'assistant',
             respuesta,
@@ -393,9 +351,8 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
             propuestaProducto: propuestaProductoJson != null ? _PropuestaProducto.fromJson(propuestaProductoJson) : null,
             navegar: data['navegar'] as String?,
           )));
-      // Si la pregunta vino por voz, la respuesta se lee en voz alta y al
-      // terminar el micrófono se reactiva solo (ver setCompletionHandler).
-      if (_modoConversacion) _hablar(respuesta);
+      // Si le hablaste con una nota de voz, te contesta en voz alta.
+      if (porVoz) _hablar(respuesta);
       // La IA marca cuando detecta que no puede resolver algo sola (ver
       // sugerir_contacto en el backend) -- se abre el formulario solo en
       // vez de esperar a que la persona note el botón de abajo.
@@ -403,7 +360,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
     } catch (e) {
       const mensajeError = 'No pude responder ahora mismo. Podés dejar tu mensaje con el botón de abajo y te contactamos.';
       setState(() => _mensajes.add(_ChatMensaje('assistant', '$mensajeError ($e)')));
-      if (_modoConversacion) _hablar(mensajeError);
+      if (porVoz) _hablar(mensajeError);
     } finally {
       if (mounted) setState(() => _enviando = false);
       _scrollAlFinal();
@@ -547,7 +504,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
     );
     if (enviar != true) return;
 
-    final transcripcion = _mensajes.map((m) => "${m.role == 'user' ? 'Yo' : 'IA'}: ${m.content}").join('\n');
+    final transcripcion = _mensajes.map((m) => "${m.role == 'user' ? 'Yo' : 'IA'}: ${m.toJson()['content']}").join('\n');
     try {
       final response = await ApiService.post('/soporte/contacto/', {
         'nombre': nombreCtrl.text.trim(),
@@ -730,46 +687,55 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
     );
   }
 
-  /// Botón de micrófono con un aro que pulsa -- rojo mientras escucha, azul
-  /// mientras la IA habla (mismo botón: tocarlo ahí la interrumpe y pasa a
-  /// escuchar, "barge-in" como Alexa/Siri). Fuera de eso es un IconButton
-  /// normal.
+  /// Micrófono: graba una nota de voz para la IA. Mientras la IA lee su
+  /// respuesta en voz alta, el aro pulsa y tocarlo la calla.
   Widget _buildBotonMicrofono() {
-    final colorAro = _escuchando ? Colors.red : (_hablando ? AppColors.primary : null);
     return AnimatedBuilder(
       animation: _pulseCtrl,
       builder: (context, child) {
         return Container(
-          width: 42,
-          height: 42,
+          width: 46,
+          height: 46,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: colorAro != null ? colorAro.withOpacity(0.12 + 0.18 * _pulseCtrl.value) : Colors.transparent,
+            color: _hablando ? AppColors.primary.withOpacity(0.12 + 0.18 * _pulseCtrl.value) : Colors.transparent,
           ),
           child: child,
         );
       },
-      child: IconButton(
-        onPressed: _enviando ? null : _alternarEscucha,
-        icon: Icon(
-          _escuchando ? Icons.mic : (_hablando ? Icons.volume_up : Icons.mic_none_rounded),
-          color: _escuchando ? Colors.red : (_hablando ? AppColors.primary : AppColors.primary),
-        ),
-        tooltip: _escuchando ? 'Escuchando... tocá para detener' : (_hablando ? 'Hablando... tocá para interrumpir' : 'Hablarle al chat'),
+      child: IconButton.filled(
+        onPressed: _enviando ? null : _empezarAGrabar,
+        icon: Icon(_hablando ? Icons.volume_up_rounded : Icons.mic_rounded),
+        style: IconButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.black),
+        tooltip: _hablando ? 'Hablando... tocá para callarla' : 'Mandar nota de voz',
       ),
     );
   }
 
-  /// Aparece solo en modo conversación (manos libres, activado al hablarle
-  /// al chat) -- deja volver al chat normal por texto sin que se reactive
-  /// el micrófono solo después de cada respuesta.
-  Widget _buildBotonSalirConversacion() {
-    if (!_modoConversacion) return const SizedBox.shrink();
-    return IconButton(
-      onPressed: _salirModoConversacion,
-      icon: const Icon(Icons.call_end, color: Colors.red),
-      tooltip: 'Salir del modo conversación por voz',
-    );
+  /// Nota de voz, fotos y archivos que mandó la persona, dentro de su burbuja.
+  List<Widget> _buildAdjuntosMensaje(_ChatMensaje m) {
+    final color = m.role == 'user' ? Colors.black : AppColors.textStrong;
+    return [
+      for (final a in m.adjuntos)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: a.esAudio
+              ? NotaVozBurbuja(bytes: a.bytes, mime: a.mime, duracion: a.duracion, color: color)
+              : a.esImagen
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.memory(a.bytes, width: 200, fit: BoxFit.cover),
+                    )
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(a.mime == 'application/pdf' ? Icons.picture_as_pdf_outlined : Icons.insert_drive_file_outlined, size: 18, color: color),
+                        const SizedBox(width: 6),
+                        Flexible(child: Text(a.nombre, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontSize: 13))),
+                      ],
+                    ),
+        ),
+    ];
   }
 
   @override
@@ -825,9 +791,17 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
                             color: esUsuario ? AppColors.primary : AppColors.surfaceSubtle,
                             borderRadius: BorderRadius.circular(14),
                           ),
-                          child: Text(
-                            m.content,
-                            style: TextStyle(color: esUsuario ? Colors.black : AppColors.textStrong, fontSize: 14, height: 1.35),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ..._buildAdjuntosMensaje(m),
+                              if (m.content.isNotEmpty)
+                                Text(
+                                  m.content,
+                                  style: TextStyle(color: esUsuario ? Colors.black : AppColors.textStrong, fontSize: 14, height: 1.35),
+                                ),
+                            ],
                           ),
                         ),
                       ),
@@ -855,38 +829,68 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Row(
-                children: [
-                  _buildBotonSalirConversacion(),
-                  _buildBotonMicrofono(),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: TextField(
-                      controller: _inputCtrl,
-                      readOnly: _escuchando,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _enviarMensaje(),
-                      decoration: InputDecoration(
-                        hintText: _escuchando ? 'Escuchando...' : (_hablando ? 'Hablando...' : 'Escribí tu pregunta o tocá el micrófono...'),
-                        filled: true,
-                        fillColor: _escuchando
-                            ? Colors.red.withOpacity(0.06)
-                            : (_hablando ? AppColors.primary.withOpacity(0.06) : AppColors.surfaceSubtle),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                      ),
-                    ),
+            if (_pendientes.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final a in List.of(_pendientes))
+                        ChipAdjunto(adjunto: a, onQuitar: () => setState(() => _pendientes.remove(a))),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  IconButton.filled(
-                    onPressed: (_enviando || _escuchando) ? null : _enviarMensaje,
-                    icon: const Icon(Icons.send),
-                    style: IconButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.black),
-                  ),
-                ],
+                ),
               ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 16, 16),
+              child: _grabando
+                  ? Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                      decoration: BoxDecoration(color: AppColors.surfaceSubtle, borderRadius: BorderRadius.circular(28)),
+                      child: GrabandoNotaVoz(
+                        grabador: _grabador!,
+                        onCancelar: _descartarNotaDeVoz,
+                        onEnviar: _mandarNotaDeVoz,
+                        colorTexto: AppColors.textStrong,
+                      ),
+                    )
+                  : Row(
+                      children: [
+                        IconButton(
+                          onPressed: _enviando ? null : _adjuntar,
+                          icon: Icon(Icons.attach_file_rounded, color: AppColors.textMuted),
+                          tooltip: 'Adjuntar foto, PDF o Excel',
+                        ),
+                        Expanded(
+                          child: TextField(
+                            controller: _inputCtrl,
+                            textInputAction: TextInputAction.send,
+                            onSubmitted: (_) => _enviarMensaje(),
+                            decoration: InputDecoration(
+                              hintText: _hablando ? 'Hablando...' : 'Escribí o mandá una nota de voz...',
+                              filled: true,
+                              fillColor: _hablando ? AppColors.primary.withOpacity(0.06) : AppColors.surfaceSubtle,
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Como en WhatsApp: con algo escrito o adjunto se
+                        // envía; si no, el micrófono.
+                        if (_inputCtrl.text.trim().isNotEmpty || _pendientes.isNotEmpty)
+                          IconButton.filled(
+                            onPressed: _enviando ? null : () => _enviarMensaje(),
+                            icon: const Icon(Icons.send),
+                            style: IconButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.black),
+                          )
+                        else
+                          _buildBotonMicrofono(),
+                      ],
+                    ),
             ),
           ],
         ),

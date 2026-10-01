@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'soporte_chat.dart';
+import 'adjuntos_ia.dart';
 
 /// Barra "¿Qué querés hacer hoy?" -- lo primero en el dashboard de cada
 /// perfil (negocio, contador, despacho y administrador). Lo que se escribe
@@ -10,6 +11,10 @@ import 'soporte_chat.dart';
 /// saldos, preparar facturas y productos...) y además puede llevar a la
 /// persona a la sección correcta del panel (ver `secciones` / `onNavegar`
 /// y la marca [[ABRIR:...]] en el backend).
+///
+/// Se le puede HABLAR: el botón del micrófono graba una nota de voz que la
+/// IA escucha y contesta (sin mostrar transcripción), y el clip adjunta
+/// fotos, PDF o Excel para que los interprete (ver adjuntos_ia.dart).
 ///
 /// Diseño fijo de marca (degradado oscuro con acentos cian) para que se vea
 /// igual de bien en el tema oscuro del negocio y en el claro del contador.
@@ -48,6 +53,8 @@ class _AsistenteIABarState extends State<AsistenteIABar> with SingleTickerProvid
   late final AnimationController _brillo = AnimationController(vsync: this, duration: const Duration(seconds: 6))..repeat();
   Timer? _rotarEjemplo;
   int _ejemplo = 0;
+  GrabadorVoz? _grabador;
+  bool _grabando = false;
 
   /// Lo que se ve en gris dentro del campo: primero se presenta, después
   /// van rotando ejemplos de lo que se le puede pedir.
@@ -70,15 +77,17 @@ class _AsistenteIABarState extends State<AsistenteIABar> with SingleTickerProvid
   @override
   void dispose() {
     _rotarEjemplo?.cancel();
+    _grabador?.cancelar();
+    _grabador?.dispose();
     _brillo.dispose();
     _ctrl.dispose();
     _foco.dispose();
     super.dispose();
   }
 
-  void _preguntar([String? texto]) {
+  void _preguntar([String? texto, List<AdjuntoIA> adjuntos = const []]) {
     final pregunta = (texto ?? _ctrl.text).trim();
-    if (pregunta.isEmpty) {
+    if (pregunta.isEmpty && adjuntos.isEmpty) {
       _foco.requestFocus();
       return;
     }
@@ -89,9 +98,43 @@ class _AsistenteIABarState extends State<AsistenteIABar> with SingleTickerProvid
       contexto: 'usuario',
       negocioId: widget.negocioId,
       mensajeInicial: pregunta,
+      adjuntosIniciales: adjuntos,
       secciones: widget.secciones,
       onNavegar: widget.onNavegar,
     );
+  }
+
+  Future<void> _empezarAGrabar() async {
+    _foco.unfocus();
+    final grabador = _grabador ??= GrabadorVoz();
+    try {
+      if (!await grabador.iniciar()) throw Exception('sin permiso');
+      if (mounted) setState(() => _grabando = true);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No pude usar el micrófono. Revisá que el navegador o Windows le den permiso a Equilibra.'),
+        duration: Duration(seconds: 6),
+      ));
+    }
+  }
+
+  Future<void> _mandarNotaDeVoz() async {
+    if (!_grabando) return;
+    setState(() => _grabando = false);
+    final nota = await _grabador!.detener();
+    if (nota == null || !mounted) return;
+    _preguntar(_ctrl.text, [nota]);
+  }
+
+  Future<void> _descartarNotaDeVoz() async {
+    setState(() => _grabando = false);
+    await _grabador?.cancelar();
+  }
+
+  Future<void> _adjuntar() async {
+    final archivos = await elegirArchivosParaIA(context);
+    if (archivos.isNotEmpty && mounted) _preguntar(_ctrl.text, archivos);
   }
 
   @override
@@ -151,7 +194,7 @@ class _AsistenteIABarState extends State<AsistenteIABar> with SingleTickerProvid
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        "Estoy para ayudarte: facturo, reviso tus números y te llevo a donde necesités.",
+                        "Estoy para ayudarte: facturo, reviso tus números y te llevo a donde necesités. Escribime o mandame una nota de voz.",
                         style: TextStyle(color: Colors.white.withOpacity(0.66), fontSize: 13),
                       ),
                     ],
@@ -168,8 +211,10 @@ class _AsistenteIABarState extends State<AsistenteIABar> with SingleTickerProvid
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: _foco.hasFocus ? _cian : Colors.white.withOpacity(0.14), width: _foco.hasFocus ? 1.5 : 1),
               ),
-              padding: const EdgeInsets.only(left: 16, right: 6),
-              child: Row(
+              padding: EdgeInsets.only(left: _grabando ? 4 : 16, right: 6, top: _grabando ? 4 : 0, bottom: _grabando ? 4 : 0),
+              child: _grabando
+                  ? GrabandoNotaVoz(grabador: _grabador!, onCancelar: _descartarNotaDeVoz, onEnviar: _mandarNotaDeVoz)
+                  : Row(
                 children: [
                   Icon(Icons.search_rounded, color: Colors.white.withOpacity(0.55), size: 22),
                   const SizedBox(width: 10),
@@ -215,27 +260,34 @@ class _AsistenteIABarState extends State<AsistenteIABar> with SingleTickerProvid
                       ],
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  _BotonEnviar(activo: _ctrl.text.trim().isNotEmpty, onTap: () => _preguntar()),
+                  IconButton(
+                    onPressed: _adjuntar,
+                    icon: Icon(Icons.attach_file_rounded, color: Colors.white.withOpacity(0.7)),
+                    tooltip: 'Adjuntar foto, PDF o Excel',
+                  ),
+                  const SizedBox(width: 2),
+                  // Como en WhatsApp: sin texto, el botón principal es el
+                  // micrófono (hablarle es lo primero); con texto, enviar.
+                  _ctrl.text.trim().isNotEmpty
+                      ? _BotonEnviar(activo: true, onTap: () => _preguntar())
+                      : _BotonMicrofono(animacion: _brillo, onTap: _empezarAGrabar),
                 ],
               ),
             ),
             if (widget.sugerencias.isNotEmpty) ...[
               const SizedBox(height: 14),
-              // En celular, una sola fila que se desliza de lado; en pantalla
-              // ancha, todas visibles.
+              // En celular, una debajo de la otra a todo el ancho (se leen y
+              // se tocan mejor); en pantalla ancha, todas en una fila.
               if (compacto)
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      for (final (icono, texto) in widget.sugerencias)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: _ChipSugerencia(icono: icono, texto: texto, onTap: () => _preguntar(texto)),
-                        ),
-                    ],
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final (icono, texto) in widget.sugerencias)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _ChipSugerencia(icono: icono, texto: texto, onTap: () => _preguntar(texto), anchoCompleto: true),
+                      ),
+                  ],
                 )
               else
                 Wrap(
@@ -320,6 +372,50 @@ class _IconoIA extends StatelessWidget {
   }
 }
 
+/// Botón principal cuando el campo está vacío: micrófono con degradado y
+/// un aro que respira, para invitar a hablarle.
+class _BotonMicrofono extends StatelessWidget {
+  final Animation<double> animacion;
+  final VoidCallback onTap;
+  const _BotonMicrofono({required this.animacion, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Hablale a Equilibra (nota de voz)',
+      child: AnimatedBuilder(
+        animation: animacion,
+        builder: (context, child) {
+          final pulso = 0.5 + 0.5 * math.sin(animacion.value * 2 * math.pi * 3);
+          return Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [BoxShadow(color: const Color(0xFF22D3EE).withOpacity(0.20 + 0.30 * pulso), blurRadius: 8 + 10 * pulso)],
+            ),
+            child: child,
+          );
+        },
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                gradient: const LinearGradient(colors: [Color(0xFF22D3EE), Color(0xFF6366F1)]),
+              ),
+              child: const Icon(Icons.mic_rounded, color: Colors.white, size: 24),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _BotonEnviar extends StatelessWidget {
   final bool activo;
   final VoidCallback onTap;
@@ -353,7 +449,8 @@ class _ChipSugerencia extends StatefulWidget {
   final IconData icono;
   final String texto;
   final VoidCallback onTap;
-  const _ChipSugerencia({required this.icono, required this.texto, required this.onTap});
+  final bool anchoCompleto;
+  const _ChipSugerencia({required this.icono, required this.texto, required this.onTap, this.anchoCompleto = false});
 
   @override
   State<_ChipSugerencia> createState() => _ChipSugerenciaState();
@@ -372,18 +469,24 @@ class _ChipSugerenciaState extends State<_ChipSugerencia> {
         onTap: widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: EdgeInsets.symmetric(horizontal: 12, vertical: widget.anchoCompleto ? 11 : 8),
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(_hover ? 0.14 : 0.07),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(widget.anchoCompleto ? 14 : 20),
             border: Border.all(color: _hover ? const Color(0xFF22D3EE) : Colors.white.withOpacity(0.14)),
           ),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisSize: widget.anchoCompleto ? MainAxisSize.max : MainAxisSize.min,
             children: [
-              Icon(widget.icono, size: 15, color: const Color(0xFF67E8F9)),
-              const SizedBox(width: 6),
-              Text(widget.texto, style: TextStyle(color: Colors.white.withOpacity(0.88), fontSize: 13, fontWeight: FontWeight.w600)),
+              Icon(widget.icono, size: 16, color: const Color(0xFF67E8F9)),
+              const SizedBox(width: 8),
+              if (widget.anchoCompleto)
+                Expanded(
+                  child: Text(widget.texto, style: TextStyle(color: Colors.white.withOpacity(0.88), fontSize: 14, fontWeight: FontWeight.w600)),
+                )
+              else
+                Text(widget.texto, style: TextStyle(color: Colors.white.withOpacity(0.88), fontSize: 13, fontWeight: FontWeight.w600)),
+              if (widget.anchoCompleto) Icon(Icons.chevron_right_rounded, size: 18, color: Colors.white.withOpacity(0.4)),
             ],
           ),
         ),

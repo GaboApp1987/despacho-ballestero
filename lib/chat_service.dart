@@ -31,6 +31,9 @@ class MensajeChat {
     return _extensionesImagen.contains(ext);
   }
 
+  static const _extensionesAudio = {'webm', 'ogg', 'm4a', 'mp3', 'wav', 'aac'};
+  bool get archivoEsAudio => _extensionesAudio.contains(archivoNombre.split('.').last.toLowerCase());
+
   factory MensajeChat.fromJson(Map<String, dynamic> json) => MensajeChat(
         id: json['id'],
         texto: json['texto'] ?? '',

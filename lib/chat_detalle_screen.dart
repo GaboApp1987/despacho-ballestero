@@ -8,6 +8,7 @@ import 'api_service.dart';
 import 'avatar_logo.dart';
 import 'chat_service.dart';
 import 'theme/app_theme.dart';
+import 'widgets/adjuntos_ia.dart';
 
 /// Conversación en vivo entre un negocio y su contador -- misma pantalla
 /// para los dos lados, cambia el color según `esContador` (igual patrón
@@ -38,6 +39,10 @@ class _ChatDetalleScreenState extends State<ChatDetalleScreen> {
   late final ChatService _chat;
   bool _cargando = true;
   bool _subiendoArchivo = false;
+  // Notas de voz: se graban acá y se suben como un adjunto de audio más
+  // (ver adjuntos_ia.dart); el otro lado las escucha en la burbuja.
+  GrabadorVoz? _grabador;
+  bool _grabando = false;
   bool _mostrarEmojis = false;
 
   Color get _colorFondo => widget.esContador ? TemaContador.fondo : AppColors.background;
@@ -63,6 +68,8 @@ class _ChatDetalleScreenState extends State<ChatDetalleScreen> {
   @override
   void dispose() {
     _chat.cerrar();
+    _grabador?.cancelar();
+    _grabador?.dispose();
     _inputCtrl.dispose();
     _inputFocus.dispose();
     _scrollCtrl.dispose();
@@ -184,6 +191,52 @@ class _ChatDetalleScreenState extends State<ChatDetalleScreen> {
     }
   }
 
+  Future<void> _empezarAGrabar() async {
+    final grabador = _grabador ??= GrabadorVoz();
+    try {
+      if (!await grabador.iniciar()) throw Exception('sin permiso');
+      if (mounted) setState(() => _grabando = true);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No pude usar el micrófono. Revisá que el navegador o Windows le den permiso a Equilibra.'),
+        duration: Duration(seconds: 6),
+      ));
+    }
+  }
+
+  Future<void> _descartarNotaDeVoz() async {
+    setState(() => _grabando = false);
+    await _grabador?.cancelar();
+  }
+
+  Future<void> _enviarNotaDeVoz() async {
+    if (!_grabando) return;
+    setState(() {
+      _grabando = false;
+      _subiendoArchivo = true;
+    });
+    try {
+      final nota = await _grabador!.detener();
+      if (nota == null) return;
+      final response = await ApiService.postMultipartBytes(
+        '/chat/conversaciones/${widget.conversacionId}/mensajes/adjunto/',
+        {},
+        'archivo',
+        nota.bytes,
+        nota.nombre,
+        contentType: nota.mime,
+      );
+      if (response.statusCode != 201 && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No se pudo mandar la nota de voz.")));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo mandar la nota de voz: $e")));
+    } finally {
+      if (mounted) setState(() => _subiendoArchivo = false);
+    }
+  }
+
   Future<void> _abrirArchivo(String url) async {
     final uri = Uri.parse(url);
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
@@ -196,7 +249,12 @@ class _ChatDetalleScreenState extends State<ChatDetalleScreen> {
     if (!m.tieneArchivo) {
       return Text(m.texto, style: TextStyle(color: colorTexto, fontSize: 14, height: 1.35));
     }
-    final adjunto = m.archivoEsImagen
+    final adjunto = m.archivoEsAudio
+        ? Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            child: NotaVozBurbuja(url: m.archivoUrl, color: colorTexto),
+          )
+        : m.archivoEsImagen
         ? ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: InkWell(
@@ -318,7 +376,22 @@ class _ChatDetalleScreenState extends State<ChatDetalleScreen> {
             top: false,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              child: Row(
+              child: _grabando
+                  ? Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: _colorSuperficie,
+                        borderRadius: BorderRadius.circular(28),
+                        border: Border.all(color: _colorBorde),
+                      ),
+                      child: GrabandoNotaVoz(
+                        grabador: _grabador!,
+                        onCancelar: _descartarNotaDeVoz,
+                        onEnviar: _enviarNotaDeVoz,
+                        colorTexto: _colorFuerte,
+                      ),
+                    )
+                  : Row(
                 children: [
                   IconButton(
                     icon: Icon(_mostrarEmojis ? Icons.keyboard_outlined : Icons.emoji_emotions_outlined, color: _colorFuerte.withOpacity(0.7)),
@@ -375,10 +448,21 @@ class _ChatDetalleScreenState extends State<ChatDetalleScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  IconButton.filled(
-                    onPressed: _enviar,
-                    icon: const Icon(Icons.send),
-                    style: IconButton.styleFrom(backgroundColor: _colorAcento, foregroundColor: Colors.white),
+                  // Como en WhatsApp: sin texto, el micrófono (nota de voz).
+                  ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: _inputCtrl,
+                    builder: (context, valor, _) => valor.text.trim().isEmpty
+                        ? IconButton.filled(
+                            onPressed: _subiendoArchivo ? null : _empezarAGrabar,
+                            icon: const Icon(Icons.mic_rounded),
+                            tooltip: 'Mandar nota de voz',
+                            style: IconButton.styleFrom(backgroundColor: _colorAcento, foregroundColor: Colors.white),
+                          )
+                        : IconButton.filled(
+                            onPressed: _enviar,
+                            icon: const Icon(Icons.send),
+                            style: IconButton.styleFrom(backgroundColor: _colorAcento, foregroundColor: Colors.white),
+                          ),
                   ),
                 ],
               ),
