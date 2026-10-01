@@ -10,6 +10,7 @@ import 'impuesto.dart';
 import 'negocio.dart';
 import 'producto.dart';
 import 'formato.dart';
+import 'widgets/campo_cedula_hacienda.dart';
 
 class FormularioCompra extends StatefulWidget {
   final Negocio negocio;
@@ -418,13 +419,12 @@ class _FormularioCompraState extends State<FormularioCompra> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // La cédula primero: con ella se carga el nombre de Hacienda.
+            CampoCedulaHacienda(controller: cedulaCtrl, nombreController: nombreCtrl, labelText: "Cédula (opcional)"),
+            const SizedBox(height: 8),
             TextField(
               controller: nombreCtrl,
               decoration: const InputDecoration(labelText: "Nombre / Razón Social"),
-            ),
-            TextField(
-              controller: cedulaCtrl,
-              decoration: const InputDecoration(labelText: "Cédula Jurídica (Opcional)"),
             ),
             TextField(
               controller: correoCtrl,

@@ -18,6 +18,7 @@ import 'login.dart';
 import 'widgets/bloqueo_salida_raiz.dart';
 import 'widgets/soporte_chat.dart';
 import 'widgets/asistente_ia_bar.dart';
+import 'widgets/campo_cedula_hacienda.dart';
 
 /// Paleta "Blanco & Cobalto" -- solo para cuando esta pantalla la ve un
 /// CONTADOR viendo su propia cartera (widget.puedeCrear), a propósito
@@ -468,6 +469,9 @@ class _NegociosScreenState extends State<NegociosScreen> {
     String entorno = 'STAGING';
     int? planSeleccionado;
     bool guardando = false;
+    // Cargados de Hacienda con la cédula (ver CampoCedulaHacienda).
+    String nombreLegal = '';
+    String actividadAlanube = '';
     // Un negocio que solo lleva su contabilidad con el contador (Ingresos,
     // Compras, Reportes) pero no factura electrónicamente por acá no
     // necesita correo/usuario/clave de Hacienda -- eso trababa la creación
@@ -498,24 +502,30 @@ class _NegociosScreenState extends State<NegociosScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextField(
-                    controller: nombreCtrl,
-                    autofocus: true,
-                    decoration: const InputDecoration(labelText: "Nombre Comercial *", border: OutlineInputBorder()),
-                  ),
-                  const SizedBox(height: 10),
+                  // La cédula primero: carga de Hacienda el nombre, el tipo
+                  // y la actividad económica.
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
                         flex: 2,
-                        child: TextField(
+                        child: CampoCedulaHacienda(
                           controller: cedulaCtrl,
-                          decoration: const InputDecoration(labelText: "Cédula *", border: OutlineInputBorder()),
+                          nombreController: nombreCtrl,
+                          labelText: "Cédula *",
+                          onEncontrado: (datos) => setStateDialog(() {
+                            final tipo = (datos['tipo_cedula'] ?? '').toString();
+                            if (_tiposCedula.containsKey(tipo)) tipoCedula = tipo;
+                            nombreLegal = (datos['nombre'] ?? '').toString();
+                            final principal = datos['actividad_principal'] as Map?;
+                            actividadAlanube = (principal?['codigo'] ?? '').toString();
+                          }),
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: DropdownButtonFormField<String>(
+                          key: ValueKey(tipoCedula),
                           value: tipoCedula,
                           decoration: const InputDecoration(labelText: "Tipo", border: OutlineInputBorder()),
                           items: _tiposCedula.entries
@@ -526,6 +536,17 @@ class _NegociosScreenState extends State<NegociosScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: nombreCtrl,
+                    decoration: const InputDecoration(labelText: "Nombre Comercial *", border: OutlineInputBorder()),
+                  ),
+                  if (actividadAlanube.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text("Actividad económica de Hacienda: $actividadAlanube (se guarda para facturar)",
+                          style: const TextStyle(fontSize: 12, color: Colors.green)),
+                    ),
                   const SizedBox(height: 10),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
@@ -624,6 +645,8 @@ class _NegociosScreenState extends State<NegociosScreen> {
                           'nombre_comercial': nombreCtrl.text.trim(),
                           'cedula': cedulaCtrl.text.trim(),
                           'tipo_cedula': tipoCedula,
+                          if (nombreLegal.isNotEmpty) 'nombre_legal': nombreLegal,
+                          if (actividadAlanube.isNotEmpty) 'alanube_economic_activity': actividadAlanube,
                           'correo_hacienda': correoHaciendaCtrl.text.trim(),
                           'codigo_actividad': codigoActividadCtrl.text.trim(),
                           'usuario_api': usuarioApiCtrl.text.trim(),

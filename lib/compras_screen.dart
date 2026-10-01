@@ -13,6 +13,7 @@ import 'impuesto.dart';
 import 'importar_externo_dialog.dart';
 import 'negocio.dart';
 import 'formato.dart';
+import 'widgets/campo_cedula_hacienda.dart';
 
 /// Registra una Nota de Débito que el proveedor emitió sobre `compra` (le
 /// cobró de más) -- compartido entre la lista de Compras y la pantalla de
@@ -524,15 +525,12 @@ class _ComprasScreenState extends State<ComprasScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // La cédula primero: con ella se carga el nombre de Hacienda.
+                CampoCedulaHacienda(controller: cedulaCtrl, nombreController: nombreCtrl, labelText: "Cédula (opcional)"),
+                const SizedBox(height: 12),
                 TextField(
                   controller: nombreCtrl,
-                  autofocus: true,
                   decoration: const InputDecoration(labelText: "Nombre / Razón Social *", border: OutlineInputBorder()),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: cedulaCtrl,
-                  decoration: const InputDecoration(labelText: "Cédula Jurídica (Opcional)", border: OutlineInputBorder()),
                 ),
                 const SizedBox(height: 10),
                 TextField(

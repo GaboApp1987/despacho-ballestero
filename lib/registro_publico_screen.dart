@@ -8,6 +8,7 @@ import 'login.dart';
 import 'plan.dart';
 import 'theme/app_theme.dart';
 import 'ubicacion_cr.dart';
+import 'widgets/campo_cedula_hacienda.dart';
 
 /// Alta pública desde el login (sin sesión previa): despacho contable,
 /// contador independiente, o negocio directo. La cuenta queda creada pero
@@ -58,6 +59,9 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
   final _codigoActividadCtrl = TextEditingController();
   final _codigoPromocionalCtrl = TextEditingController();
   String _tipoCedula = '02';
+  // Cargados de Hacienda con la cédula (ver CampoCedulaHacienda).
+  String _nombreLegal = '';
+  String _actividadAlanube = '';
 
   // Ubicación exigida por Hacienda (Provincia/Cantón/Distrito) -- opcional
   // acá igual que correo_hacienda/codigo_actividad: quien ya la tiene a
@@ -236,6 +240,8 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
       if (_tipo == 'negocio') ...{
         'cedula': _cedulaCtrl.text.trim(),
         'tipo_cedula': _tipoCedula,
+        if (_nombreLegal.isNotEmpty) 'nombre_legal': _nombreLegal,
+        if (_actividadAlanube.isNotEmpty) 'alanube_economic_activity': _actividadAlanube,
         'correo_hacienda': _correoHaciendaCtrl.text.trim(),
         'codigo_actividad': _codigoActividadCtrl.text.trim(),
         if (_provinciaSel != null) 'provincia': _provinciaSel,
@@ -373,6 +379,45 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
+                    if (_tipo == 'negocio') ...[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: CampoCedulaHacienda(
+                              controller: _cedulaCtrl,
+                              nombreController: _nombreCtrl,
+                              labelText: "Cédula del negocio",
+                              validator: (v) => (v == null || v.trim().isEmpty) ? "Requerido" : null,
+                              onEncontrado: (datos) => setState(() {
+                                final tipo = (datos['tipo_cedula'] ?? '').toString();
+                                if (const ['01', '02', '03', '04'].contains(tipo)) _tipoCedula = tipo;
+                                _nombreLegal = (datos['nombre'] ?? '').toString();
+                                final principal = datos['actividad_principal'] as Map?;
+                                _actividadAlanube = (principal?['codigo'] ?? '').toString();
+                              }),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              key: ValueKey(_tipoCedula),
+                              initialValue: _tipoCedula,
+                              decoration: const InputDecoration(labelText: "Tipo", border: OutlineInputBorder()),
+                              items: const [
+                                DropdownMenuItem(value: '01', child: Text("Física")),
+                                DropdownMenuItem(value: '02', child: Text("Jurídica")),
+                                DropdownMenuItem(value: '03', child: Text("DIMEX")),
+                                DropdownMenuItem(value: '04', child: Text("NITE")),
+                              ],
+                              onChanged: (v) => setState(() => _tipoCedula = v!),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     TextFormField(
                       controller: _nombreCtrl,
                       decoration: InputDecoration(
@@ -421,33 +466,11 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                       const SizedBox(height: 20),
                       const Text("Datos para facturar", style: TextStyle(fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            flex: 2,
-                            child: TextFormField(
-                              controller: _cedulaCtrl,
-                              decoration: const InputDecoration(labelText: "Cédula", border: OutlineInputBorder()),
-                              validator: (v) => (v == null || v.trim().isEmpty) ? "Requerido" : null,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: _tipoCedula,
-                              decoration: const InputDecoration(labelText: "Tipo", border: OutlineInputBorder()),
-                              items: const [
-                                DropdownMenuItem(value: '01', child: Text("Física")),
-                                DropdownMenuItem(value: '02', child: Text("Jurídica")),
-                                DropdownMenuItem(value: '03', child: Text("DIMEX")),
-                                DropdownMenuItem(value: '04', child: Text("NITE")),
-                              ],
-                              onChanged: (v) => setState(() => _tipoCedula = v!),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
+                      if (_actividadAlanube.isNotEmpty) ...[
+                        Text("Actividad económica de Hacienda: $_actividadAlanube (ya queda guardada para facturar)",
+                            style: const TextStyle(fontSize: 12, color: Colors.green)),
+                        const SizedBox(height: 10),
+                      ],
                       TextFormField(
                         controller: _correoHaciendaCtrl,
                         keyboardType: TextInputType.emailAddress,
