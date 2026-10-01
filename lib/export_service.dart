@@ -2750,6 +2750,528 @@ class ExportService {
     await _guardarExcel(excel, dialogTitle: 'Guardar Declaración de Renta (Excel)', fileName: 'Declaracion_Renta_Detalle_$periodoFiscal.xlsx');
   }
 
+  // =====================================================================
+  // REPORTE DE RENTA (D-101) DEL CONTADOR -- uno o varios clientes de la
+  // cartera. Cada elemento de [rentas] es la respuesta de
+  // /facturas/declaracion-renta/ (ver calcular_declaracion_renta en el
+  // backend), que trae además los datos del contribuyente (del perfil del
+  // negocio), el detalle mes a mes y el año anterior.
+  // =====================================================================
+
+  static const _mesesLargos = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Setiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+  static double _nr(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0.0;
+
+  static String _nombreRenta(Map<String, dynamic> r) =>
+      ((r['contribuyente'] as Map?)?['nombre_comercial'] ?? r['negocio_nombre'] ?? 'Cliente').toString();
+
+  /// Tasa efectiva: impuesto / renta líquida gravable (0 si no hay renta).
+  static double _tasaEfectiva(Map<String, dynamic> r) => _div(_nr(r['impuesto_estimado']), _nr(r['renta_liquida_gravable']));
+
+  static Future<void> exportRentaContadorToPdf(List<Map<String, dynamic>> rentas, int anio) async {
+    final pdf = pw.Document(theme: await _cargarTema());
+    const indigo = PdfColor.fromInt(0xFF3730A3);
+    const gris = PdfColors.grey700;
+
+    pw.Widget titulo(String t) => pw.Padding(
+          padding: const pw.EdgeInsets.only(top: 16, bottom: 6),
+          child: pw.Text(t, style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold, color: indigo)),
+        );
+
+    pw.Widget tabla(List<String> encabezados, List<List<String>> filas, {List<int> numericas = const [], List<String>? total}) {
+      final alineacion = {for (final c in numericas) c: pw.Alignment.centerRight};
+      return pw.TableHelper.fromTextArray(
+        headers: encabezados,
+        data: [...filas, if (total != null) total],
+        headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9.5),
+        headerDecoration: const pw.BoxDecoration(color: indigo),
+        cellStyle: const pw.TextStyle(fontSize: 9.5),
+        cellAlignments: alineacion,
+        headerAlignments: alineacion,
+        oddRowDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF5F7FF)),
+        cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      );
+    }
+
+    List<pw.Widget> paginaCliente(Map<String, dynamic> r) {
+      final c = (r['contribuyente'] as Map?) ?? {};
+      final ingresos = _nr(r['ingresos_brutos']);
+      final costo = _nr(r['costo_ventas']);
+      final gastos = _nr(r['gastos_deducibles']);
+      final renta = _nr(r['renta_liquida_gravable']);
+      final impuesto = _nr(r['impuesto_estimado']);
+      final anterior = (r['anio_anterior'] as Map?) ?? {};
+      final detalle = (r['ingresos_detalle'] as Map?) ?? {};
+      final tramos = (r['desglose_tramos'] as List?) ?? [];
+      final porCategoria = (r['gastos_por_categoria'] as List?) ?? [];
+      final mensual = (r['mensual'] as List?) ?? [];
+      String campo(String k) => (c[k]?.toString() ?? '').trim();
+
+      return [
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Expanded(
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text('Declaración de Renta (D-101)', style: pw.TextStyle(fontSize: 19, fontWeight: pw.FontWeight.bold, color: indigo)),
+                  pw.Text('Borrador para revisión del contador', style: const pw.TextStyle(fontSize: 10, color: gris)),
+                ],
+              ),
+            ),
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: pw.BoxDecoration(color: const PdfColor.fromInt(0xFFEEF2FF), borderRadius: pw.BorderRadius.circular(6)),
+              child: pw.Text('Periodo fiscal $anio', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: indigo)),
+            ),
+          ],
+        ),
+        pw.SizedBox(height: 12),
+        // --- Datos del contribuyente
+        pw.Container(
+          width: double.infinity,
+          padding: const pw.EdgeInsets.all(10),
+          decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey300), borderRadius: pw.BorderRadius.circular(6)),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(campo('nombre_legal').isNotEmpty ? campo('nombre_legal') : _nombreRenta(r),
+                  style: pw.TextStyle(fontSize: 12.5, fontWeight: pw.FontWeight.bold)),
+              if (campo('nombre_legal').isNotEmpty && campo('nombre_legal') != campo('nombre_comercial'))
+                pw.Text('Nombre comercial: ${campo('nombre_comercial')}', style: const pw.TextStyle(fontSize: 9.5, color: gris)),
+              pw.SizedBox(height: 3),
+              pw.Text('Cédula ${campo('tipo_cedula').toLowerCase()}: ${campo('cedula')}   ·   ${campo('tipo_contribuyente')}',
+                  style: const pw.TextStyle(fontSize: 9.5)),
+              if (campo('codigo_actividad').isNotEmpty)
+                pw.Text('Actividad económica: ${campo('codigo_actividad')}${campo('actividad').isNotEmpty ? ' — ${campo('actividad')}' : ''}',
+                    style: const pw.TextStyle(fontSize: 9.5)),
+              if (campo('direccion').isNotEmpty) pw.Text('Dirección: ${campo('direccion')}', style: const pw.TextStyle(fontSize: 9.5, color: gris)),
+              if (campo('correo').isNotEmpty || campo('telefono').isNotEmpty)
+                pw.Text([if (campo('correo').isNotEmpty) campo('correo'), if (campo('telefono').isNotEmpty) campo('telefono')].join('   ·   '),
+                    style: const pw.TextStyle(fontSize: 9.5, color: gris)),
+            ],
+          ),
+        ),
+        titulo('Estado de resultados fiscal'),
+        tabla(
+          ['Concepto', 'Monto'],
+          [
+            ['Ventas facturadas (sin IVA)', formatearColones(_nr(detalle['ventas_facturadas_sin_iva']))],
+            ['(-) Notas de crédito (sin IVA)', formatearColones(_nr(detalle['notas_credito_sin_iva']))],
+            ['(+) Otros ingresos', formatearColones(_nr(detalle['otros_ingresos']))],
+            ['Ingresos brutos', formatearColones(ingresos)],
+            ['(-) Costo de ventas (compras del periodo)', formatearColones(costo)],
+            ['(-) Gastos deducibles', formatearColones(gastos)],
+            ['Renta líquida gravable', formatearColones(renta)],
+            ['Impuesto sobre la renta estimado', formatearColones(impuesto)],
+            ['Tasa efectiva (impuesto / renta gravable)', '${(_tasaEfectiva(r) * 100).toStringAsFixed(2)}%'],
+            if (_nr(r['gastos_no_deducibles']) > 0) ['Gastos no deducibles (no restan)', formatearColones(_nr(r['gastos_no_deducibles']))],
+          ],
+          numericas: [1],
+        ),
+        if (r['tarifa_unica_aplicada'] != null)
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(top: 4),
+            child: pw.Text('Se aplicó la tarifa única de ${r['tarifa_unica_aplicada']}% (los ingresos brutos superan el límite de tramos).',
+                style: const pw.TextStyle(fontSize: 9, color: gris)),
+          ),
+        if (r['parametros_configurados'] == false)
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(top: 4),
+            child: pw.Text('Atención: no hay tramos de Hacienda cargados para $anio, el impuesto sale en cero hasta configurarlos.',
+                style: pw.TextStyle(fontSize: 9, color: PdfColors.red700, fontWeight: pw.FontWeight.bold)),
+          ),
+        if (tramos.isNotEmpty) ...[
+          titulo('Cálculo por tramo'),
+          tabla(
+            ['Desde', 'Hasta', 'Tarifa', 'Base en el tramo', 'Impuesto'],
+            [
+              for (final t in tramos)
+                [
+                  formatearColones(_nr(t['desde']), decimales: 0),
+                  t['hasta'] == null ? 'En adelante' : formatearColones(_nr(t['hasta']), decimales: 0),
+                  '${t['porcentaje']}%',
+                  formatearColones(_nr(t['base_en_tramo'])),
+                  formatearColones(_nr(t['impuesto_tramo'])),
+                ],
+            ],
+            numericas: [0, 1, 2, 3, 4],
+          ),
+        ],
+        if (porCategoria.isNotEmpty) ...[
+          titulo('Gastos deducibles por categoría'),
+          tabla(
+            ['Categoría', 'Monto', '% del total'],
+            [
+              for (final g in porCategoria)
+                [
+                  _categoriasGastoPdf[g['categoria']] ?? g['categoria'].toString(),
+                  formatearColones(_nr(g['total'])),
+                  '${(_div(_nr(g['total']), gastos) * 100).toStringAsFixed(1)}%',
+                ],
+            ],
+            numericas: [1, 2],
+            total: ['Total', formatearColones(gastos), '100%'],
+          ),
+        ],
+        if (mensual.isNotEmpty) ...[
+          titulo('Detalle mes a mes'),
+          tabla(
+            ['Mes', 'Ingresos', 'Costos', 'Gastos deducibles', 'Renta'],
+            [
+              for (final m in mensual)
+                [
+                  _mesesLargos[((m['mes'] as num).toInt() - 1).clamp(0, 11)],
+                  formatearColones(_nr(m['ingresos'])),
+                  formatearColones(_nr(m['costos'])),
+                  formatearColones(_nr(m['gastos_deducibles'])),
+                  formatearColones(_nr(m['renta'])),
+                ],
+            ],
+            numericas: [1, 2, 3, 4],
+            total: ['Total', formatearColones(ingresos), formatearColones(costo), formatearColones(gastos), formatearColones(renta)],
+          ),
+        ],
+        if (anterior.isNotEmpty) ...[
+          titulo('Comparación con ${anterior['periodo_fiscal']}'),
+          tabla(
+            ['Concepto', '${anterior['periodo_fiscal']}', '$anio', 'Variación'],
+            [
+              for (final (etiqueta, clave) in const [
+                ('Ingresos brutos', 'ingresos_brutos'),
+                ('Renta líquida gravable', 'renta_liquida_gravable'),
+                ('Impuesto estimado', 'impuesto_estimado'),
+              ])
+                [
+                  etiqueta,
+                  formatearColones(_nr(anterior[clave])),
+                  formatearColones(_nr(r[clave])),
+                  _nr(anterior[clave]) == 0
+                      ? '-'
+                      : '${((_nr(r[clave]) / _nr(anterior[clave]) - 1) * 100).toStringAsFixed(1)}%',
+                ],
+            ],
+            numericas: [1, 2, 3],
+          ),
+        ],
+        pw.SizedBox(height: 14),
+        pw.Text(
+          'Borrador de referencia generado con Equilibra a partir de lo registrado por el negocio. El costo de ventas se aproxima con las '
+          'compras del periodo y no incluye depreciación fiscal detallada, pérdidas de periodos anteriores ni créditos personales. '
+          'Revise los montos antes de presentar el D-101 ante Hacienda.',
+          style: pw.TextStyle(fontSize: 8, color: PdfColors.grey600, fontStyle: pw.FontStyle.italic),
+        ),
+      ];
+    }
+
+    final widgets = <pw.Widget>[];
+    if (rentas.length > 1) {
+      final totalImpuesto = rentas.fold(0.0, (a, r) => a + _nr(r['impuesto_estimado']));
+      widgets.addAll([
+        pw.Text('Renta estimada de la cartera (D-101)', style: pw.TextStyle(fontSize: 19, fontWeight: pw.FontWeight.bold, color: indigo)),
+        pw.Text('Periodo fiscal $anio   ·   ${rentas.length} clientes', style: const pw.TextStyle(fontSize: 10, color: gris)),
+        pw.SizedBox(height: 12),
+        tabla(
+          ['Cliente', 'Cédula', 'Ingresos brutos', 'Renta gravable', 'Impuesto', 'Tasa ef.'],
+          [
+            for (final r in ([...rentas]..sort((a, b) => _nr(b['impuesto_estimado']).compareTo(_nr(a['impuesto_estimado'])))))
+              [
+                _nombreRenta(r),
+                ((r['contribuyente'] as Map?)?['cedula'] ?? '').toString(),
+                formatearColones(_nr(r['ingresos_brutos'])),
+                formatearColones(_nr(r['renta_liquida_gravable'])),
+                formatearColones(_nr(r['impuesto_estimado'])),
+                '${(_tasaEfectiva(r) * 100).toStringAsFixed(1)}%',
+              ],
+          ],
+          numericas: [2, 3, 4, 5],
+          total: [
+            'Total',
+            '',
+            formatearColones(rentas.fold(0.0, (a, r) => a + _nr(r['ingresos_brutos']))),
+            formatearColones(rentas.fold(0.0, (a, r) => a + _nr(r['renta_liquida_gravable']))),
+            formatearColones(totalImpuesto),
+            '',
+          ],
+        ),
+      ]);
+    }
+    for (var i = 0; i < rentas.length; i++) {
+      if (widgets.isNotEmpty) widgets.add(pw.NewPage());
+      widgets.addAll(paginaCliente(rentas[i]));
+    }
+
+    pdf.addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.all(32),
+      footer: (context) => pw.Align(
+        alignment: pw.Alignment.centerRight,
+        child: pw.Text('Página ${context.pageNumber} de ${context.pagesCount}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey500)),
+      ),
+      build: (context) => widgets,
+    ));
+    final nombre = rentas.length == 1 ? 'Renta_${anio}_${_nombreRenta(rentas.first).replaceAll(' ', '_')}.pdf' : 'Renta_${anio}_cartera.pdf';
+    await Printing.layoutPdf(onLayout: (format) async => pdf.save(), name: nombre);
+  }
+
+  static Future<void> exportRentaContadorToExcel(List<Map<String, dynamic>> rentas, int anio) async {
+    final excel = Excel.createExcel();
+    excel['Dashboard']; // primera pestaña (ver _escribirDashboard)
+
+    // ---------------- Resumen de la cartera (una fila por cliente)
+    final resumen = excel['Resumen'];
+    _anchoColumnas(resumen, [34, 15, 22, 17, 17, 17, 17, 17, 11, 17]);
+    resumen.appendRow([TextCellValue('Renta estimada (D-101) · Periodo fiscal $anio')]);
+    _estilarCeldaUltimaFila(resumen, 0, _estiloTitulo());
+    resumen.appendRow([TextCellValue('${rentas.length} cliente(s)   ·   Generado: ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}')]);
+    _estilarCeldaUltimaFila(resumen, 0, _estiloSubtitulo());
+    resumen.appendRow([]);
+    const encabezados = [
+      'Cliente', 'Cédula', 'Tipo', 'Ingresos brutos', 'Costo de ventas', 'Gastos deducibles',
+      'Renta gravable', 'Impuesto estimado', 'Tasa ef.', 'Impuesto año anterior',
+    ];
+    resumen.appendRow(encabezados.map((e) => TextCellValue(e)).toList());
+    _estilarUltimaFila(resumen, encabezados.length, _estiloEncabezadoTabla());
+    final totales = List<double>.filled(5, 0);
+    final ordenadas = [...rentas]..sort((a, b) => _nr(b['impuesto_estimado']).compareTo(_nr(a['impuesto_estimado'])));
+    for (final r in ordenadas) {
+      final c = (r['contribuyente'] as Map?) ?? {};
+      final valores = [_nr(r['ingresos_brutos']), _nr(r['costo_ventas']), _nr(r['gastos_deducibles']), _nr(r['renta_liquida_gravable']), _nr(r['impuesto_estimado'])];
+      for (var k = 0; k < valores.length; k++) {
+        totales[k] += valores[k];
+      }
+      resumen.appendRow([
+        TextCellValue(_nombreRenta(r)),
+        TextCellValue((c['cedula'] ?? '').toString()),
+        TextCellValue((c['tipo_contribuyente'] ?? '').toString()),
+        for (final v in valores) DoubleCellValue(v),
+        DoubleCellValue(_tasaEfectiva(r)),
+        DoubleCellValue(_nr((r['anio_anterior'] as Map?)?['impuesto_estimado'])),
+      ]);
+      for (var col = 3; col <= 7; col++) {
+        _estilarCeldaUltimaFila(resumen, col, _estiloMoneda());
+      }
+      _estilarCeldaUltimaFila(resumen, 8, CellStyle(numberFormat: NumFormat.standard_10, horizontalAlign: HorizontalAlign.Right));
+      _estilarCeldaUltimaFila(resumen, 9, _estiloMoneda());
+    }
+    resumen.appendRow([
+      TextCellValue('TOTAL'), TextCellValue(''), TextCellValue(''),
+      for (final t in totales) DoubleCellValue(t),
+      TextCellValue(''), DoubleCellValue(rentas.fold(0.0, (a, r) => a + _nr((r['anio_anterior'] as Map?)?['impuesto_estimado']))),
+    ]);
+    _estilarUltimaFila(resumen, 3, _estiloTotalTexto());
+    for (var col = 3; col <= 7; col++) {
+      _estilarCeldaUltimaFila(resumen, col, _estiloTotalMoneda());
+    }
+    _estilarCeldaUltimaFila(resumen, 8, _estiloTotalTexto());
+    _estilarCeldaUltimaFila(resumen, 9, _estiloTotalMoneda());
+
+    // ---------------- Una hoja por cliente
+    for (var i = 0; i < rentas.length; i++) {
+      final r = rentas[i];
+      final nombre = _nombreRenta(r);
+      final hojaNombre = '${i + 1}-${nombre.length > 24 ? nombre.substring(0, 24) : nombre}'.replaceAll(RegExp(r'[\\/?*\[\]:]'), ' ');
+      final hoja = excel[hojaNombre];
+      _anchoColumnas(hoja, [38, 18, 18, 18, 18]);
+      final c = (r['contribuyente'] as Map?) ?? {};
+      final detalle = (r['ingresos_detalle'] as Map?) ?? {};
+
+      void seccion(String t) {
+        hoja.appendRow([]);
+        hoja.appendRow([TextCellValue(t)]);
+        _estilarCeldaUltimaFila(hoja, 0, _estiloEncabezadoSeccion());
+      }
+
+      void encabezado(List<String> columnas) {
+        hoja.appendRow(columnas.map((e) => TextCellValue(e)).toList());
+        _estilarUltimaFila(hoja, columnas.length, _estiloEncabezadoTabla());
+      }
+
+      void filaMonto(String concepto, double monto, {bool total = false}) {
+        hoja.appendRow([TextCellValue(concepto), DoubleCellValue(monto)]);
+        if (total) {
+          _estilarCeldaUltimaFila(hoja, 0, _estiloTotalTexto());
+          _estilarCeldaUltimaFila(hoja, 1, _estiloTotalMoneda());
+        } else {
+          _estilarCeldaUltimaFila(hoja, 1, _estiloMoneda());
+        }
+      }
+
+      hoja.appendRow([TextCellValue('Declaración de Renta (D-101) · $anio')]);
+      _estilarCeldaUltimaFila(hoja, 0, _estiloTitulo());
+      hoja.appendRow([TextCellValue('Borrador para revisión del contador')]);
+      _estilarCeldaUltimaFila(hoja, 0, _estiloSubtitulo());
+
+      seccion('Datos del contribuyente');
+      for (final (etiqueta, clave) in const [
+        ('Nombre legal', 'nombre_legal'),
+        ('Nombre comercial', 'nombre_comercial'),
+        ('Cédula', 'cedula'),
+        ('Tipo de cédula', 'tipo_cedula'),
+        ('Tipo de contribuyente', 'tipo_contribuyente'),
+        ('Código de actividad', 'codigo_actividad'),
+        ('Actividad', 'actividad'),
+        ('Dirección', 'direccion'),
+        ('Correo', 'correo'),
+        ('Teléfono', 'telefono'),
+      ]) {
+        final valor = (c[clave] ?? '').toString().trim();
+        if (valor.isEmpty) continue;
+        hoja.appendRow([TextCellValue(etiqueta), TextCellValue(valor)]);
+        _estilarCeldaUltimaFila(hoja, 0, CellStyle(bold: true, fontColorHex: ExcelColor.fromHexString('FF4B5563')));
+      }
+
+      seccion('Estado de resultados fiscal');
+      encabezado(['Concepto', 'Monto']);
+      filaMonto('Ventas facturadas (sin IVA)', _nr(detalle['ventas_facturadas_sin_iva']));
+      filaMonto('(-) Notas de crédito (sin IVA)', _nr(detalle['notas_credito_sin_iva']));
+      filaMonto('(+) Otros ingresos', _nr(detalle['otros_ingresos']));
+      filaMonto('Ingresos brutos', _nr(r['ingresos_brutos']), total: true);
+      filaMonto('(-) Costo de ventas (compras)', _nr(r['costo_ventas']));
+      filaMonto('(-) Gastos deducibles', _nr(r['gastos_deducibles']));
+      filaMonto('Renta líquida gravable', _nr(r['renta_liquida_gravable']), total: true);
+      filaMonto('Impuesto sobre la renta estimado', _nr(r['impuesto_estimado']), total: true);
+      hoja.appendRow([TextCellValue('Tasa efectiva'), DoubleCellValue(_tasaEfectiva(r))]);
+      _estilarCeldaUltimaFila(hoja, 1, CellStyle(numberFormat: NumFormat.standard_10, horizontalAlign: HorizontalAlign.Right));
+      if (_nr(r['gastos_no_deducibles']) > 0) filaMonto('Gastos no deducibles (no restan)', _nr(r['gastos_no_deducibles']));
+
+      final tramos = (r['desglose_tramos'] as List?) ?? [];
+      if (tramos.isNotEmpty) {
+        seccion('Cálculo por tramo');
+        encabezado(['Desde', 'Hasta', 'Tarifa', 'Base en el tramo', 'Impuesto']);
+        for (final t in tramos) {
+          hoja.appendRow([
+            DoubleCellValue(_nr(t['desde'])),
+            t['hasta'] == null ? TextCellValue('En adelante') : DoubleCellValue(_nr(t['hasta'])),
+            TextCellValue('${t['porcentaje']}%'),
+            DoubleCellValue(_nr(t['base_en_tramo'])),
+            DoubleCellValue(_nr(t['impuesto_tramo'])),
+          ]);
+          for (final col in [0, 1, 3, 4]) {
+            _estilarCeldaUltimaFila(hoja, col, _estiloMoneda());
+          }
+        }
+      }
+
+      final porCategoria = (r['gastos_por_categoria'] as List?) ?? [];
+      if (porCategoria.isNotEmpty) {
+        seccion('Gastos deducibles por categoría');
+        encabezado(['Categoría', 'Monto']);
+        for (final g in porCategoria) {
+          filaMonto(_categoriasGastoPdf[g['categoria']] ?? g['categoria'].toString(), _nr(g['total']));
+        }
+        filaMonto('Total', _nr(r['gastos_deducibles']), total: true);
+      }
+
+      final mensual = (r['mensual'] as List?) ?? [];
+      if (mensual.isNotEmpty) {
+        seccion('Detalle mes a mes');
+        encabezado(['Mes', 'Ingresos', 'Costos', 'Gastos deducibles', 'Renta']);
+        for (final m in mensual) {
+          hoja.appendRow([
+            TextCellValue(_mesesLargos[((m['mes'] as num).toInt() - 1).clamp(0, 11)]),
+            DoubleCellValue(_nr(m['ingresos'])),
+            DoubleCellValue(_nr(m['costos'])),
+            DoubleCellValue(_nr(m['gastos_deducibles'])),
+            DoubleCellValue(_nr(m['renta'])),
+          ]);
+          for (var col = 1; col <= 4; col++) {
+            _estilarCeldaUltimaFila(hoja, col, _estiloMoneda());
+          }
+        }
+        hoja.appendRow([
+          TextCellValue('Total'),
+          DoubleCellValue(_nr(r['ingresos_brutos'])),
+          DoubleCellValue(_nr(r['costo_ventas'])),
+          DoubleCellValue(_nr(r['gastos_deducibles'])),
+          DoubleCellValue(_nr(r['renta_liquida_gravable'])),
+        ]);
+        _estilarCeldaUltimaFila(hoja, 0, _estiloTotalTexto());
+        for (var col = 1; col <= 4; col++) {
+          _estilarCeldaUltimaFila(hoja, col, _estiloTotalMoneda());
+        }
+      }
+
+      final anterior = (r['anio_anterior'] as Map?) ?? {};
+      if (anterior.isNotEmpty) {
+        seccion('Comparación con ${anterior['periodo_fiscal']}');
+        encabezado(['Concepto', '${anterior['periodo_fiscal']}', '$anio', 'Variación']);
+        for (final (etiqueta, clave) in const [
+          ('Ingresos brutos', 'ingresos_brutos'),
+          ('Renta líquida gravable', 'renta_liquida_gravable'),
+          ('Impuesto estimado', 'impuesto_estimado'),
+        ]) {
+          final antes = _nr(anterior[clave]);
+          final ahora = _nr(r[clave]);
+          hoja.appendRow([
+            TextCellValue(etiqueta),
+            DoubleCellValue(antes),
+            DoubleCellValue(ahora),
+            antes == 0 ? TextCellValue('-') : DoubleCellValue(ahora / antes - 1),
+          ]);
+          _estilarCeldaUltimaFila(hoja, 1, _estiloMoneda());
+          _estilarCeldaUltimaFila(hoja, 2, _estiloMoneda());
+          _estilarCeldaUltimaFila(hoja, 3, CellStyle(numberFormat: NumFormat.standard_10, horizontalAlign: HorizontalAlign.Right));
+        }
+      }
+    }
+
+    // ---------------- Dashboard
+    if (rentas.length == 1) {
+      final r = rentas.first;
+      final ingresos = _nr(r['ingresos_brutos']);
+      final costo = _nr(r['costo_ventas']);
+      final gastos = _nr(r['gastos_deducibles']);
+      final renta = _nr(r['renta_liquida_gravable']);
+      final anteriorImpuesto = _nr((r['anio_anterior'] as Map?)?['impuesto_estimado']);
+      _escribirDashboard(
+        excel,
+        titulo: 'Renta $anio · ${_nombreRenta(r)}',
+        subtitulo: 'Cédula ${((r['contribuyente'] as Map?)?['cedula'] ?? '')}',
+        indicadores: [
+          ('Ingresos brutos', ingresos, 'moneda', null),
+          ('Costo de ventas', costo, 'moneda', 'Compras del periodo'),
+          ('Gastos deducibles', gastos, 'moneda', null),
+          ('Renta líquida gravable', renta, 'moneda', null),
+          ('Impuesto estimado', _nr(r['impuesto_estimado']), 'moneda', null),
+          ('Tasa efectiva', _tasaEfectiva(r), 'porcentaje', 'Impuesto / renta gravable'),
+          ('Margen neto', _div(renta, ingresos), 'porcentaje', 'Renta gravable / ingresos'),
+          ('Impuesto año anterior', anteriorImpuesto, 'moneda', '${anio - 1}'),
+        ],
+        graficos: [
+          ('¿A dónde van los ingresos?', {'Costo de ventas': costo, 'Gastos deducibles': gastos, 'Renta gravable': renta < 0 ? 0 : renta}, 'moneda'),
+          ('Ingresos por mes', {for (final m in (r['mensual'] as List? ?? [])) _mesesLargos[((m['mes'] as num).toInt() - 1).clamp(0, 11)]: _nr(m['ingresos'])}, 'moneda'),
+          ('Gastos deducibles por categoría', {for (final g in (r['gastos_por_categoria'] as List? ?? [])) (_categoriasGastoPdf[g['categoria']] ?? g['categoria'].toString()): _nr(g['total'])}, 'moneda'),
+        ],
+      );
+    } else {
+      _escribirDashboard(
+        excel,
+        titulo: 'Renta $anio de la cartera',
+        subtitulo: '${rentas.length} clientes',
+        indicadores: [
+          ('Ingresos brutos (todos)', totales[0], 'moneda', null),
+          ('Renta gravable (todos)', totales[3], 'moneda', null),
+          ('Impuesto estimado (todos)', totales[4], 'moneda', null),
+          ('Clientes con impuesto', rentas.where((r) => _nr(r['impuesto_estimado']) > 0).length.toDouble(), 'numero', 'De ${rentas.length}'),
+        ],
+        graficos: [
+          ('Impuesto estimado por cliente', {for (final r in rentas) _nombreRenta(r): _nr(r['impuesto_estimado'])}, 'moneda'),
+          ('Ingresos brutos por cliente', {for (final r in rentas) _nombreRenta(r): _nr(r['ingresos_brutos'])}, 'moneda'),
+        ],
+      );
+    }
+    _dashboardPrimero(excel);
+
+    await _guardarExcel(
+      excel,
+      dialogTitle: 'Guardar reporte de Renta',
+      fileName: rentas.length == 1 ? 'Renta_${anio}_${_nombreRenta(rentas.first).replaceAll(' ', '_')}.xlsx' : 'Renta_${anio}_cartera.xlsx',
+    );
+  }
+
   /// Exporta (o comparte) una Nota de Crédito con el detalle de lo que anula.
   static Future<void> exportNotaCreditoToPdf(NotaCredito nota, {bool share = false}) async {
     final pdf = pw.Document(theme: await _cargarTema());

@@ -8,7 +8,7 @@ import 'export_service.dart';
 import 'formato.dart';
 import 'negocio.dart';
 
-enum _TipoReporteContador { ventas, compras, ambos }
+enum _TipoReporteContador { ventas, compras, ambos, renta }
 
 /// Pestaña de Reportes para el contador/despacho: a diferencia de
 /// ReportesScreen (que ya vive dentro del detalle de UN negocio puntual),
@@ -16,6 +16,11 @@ enum _TipoReporteContador { ventas, compras, ambos }
 /// cartera, y con qué rango de fechas y tipo (ventas/compras/ambos), y
 /// consume /reportes/consolidado/ (ver ReporteConsolidadoView) que ya
 /// devuelve el desglose de IVA por tarifa para ventas.
+///
+/// "Renta (D-101)" es anual: en vez del rango de fechas se elige el año y
+/// se pide /facturas/declaracion-renta/ por cliente (mismo cálculo que la
+/// pantalla de Impuestos del negocio, más los datos del contribuyente, el
+/// detalle mes a mes y el año anterior -- ver calcular_declaracion_renta).
 class ReportesContadorScreen extends StatefulWidget {
   final bool esContador;
 
@@ -50,7 +55,12 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
   // Dos o más -> _reportes (resumen por cliente + exportación combinada).
   Map<String, dynamic>? _reporte;
   List<Map<String, dynamic>>? _reportes;
+  // Reporte de Renta: una respuesta de declaracion-renta por cliente.
+  List<Map<String, dynamic>>? _rentas;
+  int _anioRenta = DateTime.now().year;
   String? _error;
+
+  bool get _esRenta => _tipo == _TipoReporteContador.renta;
 
   @override
   void initState() {
@@ -143,6 +153,25 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
     return data as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> _pedirRenta(Negocio negocio) async {
+    final r = await ApiService.get('/facturas/declaracion-renta/?negocio=${negocio.id}&periodo_fiscal=$_anioRenta');
+    final data = json.decode(utf8.decode(r.bodyBytes));
+    if (r.statusCode != 200) {
+      throw Exception('${negocio.nombreComercial}: ${data['error'] ?? data['detail'] ?? 'No se pudo calcular la Renta.'}');
+    }
+    return {...(data as Map<String, dynamic>), 'negocio_nombre': negocio.nombreComercial};
+  }
+
+  Future<void> _generarRenta() async {
+    final rentas = <Map<String, dynamic>>[];
+    for (final negocio in _negociosSeleccionados) {
+      if (mounted) setState(() => _clienteEnCurso = negocio.nombreComercial);
+      rentas.add(await _pedirRenta(negocio));
+      if (mounted) setState(() => _progresoHecho++);
+    }
+    if (mounted) setState(() => _rentas = rentas);
+  }
+
   Future<void> _generarReporte() async {
     if (_negociosSeleccionados.isEmpty) return;
     setState(() {
@@ -150,6 +179,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
       _error = null;
       _reporte = null;
       _reportes = null;
+      _rentas = null;
       _progresoHecho = 0;
       _progresoTotal = _negociosSeleccionados.length;
       _clienteEnCurso = _negociosSeleccionados.first.nombreComercial;
@@ -158,9 +188,12 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
       _TipoReporteContador.ventas => 'ventas',
       _TipoReporteContador.compras => 'compras',
       _TipoReporteContador.ambos => 'ambos',
+      _TipoReporteContador.renta => 'renta',
     };
     try {
-      if (_negociosSeleccionados.length == 1) {
+      if (_esRenta) {
+        await _generarRenta();
+      } else if (_negociosSeleccionados.length == 1) {
         final data = await _pedirReporte(_negociosSeleccionados.first.id, tipoStr);
         if (mounted) setState(() => _reporte = data);
       } else {
@@ -248,6 +281,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
           ..addAll(resultado);
         _reporte = null;
         _reportes = null;
+        _rentas = null;
       });
     }
   }
@@ -292,6 +326,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
             ),
             if (_reporte != null) _resultados(),
             if (_reportes != null) _resultadosMultiples(),
+            if (_rentas != null) _resultadosRenta(),
           ],
         ),
       ),
@@ -346,8 +381,28 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
                       ),
                     ),
           const SizedBox(height: 16),
-          Text("Período", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _colorTenue)),
+          Text(_esRenta ? "Periodo fiscal" : "Período", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _colorTenue)),
           const SizedBox(height: 6),
+          if (_esRenta)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (var a = DateTime.now().year; a >= DateTime.now().year - 4; a--)
+                  ChoiceChip(
+                    label: Text("$a"),
+                    selected: _anioRenta == a,
+                    onSelected: (_) => setState(() {
+                      _anioRenta = a;
+                      _rentas = null;
+                    }),
+                    selectedColor: _colorAcento,
+                    labelStyle: TextStyle(color: _anioRenta == a ? Colors.white : _colorFuerte, fontWeight: FontWeight.w600),
+                    showCheckmark: false,
+                  ),
+              ],
+            )
+          else
           InkWell(
             onTap: _elegirRangoFechas,
             borderRadius: BorderRadius.circular(10),
@@ -372,9 +427,15 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
               ButtonSegment(value: _TipoReporteContador.ventas, label: Text("Ventas")),
               ButtonSegment(value: _TipoReporteContador.compras, label: Text("Compras")),
               ButtonSegment(value: _TipoReporteContador.ambos, label: Text("Ambos")),
+              ButtonSegment(value: _TipoReporteContador.renta, label: Text("Renta (D-101)")),
             ],
             selected: {_tipo},
-            onSelectionChanged: (s) => setState(() => _tipo = s.first),
+            onSelectionChanged: (s) => setState(() {
+              _tipo = s.first;
+              _reporte = null;
+              _reportes = null;
+              _rentas = null;
+            }),
             style: widget.esContador
                 ? SegmentedButton.styleFrom(
                     selectedBackgroundColor: TemaContador.acento,
@@ -561,6 +622,251 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
         if (compras != null) _seccionCompras(compras),
       ],
     );
+  }
+
+  double _num(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0;
+
+  static const _meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Set', 'Oct', 'Nov', 'Dic'];
+
+  Widget _resultadosRenta() {
+    final rentas = _rentas!;
+    final varios = rentas.length > 1;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                varios ? "Renta $_anioRenta (${rentas.length} clientes)" : "Renta $_anioRenta",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _colorFuerte),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () => _exportar(() => ExportService.exportRentaContadorToPdf(rentas, _anioRenta), formato: 'PDF'),
+              icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent, size: 18),
+              label: const Text("PDF"),
+            ),
+            TextButton.icon(
+              onPressed: () => _exportar(() => ExportService.exportRentaContadorToExcel(rentas, _anioRenta), formato: 'Excel'),
+              icon: const Icon(Icons.table_chart, color: Colors.green, size: 18),
+              label: const Text("Excel"),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          "Borrador del D-101 con lo registrado por cada negocio. El detalle completo va en el PDF o Excel.",
+          style: TextStyle(fontSize: 11, color: _colorTenue),
+        ),
+        const SizedBox(height: 12),
+        if (varios) _tarjetaTotalesRenta(rentas),
+        if (varios)
+          ...([...rentas]..sort((a, b) => _num(b['impuesto_estimado']).compareTo(_num(a['impuesto_estimado'])))).map(_tarjetaRentaCliente)
+        else
+          ..._detalleRenta(rentas.first),
+      ],
+    );
+  }
+
+  Widget _kpi(String etiqueta, String valor, {Color? color, String? nota}) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 150),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _colorAcento.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border(top: BorderSide(color: color ?? _colorAcento, width: 3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(etiqueta.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.4, color: _colorTenue)),
+          const SizedBox(height: 4),
+          Text(valor, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: color ?? _colorFuerte)),
+          if (nota != null) Text(nota, style: TextStyle(fontSize: 10.5, color: _colorTenue)),
+        ],
+      ),
+    );
+  }
+
+  String _pct(double v) => "${(v * 100).toStringAsFixed(1)}%";
+
+  Widget _tarjetaTotalesRenta(List<Map<String, dynamic>> rentas) {
+    double suma(String k) => rentas.fold(0.0, (a, r) => a + _num(r[k]));
+    return _tarjeta(
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: [
+          _kpi("Ingresos brutos", formatearColones(suma('ingresos_brutos'))),
+          _kpi("Renta gravable", formatearColones(suma('renta_liquida_gravable'))),
+          _kpi("Impuesto estimado", formatearColones(suma('impuesto_estimado')), color: _colorAcento),
+          _kpi("Con impuesto", "${rentas.where((r) => _num(r['impuesto_estimado']) > 0).length} de ${rentas.length}"),
+        ],
+      ),
+    );
+  }
+
+  Widget _tarjetaRentaCliente(Map<String, dynamic> r) {
+    final c = (r['contribuyente'] as Map?) ?? {};
+    final impuesto = _num(r['impuesto_estimado']);
+    final renta = _num(r['renta_liquida_gravable']);
+    return _tarjeta(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(r['negocio_nombre']?.toString() ?? '', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: _colorFuerte)),
+                    Text("Cédula ${c['cedula'] ?? ''} · ${c['tipo_contribuyente'] ?? ''}", style: TextStyle(fontSize: 11.5, color: _colorTenue)),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(formatearColones(impuesto), style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: _colorAcento)),
+                  Text("impuesto estimado", style: TextStyle(fontSize: 10.5, color: _colorTenue)),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _filaDocumento("Ingresos brutos", total: _num(r['ingresos_brutos'])),
+          _filaDocumento("Renta gravable", total: renta),
+          if (r['parametros_configurados'] == false)
+            Text("Sin tramos de Hacienda cargados para $_anioRenta.", style: const TextStyle(fontSize: 11, color: Colors.orange)),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _detalleRenta(Map<String, dynamic> r) {
+    final c = (r['contribuyente'] as Map?) ?? {};
+    final detalle = (r['ingresos_detalle'] as Map?) ?? {};
+    final ingresos = _num(r['ingresos_brutos']);
+    final renta = _num(r['renta_liquida_gravable']);
+    final impuesto = _num(r['impuesto_estimado']);
+    final tasa = renta == 0 ? 0.0 : impuesto / renta;
+    final anterior = (r['anio_anterior'] as Map?) ?? {};
+    final impuestoAnterior = _num(anterior['impuesto_estimado']);
+    final tramos = (r['desglose_tramos'] as List?) ?? [];
+    final mensual = (r['mensual'] as List?) ?? [];
+    final maxMes = mensual.fold(0.0, (a, m) => _num(m['ingresos']) > a ? _num(m['ingresos']) : a);
+    String campo(String k) => (c[k]?.toString() ?? '').trim();
+
+    return [
+      _tarjeta(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.badge_outlined, color: _colorAcento, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(campo('nombre_legal').isNotEmpty ? campo('nombre_legal') : (r['negocio_nombre']?.toString() ?? ''),
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: _colorFuerte)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text("Cédula ${campo('tipo_cedula').toLowerCase()} ${campo('cedula')} · ${campo('tipo_contribuyente')}", style: TextStyle(fontSize: 12.5, color: _colorFuerte)),
+            if (campo('codigo_actividad').isNotEmpty)
+              Text("Actividad ${campo('codigo_actividad')}${campo('actividad').isNotEmpty ? ' — ${campo('actividad')}' : ''}",
+                  style: TextStyle(fontSize: 12, color: _colorTenue)),
+            if (campo('direccion').isNotEmpty) Text(campo('direccion'), style: TextStyle(fontSize: 12, color: _colorTenue)),
+          ],
+        ),
+      ),
+      _tarjeta(
+        child: Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            _kpi("Ingresos brutos", formatearColones(ingresos)),
+            _kpi("Renta gravable", formatearColones(renta)),
+            _kpi("Impuesto estimado", formatearColones(impuesto), color: _colorAcento),
+            _kpi("Tasa efectiva", _pct(tasa), nota: "impuesto / renta gravable"),
+            if (anterior.isNotEmpty)
+              _kpi(
+                "Impuesto ${anterior['periodo_fiscal']}",
+                formatearColones(impuestoAnterior),
+                nota: impuestoAnterior == 0 ? null : "${impuesto >= impuestoAnterior ? '+' : ''}${_pct(impuesto / impuestoAnterior - 1)} este año",
+              ),
+          ],
+        ),
+      ),
+      _tarjeta(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Estado de resultados fiscal", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: _colorFuerte)),
+            const SizedBox(height: 10),
+            _filaDocumento("Ventas facturadas (sin IVA)", total: _num(detalle['ventas_facturadas_sin_iva'])),
+            _filaDocumento("(−) Notas de crédito", total: _num(detalle['notas_credito_sin_iva'])),
+            _filaDocumento("(+) Otros ingresos", total: _num(detalle['otros_ingresos'])),
+            const Divider(),
+            _filaDocumento("Ingresos brutos", total: ingresos),
+            _filaDocumento("(−) Costo de ventas (compras)", total: _num(r['costo_ventas'])),
+            _filaDocumento("(−) Gastos deducibles", total: _num(r['gastos_deducibles'])),
+            const Divider(),
+            _filaDocumento("Renta líquida gravable", total: renta),
+            if (r['tarifa_unica_aplicada'] != null)
+              Text("Tarifa única de ${r['tarifa_unica_aplicada']}% (ingresos sobre el límite de tramos).", style: TextStyle(fontSize: 11, color: _colorTenue)),
+            if (r['parametros_configurados'] == false)
+              const Text("No hay tramos de Hacienda cargados para este año: el impuesto sale en cero.", style: TextStyle(fontSize: 11.5, color: Colors.orange)),
+            for (final t in tramos)
+              _filaDocumento(
+                "Tramo ${t['porcentaje']}%",
+                subtitulo: "Base ${formatearColones(_num(t['base_en_tramo']))}",
+                total: _num(t['impuesto_tramo']),
+              ),
+          ],
+        ),
+      ),
+      if (mensual.isNotEmpty)
+        _tarjeta(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("Ingresos y renta por mes", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: _colorFuerte)),
+              const SizedBox(height: 10),
+              for (final m in mensual)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    children: [
+                      SizedBox(width: 34, child: Text(_meses[((m['mes'] as num).toInt() - 1).clamp(0, 11)], style: TextStyle(fontSize: 12, color: _colorTenue))),
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: maxMes == 0 ? 0 : (_num(m['ingresos']) / maxMes).clamp(0.0, 1.0),
+                            minHeight: 10,
+                            backgroundColor: _colorBorde.withOpacity(0.5),
+                            valueColor: AlwaysStoppedAnimation(_colorAcento),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      SizedBox(
+                        width: 120,
+                        child: Text(formatearColones(_num(m['ingresos'])), textAlign: TextAlign.right, style: TextStyle(fontSize: 12, color: _colorFuerte)),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+    ];
   }
 
   Widget _tarjeta({required Widget child}) => Container(
