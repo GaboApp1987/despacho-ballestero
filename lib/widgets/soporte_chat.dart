@@ -135,7 +135,12 @@ class _PropuestaProducto {
   final String? categoriaNombre;
   final int impuestoId;
   final String impuestoNombre;
+  // Negocio del cliente cuando lo arma el asistente del contador.
+  final int? negocioId;
+  final String? negocioNombre;
   _PropuestaProducto({
+    this.negocioId,
+    this.negocioNombre,
     required this.nombre,
     required this.codigoCabys,
     required this.codigoCabysDescripcion,
@@ -164,6 +169,8 @@ class _PropuestaProducto {
       categoriaNombre: json['categoria_nombre'],
       impuestoId: json['impuesto_id'],
       impuestoNombre: json['impuesto_nombre'] ?? '',
+      negocioId: json['negocio_id'],
+      negocioNombre: json['negocio_nombre'],
     );
   }
 }
@@ -181,7 +188,12 @@ class _PropuestaFactura {
   final String condicionVenta; // '01' contado | '02' crédito
   final int plazoCredito;
   final String medioPago; // '01' efectivo | '02' tarjeta | '03' cheque | '04' transferencia
+  // Negocio del cliente cuando la arma el asistente del contador.
+  final int? negocioId;
+  final String? negocioNombre;
   _PropuestaFactura({
+    this.negocioId,
+    this.negocioNombre,
     required this.clienteId,
     required this.clienteNombre,
     required this.clienteCedula,
@@ -202,6 +214,8 @@ class _PropuestaFactura {
       condicionVenta: json['condicion_venta'] ?? '01',
       plazoCredito: (json['plazo_credito'] as num? ?? 0).toInt(),
       medioPago: json['medio_pago'] ?? '01',
+      negocioId: json['negocio_id'],
+      negocioNombre: json['negocio_nombre'],
     );
   }
 
@@ -450,7 +464,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
     setState(() => mensaje.estadoPropuesta = 'creando');
     try {
       final body = {
-        'negocio': widget.negocioId,
+        'negocio': propuesta.negocioId ?? widget.negocioId,
         'cliente': propuesta.clienteId,
         'consecutivo': '',
         'tipo_documento': propuesta.tipoDocumento,
@@ -501,7 +515,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
     setState(() => mensaje.estadoPropuestaProducto = 'creando');
     try {
       final response = await ApiService.post('/productos/', {
-        'negocio': widget.negocioId,
+        'negocio': propuesta.negocioId ?? widget.negocioId,
         'nombre': propuesta.nombre,
         'codigo_cabys': propuesta.codigoCabys,
         'unidad_medida': propuesta.unidadMedida,
@@ -629,6 +643,11 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
             ],
           ),
           const SizedBox(height: 8),
+          if (propuesta.negocioNombre != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text('Emite: ${propuesta.negocioNombre}', style: TextStyle(fontSize: 12.5, color: AppColors.textMuted)),
+            ),
           Text(propuesta.esTiquete ? 'Consumidor final (sin cliente)' : 'Cliente: ${propuesta.clienteNombre}', style: const TextStyle(fontSize: 13)),
           const SizedBox(height: 6),
           ...propuesta.items.map((it) => Padding(
@@ -697,6 +716,11 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
             ],
           ),
           const SizedBox(height: 8),
+          if (propuesta.negocioNombre != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text('Para: ${propuesta.negocioNombre}', style: TextStyle(fontSize: 12.5, color: AppColors.textMuted)),
+            ),
           Text(propuesta.nombre, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
           const SizedBox(height: 4),
           Text(
