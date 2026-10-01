@@ -160,4 +160,74 @@ void main() {
     await ExportService.exportNotasCreditoToExcel(notas);
     verificarDashboard('Notas de crédito');
   });
+
+  // ---- Formato de las pestañas de detalle (no solo el Dashboard): título,
+  // encabezado con el color de marca y fila TOTAL con la suma correcta.
+  String texto(Data? d) => d?.value?.toString() ?? '';
+
+  void verificarTabla(String hoja, {required String titulo, required int columnaTotal, required double total}) {
+    final filas = abrir().tables[hoja]!.rows;
+    expect(texto(filas.first.first), startsWith(titulo), reason: '$hoja: falta el título');
+    final conEncabezado = filas.where((r) => r.isNotEmpty && r.first?.cellStyle?.backgroundColor.colorHex == 'FF3730A3');
+    expect(conEncabezado, isNotEmpty, reason: '$hoja: el encabezado no tiene el color de marca');
+    final filaTotal = filas.lastWhere((r) => r.isNotEmpty && texto(r.first) == 'TOTAL');
+    expect(double.parse(texto(filaTotal[columnaTotal])), closeTo(total, 0.01), reason: '$hoja: total incorrecto');
+  }
+
+  test('Formato: hojas de detalle del reporte de ventas y compras', () async {
+    await ExportService.exportReporteConsolidadoToExcel(reporte);
+    verificarTabla('Ventas', titulo: 'Ventas (1 documento(s))', columnaTotal: 6, total: 1130);
+    verificarTabla('Compras', titulo: 'Compras (1 documento(s))', columnaTotal: 5, total: 565);
+    verificarTabla('Desglose IVA Ventas', titulo: 'Desglose de IVA de ventas', columnaTotal: 2, total: 130);
+    final resumen = abrir().tables['Resumen Declaracion']!.rows.expand((r) => r).map(texto).join(' | ');
+    expect(resumen, contains('IVA A PAGAR'));
+  });
+
+  test('Formato: varios clientes con prefijo en cada hoja', () async {
+    await ExportService.exportReportesConsolidadosToExcel([reporte, {...reporte, 'negocio_nombre': 'Soda'}], periodo: 'set 2026');
+    final hojas = abrir().tables.keys.toList();
+    final ventasSoda = hojas.firstWhere((h) => h.startsWith('2-Soda') && h.endsWith('Ventas'));
+    verificarTabla(ventasSoda, titulo: 'Ventas', columnaTotal: 6, total: 1130);
+  });
+
+  test('Formato: saldos, estado de cuenta, gastos y notas', () async {
+    await ExportService.exportSaldosToExcel([
+      {'nombre': 'Soda La Esquina', 'cedula': '3102', 'saldo': '12000'},
+      {'nombre': 'Constructora Arenal', 'cedula': '3101', 'saldo': '45000'},
+    ]);
+    verificarTabla('Saldos', titulo: 'Cuentas por cobrar', columnaTotal: 2, total: 57000);
+    // De mayor a menor saldo.
+    final saldos = abrir().tables['Saldos']!.rows;
+    final encabezado = saldos.indexWhere((r) => r.isNotEmpty && texto(r.first) == 'Cliente');
+    expect(texto(saldos[encabezado + 1].first), 'Constructora Arenal');
+
+    await ExportService.exportHistorialToExcel('Constructora Arenal', [
+      {'fecha': '2026-09-01', 'tipo': 'FACTURA', 'numero': '1', 'monto': '10000'},
+      {'fecha': '2026-09-10', 'tipo': 'ABONO', 'numero': '', 'monto': '4000'},
+    ]);
+    verificarTabla('Historial', titulo: 'Estado de cuenta', columnaTotal: 3, total: 10000);
+    final historial = abrir().tables['Historial']!.rows;
+    final ultimoMovimiento = historial.lastWhere((r) => r.isNotEmpty && texto(r.first) == '2026-09-10');
+    expect(double.parse(texto(ultimoMovimiento[5])), 6000, reason: 'saldo acumulado');
+
+    await ExportService.exportGastosToExcel(gastos);
+    verificarTabla('Gastos', titulo: 'Reporte de gastos', columnaTotal: 5, total: 6000);
+
+    await ExportService.exportNotasCreditoToExcel(notas);
+    verificarTabla('NotasCredito', titulo: 'Reporte de notas de crédito', columnaTotal: 7, total: 113);
+  });
+
+  test('Formato: declaración de Renta del negocio', () async {
+    await ExportService.exportDeclaracionRentaDetalladaExcel(
+      negocioNombre: 'Ferretería',
+      declaracion: {
+        'periodo_fiscal': '2026', 'ingresos_brutos': '100000', 'costo_ventas': '40000', 'gastos_deducibles': '20000',
+        'gastos_no_deducibles': '5000', 'renta_liquida_gravable': '40000', 'impuesto_estimado': '4000',
+        'gastos_por_categoria': [], 'desglose_tramos': [],
+      },
+      facturas: facturas, compras: compras, gastos: gastos,
+    );
+    verificarTabla('Facturas', titulo: 'Facturas del periodo fiscal 2026', columnaTotal: 5, total: facturas.fold(0.0, (a, f) => a + f.totalFactura));
+    verificarTabla('Compras', titulo: 'Compras del periodo fiscal 2026', columnaTotal: 3, total: compras.fold(0.0, (a, c) => a + c.totalCompra));
+  });
 }

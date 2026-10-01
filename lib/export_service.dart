@@ -114,6 +114,115 @@ class ExportService {
     }
   }
 
+  static final ExcelColor _fondoFilaAlterna = ExcelColor.fromHexString('FFF5F7FF');
+
+  /// Escribe una tabla con el formato de la casa: título y subtítulo
+  /// (opcionales), encabezado con el color de marca, filas alternas
+  /// sombreadas, montos con separador de miles, una fila TOTAL con las
+  /// columnas de [sumar] y anchos de columna calculados según el contenido
+  /// (o [anchos] si se pasan). Se puede llamar varias veces sobre la misma
+  /// hoja para poner varias tablas una debajo de otra ([seccion] les pone
+  /// un subtítulo).
+  static void _escribirTabla(
+    Sheet hoja, {
+    String? titulo,
+    String? subtitulo,
+    String? seccion,
+    required List<String> encabezados,
+    required List<List<CellValue>> filas,
+    Set<int> moneda = const {},
+    Set<int> sumar = const {},
+    Set<int> porcentaje = const {},
+    String etiquetaTotal = 'TOTAL',
+    List<double>? anchos,
+    String vacio = 'Sin datos en este periodo.',
+  }) {
+    if (titulo != null) {
+      hoja.appendRow([TextCellValue(titulo)]);
+      _estilarCeldaUltimaFila(hoja, 0, _estiloTitulo());
+      final hoy = DateTime.now();
+      hoja.appendRow([TextCellValue([if (subtitulo != null && subtitulo.isNotEmpty) subtitulo, 'Generado el ${hoy.day}/${hoy.month}/${hoy.year} con Equilibra'].join('   ·   '))]);
+      _estilarCeldaUltimaFila(hoja, 0, _estiloSubtitulo());
+      hoja.appendRow([]);
+    }
+    if (seccion != null) {
+      if (titulo == null && hoja.maxRows > 0) hoja.appendRow([]);
+      hoja.appendRow([TextCellValue(seccion)]);
+      _estilarCeldaUltimaFila(hoja, 0, _estiloEncabezadoSeccion());
+    }
+    hoja.appendRow(encabezados.map((e) => TextCellValue(e)).toList());
+    _estilarUltimaFila(hoja, encabezados.length, _estiloEncabezadoTabla());
+
+    if (filas.isEmpty) {
+      hoja.appendRow([TextCellValue(vacio)]);
+      _estilarCeldaUltimaFila(hoja, 0, CellStyle(italic: true, fontColorHex: ExcelColor.fromHexString('FF6B7280')));
+    }
+    final totales = <int, double>{for (final c in sumar) c: 0};
+    for (var i = 0; i < filas.length; i++) {
+      final fila = filas[i];
+      hoja.appendRow(fila);
+      final alterna = i.isOdd;
+      for (var c = 0; c < encabezados.length; c++) {
+        final esMonto = moneda.contains(c);
+        final esPct = porcentaje.contains(c);
+        _estilarCeldaUltimaFila(
+          hoja,
+          c,
+          CellStyle(
+            numberFormat: esMonto ? NumFormat.standard_4 : (esPct ? NumFormat.standard_10 : NumFormat.standard_0),
+            horizontalAlign: (esMonto || esPct) ? HorizontalAlign.Right : HorizontalAlign.Left,
+            backgroundColorHex: alterna ? _fondoFilaAlterna : ExcelColor.none,
+          ),
+        );
+        if (sumar.contains(c) && c < fila.length) {
+          final v = fila[c];
+          if (v is DoubleCellValue) totales[c] = totales[c]! + v.value;
+          if (v is IntCellValue) totales[c] = totales[c]! + v.value;
+        }
+      }
+    }
+    if (sumar.isNotEmpty && filas.isNotEmpty) {
+      hoja.appendRow([
+        for (var c = 0; c < encabezados.length; c++)
+          c == 0 ? TextCellValue(etiquetaTotal) : (sumar.contains(c) ? DoubleCellValue(totales[c]!) : TextCellValue('')),
+      ]);
+      for (var c = 0; c < encabezados.length; c++) {
+        _estilarCeldaUltimaFila(hoja, c, sumar.contains(c) ? _estiloTotalMoneda() : _estiloTotalTexto());
+      }
+    }
+
+    // Anchos: los que vengan, o según el texto más largo de cada columna.
+    final calculados = anchos ??
+        [
+          for (var c = 0; c < encabezados.length; c++)
+            () {
+              var largo = encabezados[c].length.toDouble();
+              for (final fila in filas.take(300)) {
+                if (c >= fila.length) continue;
+                final v = fila[c];
+                final texto = v is DoubleCellValue ? v.value.toStringAsFixed(2) : v.toString();
+                if (texto.length > largo) largo = texto.length.toDouble();
+              }
+              final minimo = moneda.contains(c) ? 15.0 : 10.0;
+              return (largo * 1.1 + 3).clamp(minimo, 50.0);
+            }(),
+        ];
+    // Nunca achicar una columna que otra tabla de la misma hoja ya ensanchó
+    // (Sheet.getColumnWidth del paquete falla si la columna no tiene ancho
+    // asignado, por eso se lleva la cuenta acá).
+    final usados = _anchosUsados[hoja] ??= {};
+    for (var c = 0; c < calculados.length; c++) {
+      if ((usados[c] ?? 0) < calculados[c]) {
+        usados[c] = calculados[c];
+        hoja.setColumnWidth(c, calculados[c]);
+      }
+    }
+  }
+
+  static final Expando<Map<int, double>> _anchosUsados = Expando();
+
+  static double _numeroDe(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0.0;
+
   // =====================================================================
   // DASHBOARD -- primera pestaña de TODOS los Excel exportados. Antes la
   // primera pestaña era la "Sheet1" vacía que trae Excel.createExcel(); ahora
@@ -1163,118 +1272,182 @@ class ExportService {
     final ventas = reporte['ventas'] as Map<String, dynamic>?;
     final compras = reporte['compras'] as Map<String, dynamic>?;
     final resumen = reporte['resumen_declaracion'] as Map<String, dynamic>?;
+    final negocio = reporte['negocio_nombre']?.toString() ?? '';
+    final periodo = [reporte['fecha_inicio'], reporte['fecha_fin']].where((x) => x != null && x.toString().isNotEmpty).join(' a ');
+    final subtitulo = [if (negocio.isNotEmpty) negocio, if (periodo.isNotEmpty) 'Periodo: $periodo'].join('   ·   ');
+    String fecha(dynamic v) => (v?.toString() ?? '').split('T').first;
 
     String nombreHoja(String base) {
       final nombre = '$prefijo$base';
       return nombre.length > 31 ? nombre.substring(0, 31) : nombre;
     }
 
-    void escribirDesglose(Sheet hoja, List desglose) {
-      hoja.appendRow([TextCellValue('Tarifa'), TextCellValue('Base Imponible'), TextCellValue('Monto de Impuesto')]);
-      for (var d in desglose) {
-        hoja.appendRow([
-          TextCellValue(d['tarifa']?.toString() ?? ''),
-          DoubleCellValue(double.tryParse(d['base_imponible'].toString()) ?? 0),
-          DoubleCellValue(double.tryParse(d['monto_impuesto'].toString()) ?? 0),
-        ]);
-      }
-    }
+    List<List<CellValue>> filasDesglose(List desglose) => [
+          for (final d in desglose)
+            [
+              TextCellValue(d['tarifa']?.toString() ?? ''),
+              DoubleCellValue(_numeroDe(d['base_imponible'])),
+              DoubleCellValue(_numeroDe(d['monto_impuesto'])),
+            ],
+        ];
 
     if (resumen != null) {
       final hoja = excel[nombreHoja('Resumen Declaracion')];
-      hoja.appendRow([TextCellValue('Ventas gravadas')]);
-      escribirDesglose(hoja, (resumen['ventas_por_tarifa'] as List?) ?? []);
-      hoja.appendRow([TextCellValue('')]);
-      hoja.appendRow([TextCellValue('Compras gravadas')]);
-      escribirDesglose(hoja, (resumen['compras_por_tarifa'] as List?) ?? []);
-      hoja.appendRow([TextCellValue('')]);
-      hoja.appendRow([
-        TextCellValue('IVA a pagar (ventas - crédito fiscal de compras)'),
-        DoubleCellValue(double.tryParse(resumen['iva_a_pagar'].toString()) ?? 0),
-      ]);
+      _escribirTabla(
+        hoja,
+        titulo: 'Resumen para la declaración de IVA (D-104)',
+        subtitulo: subtitulo,
+        seccion: 'Ventas gravadas (netas de notas de crédito)',
+        encabezados: const ['Tarifa', 'Base imponible', 'IVA'],
+        filas: filasDesglose((resumen['ventas_por_tarifa'] as List?) ?? []),
+        moneda: const {1, 2},
+        sumar: const {1, 2},
+        anchos: const [44, 18, 18],
+        vacio: 'Sin ventas gravadas.',
+      );
+      _escribirTabla(
+        hoja,
+        seccion: 'Compras gravadas (crédito fiscal estimado)',
+        encabezados: const ['Tarifa', 'Base imponible', 'IVA'],
+        filas: filasDesglose((resumen['compras_por_tarifa'] as List?) ?? []),
+        moneda: const {1, 2},
+        sumar: const {1, 2},
+        vacio: 'Sin compras gravadas.',
+      );
+      hoja.appendRow([]);
+      hoja.appendRow([TextCellValue('IVA A PAGAR (ventas - crédito fiscal de compras)'), TextCellValue(''), DoubleCellValue(_numeroDe(resumen['iva_a_pagar']))]);
+      _estilarCeldaUltimaFila(hoja, 0, CellStyle(bold: true, fontColorHex: ExcelColor.white, backgroundColorHex: _colorMarca));
+      _estilarCeldaUltimaFila(hoja, 1, CellStyle(backgroundColorHex: _colorMarca));
+      _estilarCeldaUltimaFila(hoja, 2, CellStyle(bold: true, fontColorHex: ExcelColor.white, backgroundColorHex: _colorMarca, numberFormat: NumFormat.standard_4, horizontalAlign: HorizontalAlign.Right));
     }
 
     if (ventas != null) {
-      final hojaVentas = excel[nombreHoja('Ventas')];
-      hojaVentas.appendRow([
-        TextCellValue('Fecha'), TextCellValue('Documento'), TextCellValue('Tipo'), TextCellValue('Cliente'),
-        TextCellValue('Base'), TextCellValue('IVA'), TextCellValue('Total'),
-      ]);
-      for (var f in (ventas['documentos'] as List? ?? [])) {
-        hojaVentas.appendRow([
-          TextCellValue((f['fecha']?.toString() ?? '').split('T').first),
-          TextCellValue(f['consecutivo']?.toString() ?? ''),
-          TextCellValue(f['tipo_documento']?.toString() ?? ''),
-          TextCellValue(f['cliente']?.toString() ?? ''),
-          DoubleCellValue(double.tryParse(f['subtotal'].toString()) ?? 0),
-          DoubleCellValue(double.tryParse(f['monto_iva'].toString()) ?? 0),
-          DoubleCellValue(double.tryParse(f['total'].toString()) ?? 0),
-        ]);
-      }
+      final documentos = (ventas['documentos'] as List?) ?? [];
+      _escribirTabla(
+        excel[nombreHoja('Ventas')],
+        titulo: 'Ventas (${documentos.length} documento(s))',
+        subtitulo: subtitulo,
+        encabezados: const ['Fecha', 'Documento', 'Tipo', 'Cliente', 'Base', 'IVA', 'Total'],
+        filas: [
+          for (final f in documentos)
+            [
+              TextCellValue(fecha(f['fecha'])),
+              TextCellValue(f['consecutivo']?.toString() ?? ''),
+              TextCellValue(f['tipo_documento']?.toString() ?? ''),
+              TextCellValue(f['cliente']?.toString() ?? ''),
+              DoubleCellValue(_numeroDe(f['subtotal'])),
+              DoubleCellValue(_numeroDe(f['monto_iva'])),
+              DoubleCellValue(_numeroDe(f['total'])),
+            ],
+        ],
+        moneda: const {4, 5, 6},
+        sumar: const {4, 5, 6},
+        vacio: 'Sin ventas en este periodo.',
+      );
 
       final notasCredito = (ventas['notas_credito'] as List?) ?? [];
       if (notasCredito.isNotEmpty) {
-        final hojaNC = excel[nombreHoja('Notas de Credito')];
-        hojaNC.appendRow([
-          TextCellValue('Fecha'), TextCellValue('N.°'), TextCellValue('Anula Factura'), TextCellValue('Motivo'),
-          TextCellValue('Base'), TextCellValue('IVA'), TextCellValue('Total'),
-        ]);
-        for (var n in notasCredito) {
-          hojaNC.appendRow([
-            TextCellValue((n['fecha']?.toString() ?? '').split('T').first),
-            TextCellValue(n['consecutivo']?.toString() ?? ''),
-            TextCellValue(n['factura_anulada']?.toString() ?? ''),
-            TextCellValue(n['motivo']?.toString() ?? ''),
-            DoubleCellValue(double.tryParse(n['subtotal'].toString()) ?? 0),
-            DoubleCellValue(double.tryParse(n['monto_iva'].toString()) ?? 0),
-            DoubleCellValue(double.tryParse(n['total'].toString()) ?? 0),
-          ]);
-        }
+        _escribirTabla(
+          excel[nombreHoja('Notas de Credito')],
+          titulo: 'Notas de crédito (${notasCredito.length})',
+          subtitulo: subtitulo,
+          encabezados: const ['Fecha', 'N.°', 'Anula factura', 'Motivo', 'Base', 'IVA', 'Total'],
+          filas: [
+            for (final n in notasCredito)
+              [
+                TextCellValue(fecha(n['fecha'])),
+                TextCellValue(n['consecutivo']?.toString() ?? ''),
+                TextCellValue(n['factura_anulada']?.toString() ?? ''),
+                TextCellValue(n['motivo']?.toString() ?? ''),
+                DoubleCellValue(_numeroDe(n['subtotal'])),
+                DoubleCellValue(_numeroDe(n['monto_iva'])),
+                DoubleCellValue(_numeroDe(n['total'])),
+              ],
+          ],
+          moneda: const {4, 5, 6},
+          sumar: const {4, 5, 6},
+        );
       }
 
       final desglose = (ventas['desglose_impuestos'] as List?) ?? [];
       if (desglose.isNotEmpty) {
-        escribirDesglose(excel[nombreHoja('Desglose IVA Ventas')], desglose);
+        _escribirTabla(
+          excel[nombreHoja('Desglose IVA Ventas')],
+          titulo: 'Desglose de IVA de ventas por tarifa',
+          subtitulo: subtitulo,
+          encabezados: const ['Tarifa', 'Base imponible', 'IVA'],
+          filas: filasDesglose(desglose),
+          moneda: const {1, 2},
+          sumar: const {1, 2},
+          anchos: const [24, 18, 18],
+        );
       }
     }
 
     if (compras != null) {
-      final hojaCompras = excel[nombreHoja('Compras')];
-      hojaCompras.appendRow([
-        TextCellValue('Fecha'), TextCellValue('Proveedor'), TextCellValue('N.° Factura Proveedor'),
-        TextCellValue('Base (est.)'), TextCellValue('IVA (est.)'), TextCellValue('Total'),
-      ]);
-      for (var c in (compras['documentos'] as List? ?? [])) {
-        hojaCompras.appendRow([
-          TextCellValue((c['fecha']?.toString() ?? '').split('T').first),
-          TextCellValue(c['proveedor']?.toString() ?? ''),
-          TextCellValue(c['numero_factura_proveedor']?.toString() ?? ''),
-          DoubleCellValue(double.tryParse(c['subtotal_estimado'].toString()) ?? 0),
-          DoubleCellValue(double.tryParse(c['monto_iva_estimado'].toString()) ?? 0),
-          DoubleCellValue(double.tryParse(c['total'].toString()) ?? 0),
-        ]);
-      }
+      final documentos = (compras['documentos'] as List?) ?? [];
+      _escribirTabla(
+        excel[nombreHoja('Compras')],
+        titulo: 'Compras (${documentos.length} documento(s))',
+        subtitulo: subtitulo,
+        encabezados: const ['Fecha', 'Proveedor', 'N.° factura proveedor', 'Base (est.)', 'IVA (est.)', 'Total'],
+        filas: [
+          for (final c in documentos)
+            [
+              TextCellValue(fecha(c['fecha'])),
+              TextCellValue(c['proveedor']?.toString() ?? ''),
+              TextCellValue(c['numero_factura_proveedor']?.toString() ?? ''),
+              DoubleCellValue(_numeroDe(c['subtotal_estimado'])),
+              DoubleCellValue(_numeroDe(c['monto_iva_estimado'])),
+              DoubleCellValue(_numeroDe(c['total'])),
+            ],
+        ],
+        moneda: const {3, 4, 5},
+        sumar: const {3, 4, 5},
+        vacio: 'Sin compras en este periodo.',
+      );
 
       final notasDebito = (compras['notas_debito'] as List?) ?? [];
       if (notasDebito.isNotEmpty) {
-        final hojaND = excel[nombreHoja('Notas de Debito')];
-        hojaND.appendRow([
-          TextCellValue('Fecha'), TextCellValue('N.°'), TextCellValue('Proveedor'), TextCellValue('Motivo'), TextCellValue('Monto'),
-        ]);
-        for (var n in notasDebito) {
-          hojaND.appendRow([
-            TextCellValue((n['fecha']?.toString() ?? '').split('T').first),
-            TextCellValue(n['numero_documento']?.toString() ?? ''),
-            TextCellValue(n['proveedor']?.toString() ?? ''),
-            TextCellValue(n['motivo']?.toString() ?? ''),
-            DoubleCellValue(double.tryParse(n['monto'].toString()) ?? 0),
-          ]);
-        }
+        _escribirTabla(
+          excel[nombreHoja('Notas de Debito')],
+          titulo: 'Notas de débito de proveedores (${notasDebito.length})',
+          subtitulo: subtitulo,
+          encabezados: const ['Fecha', 'N.°', 'Proveedor', 'Motivo', 'Monto'],
+          filas: [
+            for (final n in notasDebito)
+              [
+                TextCellValue(fecha(n['fecha'])),
+                TextCellValue(n['numero_documento']?.toString() ?? ''),
+                TextCellValue(n['proveedor']?.toString() ?? ''),
+                TextCellValue(n['motivo']?.toString() ?? ''),
+                DoubleCellValue(_numeroDe(n['monto'])),
+              ],
+          ],
+          moneda: const {4},
+          sumar: const {4},
+        );
       }
 
       final desglose = (compras['desglose_impuestos'] as List?) ?? [];
       if (desglose.isNotEmpty) {
-        escribirDesglose(excel[nombreHoja('Desglose IVA Compras')], desglose);
+        final hoja = excel[nombreHoja('Desglose IVA Compras')];
+        _escribirTabla(
+          hoja,
+          titulo: 'Desglose de IVA de compras por tarifa (estimado)',
+          subtitulo: subtitulo,
+          encabezados: const ['Tarifa', 'Base imponible', 'IVA'],
+          filas: filasDesglose(desglose),
+          moneda: const {1, 2},
+          sumar: const {1, 2},
+          anchos: const [24, 18, 18],
+        );
+        final nota = compras['nota_desglose']?.toString() ?? '';
+        if (nota.isNotEmpty) {
+          hoja.appendRow([]);
+          hoja.appendRow([TextCellValue(nota)]);
+          _estilarCeldaUltimaFila(hoja, 0, CellStyle(italic: true, fontSize: 9, fontColorHex: ExcelColor.fromHexString('FF6B7280')));
+        }
       }
     }
   }
@@ -1316,19 +1489,23 @@ class ExportService {
   static Future<void> exportSaldosToExcel(List<Map<String, dynamic>> saldos) async {
     var excel = Excel.createExcel();
     excel['Dashboard']; // primera pestaña (ver _escribirDashboard)
-    Sheet sheet = excel['Saldos'];
-    sheet.appendRow([
-      TextCellValue('Cliente'),
-      TextCellValue('Cédula'),
-      TextCellValue('Saldo Pendiente'),
-    ]);
-    for (var item in saldos) {
-      sheet.appendRow([
-        TextCellValue(item['nombre'].toString()),
-        TextCellValue(item['cedula'].toString()),
-        DoubleCellValue(double.parse(item['saldo'].toString())),
-      ]);
-    }
+    final ordenados = [...saldos]..sort((a, b) => _numeroDe(b['saldo']).compareTo(_numeroDe(a['saldo'])));
+    _escribirTabla(
+      excel['Saldos'],
+      titulo: 'Cuentas por cobrar',
+      subtitulo: '${saldos.length} cliente(s), de mayor a menor saldo',
+      encabezados: const ['Cliente', 'Cédula', 'Saldo pendiente'],
+      filas: [
+        for (final item in ordenados)
+          [
+            TextCellValue(item['nombre']?.toString() ?? ''),
+            TextCellValue(item['cedula']?.toString() ?? ''),
+            DoubleCellValue(_numeroDe(item['saldo'])),
+          ],
+      ],
+      moneda: const {2},
+      sumar: const {2},
+    );
 
     {
       double n(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0.0;
@@ -1408,22 +1585,31 @@ class ExportService {
   static Future<void> exportHistorialToExcel(String clienteNombre, List<dynamic> historial) async {
     var excel = Excel.createExcel();
     excel['Dashboard']; // primera pestaña (ver _escribirDashboard)
-    Sheet sheet = excel['Historial'];
-    sheet.appendRow([
-      TextCellValue('Fecha'),
-      TextCellValue('Tipo'),
-      TextCellValue('Detalle'),
-      TextCellValue('Monto'),
-    ]);
-    for (var item in historial) {
-      final bool esFactura = item['tipo'] == 'FACTURA';
-      sheet.appendRow([
-        TextCellValue(item['fecha'].toString()),
-        TextCellValue(item['tipo'].toString()),
-        TextCellValue(esFactura ? 'F-${item['numero']}' : 'Abono'),
-        DoubleCellValue(double.parse(item['monto'].toString()) * (esFactura ? 1 : -1))
-      ]);
-    }
+    var saldoAcumulado = 0.0;
+    _escribirTabla(
+      excel['Historial'],
+      titulo: 'Estado de cuenta · $clienteNombre',
+      subtitulo: '${historial.length} movimiento(s)',
+      encabezados: const ['Fecha', 'Tipo', 'Detalle', 'Cargo', 'Abono', 'Saldo'],
+      filas: [
+        for (final item in historial)
+          () {
+            final esFactura = item['tipo'] == 'FACTURA';
+            final monto = _numeroDe(item['monto']);
+            saldoAcumulado += esFactura ? monto : -monto;
+            return <CellValue>[
+              TextCellValue(item['fecha']?.toString() ?? ''),
+              TextCellValue(esFactura ? 'Factura' : 'Abono'),
+              TextCellValue(esFactura ? 'F-${item['numero']}' : 'Recibo de abono'),
+              DoubleCellValue(esFactura ? monto : 0),
+              DoubleCellValue(esFactura ? 0 : monto),
+              DoubleCellValue(saldoAcumulado),
+            ];
+          }(),
+      ],
+      moneda: const {3, 4, 5},
+      sumar: const {3, 4},
+    );
 
     {
       double n(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0.0;
@@ -2654,66 +2840,110 @@ class ExportService {
     excel['Dashboard']; // primera pestaña (ver _escribirDashboard)
 
     final resumen = excel['Resumen'];
-    excel.setDefaultSheet('Resumen');
-    resumen.appendRow([TextCellValue('Declaración de Renta - $negocioNombre')]);
-    resumen.appendRow([TextCellValue('Periodo fiscal: $periodoFiscal')]);
-    resumen.appendRow([]);
-    resumen.appendRow([TextCellValue('Concepto'), TextCellValue('Monto')]);
-    resumen.appendRow([TextCellValue('Ingresos brutos (ventas)'), DoubleCellValue(numDe('ingresos_brutos'))]);
-    resumen.appendRow([TextCellValue('Costo de ventas (compras)'), DoubleCellValue(numDe('costo_ventas'))]);
-    resumen.appendRow([TextCellValue('Gastos deducibles'), DoubleCellValue(numDe('gastos_deducibles'))]);
-    resumen.appendRow([TextCellValue('Gastos no deducibles'), DoubleCellValue(numDe('gastos_no_deducibles'))]);
-    resumen.appendRow([TextCellValue('Renta líquida gravable'), DoubleCellValue(numDe('renta_liquida_gravable'))]);
-    resumen.appendRow([TextCellValue('Impuesto estimado'), DoubleCellValue(numDe('impuesto_estimado'))]);
-    resumen.appendRow([]);
-    resumen.appendRow([TextCellValue('Desglose por tramo')]);
-    resumen.appendRow([TextCellValue('Rango desde'), TextCellValue('Rango hasta'), TextCellValue('Tarifa'), TextCellValue('Impuesto')]);
-    for (final t in ((declaracion['desglose_tramos'] as List?) ?? [])) {
-      resumen.appendRow([
-        DoubleCellValue(double.tryParse(t['desde'].toString()) ?? 0),
-        TextCellValue(t['hasta']?.toString() ?? 'Sin límite'),
-        TextCellValue('${t['porcentaje']}%'),
-        DoubleCellValue(double.tryParse(t['impuesto_tramo'].toString()) ?? 0),
-      ]);
+    _escribirTabla(
+      resumen,
+      titulo: 'Declaración de Renta (D-101) · $negocioNombre',
+      subtitulo: 'Periodo fiscal $periodoFiscal',
+      encabezados: const ['Concepto', 'Monto'],
+      filas: [
+        [TextCellValue('Ingresos brutos (ventas)'), DoubleCellValue(numDe('ingresos_brutos'))],
+        [TextCellValue('(-) Costo de ventas (compras)'), DoubleCellValue(numDe('costo_ventas'))],
+        [TextCellValue('(-) Gastos deducibles'), DoubleCellValue(numDe('gastos_deducibles'))],
+        [TextCellValue('Gastos no deducibles (no restan)'), DoubleCellValue(numDe('gastos_no_deducibles'))],
+      ],
+      moneda: const {1},
+      anchos: const [40, 20, 16, 20],
+    );
+    for (final (concepto, clave) in const [('Renta líquida gravable', 'renta_liquida_gravable'), ('Impuesto estimado', 'impuesto_estimado')]) {
+      resumen.appendRow([TextCellValue(concepto), DoubleCellValue(numDe(clave))]);
+      _estilarCeldaUltimaFila(resumen, 0, _estiloTotalTexto());
+      _estilarCeldaUltimaFila(resumen, 1, _estiloTotalMoneda());
+    }
+    final tramos = (declaracion['desglose_tramos'] as List?) ?? [];
+    if (tramos.isNotEmpty) {
+      _escribirTabla(
+        resumen,
+        seccion: 'Cálculo por tramo',
+        encabezados: const ['Desde', 'Hasta', 'Tarifa', 'Impuesto'],
+        filas: [
+          for (final t in tramos)
+            [
+              DoubleCellValue(_numeroDe(t['desde'])),
+              t['hasta'] == null ? TextCellValue('En adelante') : DoubleCellValue(_numeroDe(t['hasta'])),
+              TextCellValue('${t['porcentaje']}%'),
+              DoubleCellValue(_numeroDe(t['impuesto_tramo'])),
+            ],
+        ],
+        moneda: const {0, 1, 3},
+        sumar: const {3},
+      );
     }
 
-    final hojaFacturas = excel['Facturas'];
-    hojaFacturas.appendRow([TextCellValue('Consecutivo'), TextCellValue('Fecha'), TextCellValue('Cliente'), TextCellValue('Subtotal'), TextCellValue('IVA'), TextCellValue('Total')]);
-    for (final f in facturas) {
-      hojaFacturas.appendRow([
-        TextCellValue('F-${f.consecutivo}'),
-        TextCellValue(f.fechaEmision.split('T').first),
-        TextCellValue(f.receptorNombre),
-        DoubleCellValue(f.totalFactura - f.totalIva),
-        DoubleCellValue(f.totalIva),
-        DoubleCellValue(f.totalFactura),
-      ]);
-    }
+    _escribirTabla(
+      excel['Facturas'],
+      titulo: 'Facturas del periodo fiscal $periodoFiscal',
+      subtitulo: negocioNombre,
+      encabezados: const ['Consecutivo', 'Fecha', 'Cliente', 'Subtotal', 'IVA', 'Total'],
+      filas: [
+        for (final f in facturas)
+          [
+            TextCellValue('F-${f.consecutivo}'),
+            TextCellValue(f.fechaEmision.split('T').first),
+            TextCellValue(f.receptorNombre),
+            DoubleCellValue(f.totalFactura - f.totalIva),
+            DoubleCellValue(f.totalIva),
+            DoubleCellValue(f.totalFactura),
+          ],
+      ],
+      moneda: const {3, 4, 5},
+      sumar: const {3, 4, 5},
+    );
 
-    final hojaCompras = excel['Compras'];
-    hojaCompras.appendRow([TextCellValue('Proveedor'), TextCellValue('Fecha'), TextCellValue('N° Factura Proveedor'), TextCellValue('Total')]);
-    for (final c in compras) {
-      hojaCompras.appendRow([
-        TextCellValue(c.nombreProveedor ?? 'Sin especificar'),
-        TextCellValue(c.fechaCompra.split('T').first),
-        TextCellValue(c.numeroFacturaProveedor),
-        DoubleCellValue(c.totalCompra),
-      ]);
-    }
+    _escribirTabla(
+      excel['Compras'],
+      titulo: 'Compras del periodo fiscal $periodoFiscal',
+      subtitulo: negocioNombre,
+      encabezados: const ['Proveedor', 'Fecha', 'N.° factura proveedor', 'Total'],
+      filas: [
+        for (final c in compras)
+          [
+            TextCellValue(c.nombreProveedor ?? 'Sin especificar'),
+            TextCellValue(c.fechaCompra.split('T').first),
+            TextCellValue(c.numeroFacturaProveedor),
+            DoubleCellValue(c.totalCompra),
+          ],
+      ],
+      moneda: const {3},
+      sumar: const {3},
+    );
 
     final hojaGastos = excel['Gastos'];
-    hojaGastos.appendRow([TextCellValue('Fecha'), TextCellValue('Categoría'), TextCellValue('Descripción'), TextCellValue('Monto'), TextCellValue('Deducible')]);
-    for (final g in gastos) {
+    _escribirTabla(
+      hojaGastos,
+      titulo: 'Gastos del periodo fiscal $periodoFiscal',
+      subtitulo: negocioNombre,
+      encabezados: const ['Fecha', 'Categoría', 'Descripción', 'Deducible', 'Monto'],
+      filas: [
+        for (final g in gastos)
+          [
+            TextCellValue(g.fecha),
+            TextCellValue(g.categoriaLabel),
+            TextCellValue(g.descripcion),
+            TextCellValue(g.deducible ? 'Sí' : 'No'),
+            DoubleCellValue(g.monto),
+          ],
+      ],
+      moneda: const {4},
+      sumar: const {4},
+    );
+    if (gastos.isNotEmpty) {
       hojaGastos.appendRow([
-        TextCellValue(g.fecha),
-        TextCellValue(g.categoriaLabel),
-        TextCellValue(g.descripcion),
-        DoubleCellValue(g.monto),
-        TextCellValue(g.deducible ? 'Sí' : 'No'),
+        TextCellValue('Deducible para Renta'), TextCellValue(''), TextCellValue(''), TextCellValue(''),
+        DoubleCellValue(gastos.where((g) => g.deducible).fold(0.0, (s, g) => s + g.monto)),
       ]);
+      _estilarCeldaUltimaFila(hojaGastos, 0, CellStyle(bold: true, fontColorHex: _colorMarca));
+      _estilarCeldaUltimaFila(hojaGastos, 4, _estiloMoneda(negrita: true));
     }
-    hojaGastos.appendRow([]);
-    hojaGastos.appendRow([TextCellValue('TOTAL DEDUCIBLE'), TextCellValue(''), TextCellValue(''), DoubleCellValue(gastos.where((g) => g.deducible).fold(0.0, (s, g) => s + g.monto)), TextCellValue('')]);
 
     excel.delete('Sheet1');
 
@@ -3794,11 +4024,15 @@ class ExportService {
     final sumaTotal = sumaSubtotal + sumaIva;
 
     sheet.appendRow([TextCellValue('Reporte de Ingresos')]); // fila 1
+    _estilarCeldaUltimaFila(sheet, 0, _estiloTitulo());
     sheet.appendRow([                                        // fila 2: sumas del periodo
       TextCellValue('Subtotal:'), DoubleCellValue(sumaSubtotal),
       TextCellValue('IVA:'), DoubleCellValue(sumaIva),
       TextCellValue('Total:'), DoubleCellValue(sumaTotal),
     ]);
+    _estilarCeldaUltimaFila(sheet, 1, _estiloMoneda());
+    _estilarCeldaUltimaFila(sheet, 3, _estiloMoneda());
+    _estilarCeldaUltimaFila(sheet, 5, _estiloMoneda(negrita: true));
     sheet.appendRow([]); // fila 3: separador
     sheet.appendRow([    // fila 4: encabezado
       TextCellValue('Fecha'),
@@ -3809,6 +4043,7 @@ class ExportService {
       TextCellValue('IVA'),
       TextCellValue('Total'),
     ]);
+    _estilarUltimaFila(sheet, 7, _estiloEncabezadoTabla());
     for (var i in ingresos) { // fila 5 en adelante
       sheet.appendRow([
         TextCellValue(i.fecha),
@@ -3819,18 +4054,37 @@ class ExportService {
         DoubleCellValue(i.montoIva),
         DoubleCellValue(i.total),
       ]);
+      for (final col in [3, 5, 6]) {
+        _estilarCeldaUltimaFila(sheet, col, _estiloMoneda());
+      }
+    }
+    sheet.appendRow([]);
+    sheet.appendRow([
+      TextCellValue('TOTAL'), TextCellValue(''), TextCellValue(''),
+      DoubleCellValue(sumaSubtotal), TextCellValue(''), DoubleCellValue(sumaIva), DoubleCellValue(sumaTotal),
+    ]);
+    _estilarCeldaUltimaFila(sheet, 0, _estiloTotalTexto());
+    for (final col in [3, 5, 6]) {
+      _estilarCeldaUltimaFila(sheet, col, _estiloTotalMoneda());
     }
 
-    const colTarifas = 11; // L
+    const colTarifas = 9; // J -- deja una columna de separación (I) con la tabla principal
     void celda(int col, int fila, CellValue valor) {
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: fila)).value = valor;
     }
+    void estilarCelda(int col, int fila, CellStyle estilo) {
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: fila)).cellStyle = estilo;
+    }
 
     celda(colTarifas, 0, TextCellValue('Detalle por Tarifa de IVA'));
+    estilarCelda(colTarifas, 0, _estiloEncabezadoSeccion());
     celda(colTarifas, 1, TextCellValue('Tarifa'));
     celda(colTarifas + 1, 1, TextCellValue('Base'));
     celda(colTarifas + 2, 1, TextCellValue('IVA'));
     celda(colTarifas + 3, 1, TextCellValue('Total'));
+    for (var k = 0; k < 4; k++) {
+      estilarCelda(colTarifas + k, 1, _estiloEncabezadoTabla());
+    }
 
     final porTarifa = _agruparPorTarifaIngreso(ingresos);
     final tarifasOrdenadas = porTarifa.base.keys.toList()..sort();
@@ -3840,16 +4094,24 @@ class ExportService {
       final iva = porTarifa.iva[t] ?? 0;
       celda(colTarifas, filaTarifa, TextCellValue('$t%'));
       celda(colTarifas + 1, filaTarifa, DoubleCellValue(base));
+      estilarCelda(colTarifas + 1, filaTarifa, _estiloMoneda());
       celda(colTarifas + 2, filaTarifa, DoubleCellValue(iva));
+      estilarCelda(colTarifas + 2, filaTarifa, _estiloMoneda());
       celda(colTarifas + 3, filaTarifa, DoubleCellValue(base + iva));
+      estilarCelda(colTarifas + 3, filaTarifa, _estiloMoneda());
       filaTarifa++;
     }
     final baseTotal = porTarifa.base.values.fold(0.0, (s, v) => s + v);
     final ivaTotal = porTarifa.iva.values.fold(0.0, (s, v) => s + v);
     celda(colTarifas, filaTarifa, TextCellValue('TOTAL'));
+    estilarCelda(colTarifas, filaTarifa, _estiloTotalTexto());
     celda(colTarifas + 1, filaTarifa, DoubleCellValue(baseTotal));
+    estilarCelda(colTarifas + 1, filaTarifa, _estiloTotalMoneda());
     celda(colTarifas + 2, filaTarifa, DoubleCellValue(ivaTotal));
+    estilarCelda(colTarifas + 2, filaTarifa, _estiloTotalMoneda());
     celda(colTarifas + 3, filaTarifa, DoubleCellValue(baseTotal + ivaTotal));
+    estilarCelda(colTarifas + 3, filaTarifa, _estiloTotalMoneda());
+    _anchoColumnas(sheet, [12, 28, 18, 14, 10, 14, 14, 3, 3, 12, 14, 14, 14]);
 
 
     {
@@ -3928,22 +4190,33 @@ class ExportService {
   static Future<void> exportGastosToExcel(List<GastoOperativo> gastos) async {
     var excel = Excel.createExcel();
     excel['Dashboard']; // primera pestaña (ver _escribirDashboard)
-    Sheet sheet = excel['Gastos'];
-    sheet.appendRow([
-      TextCellValue('Fecha'),
-      TextCellValue('Categoría'),
-      TextCellValue('Descripción'),
-      TextCellValue('Deducible'),
-      TextCellValue('Monto'),
-    ]);
-    for (var g in gastos) {
-      sheet.appendRow([
-        TextCellValue(g.fecha),
-        TextCellValue(g.categoriaLabel),
-        TextCellValue(g.descripcion),
-        TextCellValue(g.deducible ? 'Sí' : 'No'),
-        DoubleCellValue(g.monto),
+    final hojaGastos = excel['Gastos'];
+    _escribirTabla(
+      hojaGastos,
+      titulo: 'Reporte de gastos',
+      subtitulo: '${gastos.length} gasto(s)',
+      encabezados: const ['Fecha', 'Categoría', 'Descripción', 'Proveedor', 'Deducible', 'Monto'],
+      filas: [
+        for (final g in gastos)
+          [
+            TextCellValue(g.fecha),
+            TextCellValue(g.categoriaLabel),
+            TextCellValue(g.descripcion),
+            TextCellValue(g.nombreProveedor ?? ''),
+            TextCellValue(g.deducible ? 'Sí' : 'No'),
+            DoubleCellValue(g.monto),
+          ],
+      ],
+      moneda: const {5},
+      sumar: const {5},
+    );
+    if (gastos.isNotEmpty) {
+      hojaGastos.appendRow([
+        TextCellValue('Deducible para Renta'), TextCellValue(''), TextCellValue(''), TextCellValue(''), TextCellValue(''),
+        DoubleCellValue(gastos.where((g) => g.deducible).fold(0.0, (a, g) => a + g.monto)),
       ]);
+      _estilarCeldaUltimaFila(hojaGastos, 0, CellStyle(bold: true, fontColorHex: _colorMarca));
+      _estilarCeldaUltimaFila(hojaGastos, 5, _estiloMoneda(negrita: true));
     }
 
     {
@@ -4022,23 +4295,27 @@ class ExportService {
   static Future<void> exportNotasCreditoToExcel(List<NotaCredito> notas) async {
     var excel = Excel.createExcel();
     excel['Dashboard']; // primera pestaña (ver _escribirDashboard)
-    Sheet sheet = excel['NotasCredito'];
-    sheet.appendRow([
-      TextCellValue('Fecha'),
-      TextCellValue('Consecutivo'),
-      TextCellValue('Anula Factura'),
-      TextCellValue('Cliente'),
-      TextCellValue('Total'),
-    ]);
-    for (var n in notas) {
-      sheet.appendRow([
-        TextCellValue(n.fechaEmision.split('T')[0]),
-        TextCellValue(n.consecutivo),
-        TextCellValue('F-${n.facturaConsecutivo ?? ''}'),
-        TextCellValue(n.receptorNombre),
-        DoubleCellValue(n.total),
-      ]);
-    }
+    _escribirTabla(
+      excel['NotasCredito'],
+      titulo: 'Reporte de notas de crédito',
+      subtitulo: '${notas.length} nota(s)',
+      encabezados: const ['Fecha', 'Consecutivo', 'Anula factura', 'Cliente', 'Motivo', 'Subtotal', 'IVA', 'Total'],
+      filas: [
+        for (final n in notas)
+          [
+            TextCellValue(n.fechaEmision.split('T')[0]),
+            TextCellValue(n.consecutivo),
+            TextCellValue('F-${n.facturaConsecutivo ?? ''}'),
+            TextCellValue(n.receptorNombre),
+            TextCellValue(n.motivo),
+            DoubleCellValue(n.subtotal),
+            DoubleCellValue(n.montoIva),
+            DoubleCellValue(n.total),
+          ],
+      ],
+      moneda: const {5, 6, 7},
+      sumar: const {5, 6, 7},
+    );
 
     {
       final total = notas.fold(0.0, (a, x) => a + x.total);
