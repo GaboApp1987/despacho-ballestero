@@ -917,8 +917,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         // En escritorio la navegacion ya esta siempre visible como pildoras
         // (ver bottom: mas abajo), asi que no hace falta un boton de menu
         // ahi -- solo en movil, para abrir el Drawer con la lista vertical.
-        leadingWidth: Navigator.canPop(context) ? 96 : null,
-        leading: Navigator.canPop(context)
+        leadingWidth: (ModalRoute.of(context)?.canPop ?? false) ? 96 : null,
+        leading: (ModalRoute.of(context)?.canPop ?? false)
             ? Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [

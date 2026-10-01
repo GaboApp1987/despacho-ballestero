@@ -16,6 +16,7 @@ import 'widgets/instalar_app_banner.dart';
 import 'recuperar_password_screen.dart';
 import 'registro_publico_screen.dart';
 import 'suscripcion_suspendida_screen.dart';
+import 'widgets/asistente_ia_bar.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -240,6 +241,10 @@ class _LoginScreenState extends State<LoginScreen> {
         // Cuentas autenticadas sin ningún perfil asignado todavía.
         pantallaDestino = const NegociosScreen(puedeCrear: false);
     }
+
+    // Lo primero que se ve al entrar es el asistente de IA en pantalla
+    // completa (lo abre el dashboard al construirse, ver AsistenteIABar).
+    AsistenteIABar.abrirAlProximoIngreso();
 
     // 🚀 Navegación hacia la pantalla principal
     if (mounted) {

@@ -950,7 +950,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
           ? DashboardDrawer(dashboardFuture: _dashboardFuture, onAbrirNegocio: _abrirNegocioPorId, mostrarContadores: false, esContador: esContador)
           : null,
       appBar: esAncho ? null : AppBar(
-        leading: Navigator.canPop(context)
+        leading: (ModalRoute.of(context)?.canPop ?? false)
             ? IconButton(
                 icon: const Icon(Icons.arrow_back),
                 tooltip: "Volver",
@@ -1039,7 +1039,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
               tooltip: "Soporte",
               onPressed: () => mostrarSoporteChat(context, contexto: 'usuario'),
             ),
-          if (!Navigator.canPop(context))
+          if (!(ModalRoute.of(context)?.canPop ?? false))
             esContador
                 ? _accionAppBarClara(
                     icono: Icons.logout,

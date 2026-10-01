@@ -2,22 +2,20 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'soporte_chat.dart';
-import 'adjuntos_ia.dart';
 
-/// Barra "¿Qué querés hacer hoy?" -- lo primero en el dashboard de cada
-/// perfil (negocio, contador, despacho y administrador). Lo que se escribe
-/// acá lo contesta la IA (mismo asistente del chat de soporte, con acceso a
-/// los datos reales y a las acciones que ya tiene: consultar ventas y
-/// saldos, preparar facturas y productos...) y además puede llevar a la
-/// persona a la sección correcta del panel (ver `secciones` / `onNavegar`
-/// y la marca [[ABRIR:...]] en el backend).
+/// Acceso al asistente de IA ("Equilibra") desde el dashboard de cada
+/// perfil (negocio, contador, despacho y administrador).
 ///
-/// Se le puede HABLAR: el botón del micrófono graba una nota de voz que la
-/// IA escucha y contesta (sin mostrar transcripción), y el clip adjunta
-/// fotos, PDF o Excel para que los interprete (ver adjuntos_ia.dart).
+/// El asistente es su propia pantalla, estilo Claude/Gemini (ver
+/// abrirAsistentePantalla en soporte_chat.dart): se abre SOLO apenas la
+/// persona inicia sesión -- es lo primero que ve -- y desde ahí pasa al
+/// panel con "Ir al panel". En el dashboard queda solo este acceso
+/// compacto para volver a abrirlo (o hablarle directo con el micrófono).
 ///
-/// Diseño fijo de marca (degradado oscuro con acentos cian) para que se vea
-/// igual de bien en el tema oscuro del negocio y en el claro del contador.
+/// La IA contesta con los datos reales y las acciones que ya tiene
+/// (consultar ventas y saldos, preparar facturas y productos...) y puede
+/// llevar a la sección correcta del panel (`secciones` / `onNavegar` y la
+/// marca [[ABRIR:...]] en el backend).
 class AsistenteIABar extends StatefulWidget {
   final int? negocioId;
   /// Secciones de ESTE perfil que la IA puede proponer abrir: clave ->
@@ -26,7 +24,7 @@ class AsistenteIABar extends StatefulWidget {
   final void Function(String clave) onNavegar;
   /// Sugerencias tocables (ícono, texto que se manda tal cual).
   final List<(IconData, String)> sugerencias;
-  /// Ejemplos que van rotando en el campo de texto.
+  /// Ejemplos que van rotando en el acceso.
   final List<String> ejemplos;
   final String? saludo;
 
@@ -40,24 +38,23 @@ class AsistenteIABar extends StatefulWidget {
     this.saludo,
   });
 
+  /// El primer dashboard que se construye después de iniciar sesión abre
+  /// el asistente en pantalla completa una vez. Login lo vuelve a armar
+  /// (ver login.dart) para el próximo ingreso.
+  static bool _abrirAlEntrar = true;
+  static void abrirAlProximoIngreso() => _abrirAlEntrar = true;
+
   @override
   State<AsistenteIABar> createState() => _AsistenteIABarState();
 }
 
 class _AsistenteIABarState extends State<AsistenteIABar> with SingleTickerProviderStateMixin {
-  static const _cian = Color(0xFF22D3EE);
   static const _cianSuave = Color(0xFF67E8F9);
 
-  final _ctrl = TextEditingController();
-  final _foco = FocusNode();
   late final AnimationController _brillo = AnimationController(vsync: this, duration: const Duration(seconds: 6))..repeat();
   Timer? _rotarEjemplo;
   int _ejemplo = 0;
-  GrabadorVoz? _grabador;
-  bool _grabando = false;
 
-  /// Lo que se ve en gris dentro del campo: primero se presenta, después
-  /// van rotando ejemplos de lo que se le puede pedir.
   List<String> get _pistas => ['Hola, soy Equilibra. ¿Qué querés que hagamos hoy?', ...widget.ejemplos];
 
   @override
@@ -65,271 +62,149 @@ class _AsistenteIABarState extends State<AsistenteIABar> with SingleTickerProvid
     super.initState();
     if (widget.ejemplos.isNotEmpty) {
       _rotarEjemplo = Timer.periodic(const Duration(milliseconds: 3200), (_) {
-        if (mounted && _ctrl.text.isEmpty && !_foco.hasFocus) {
-          setState(() => _ejemplo = (_ejemplo + 1) % _pistas.length);
-        }
+        if (mounted) setState(() => _ejemplo = (_ejemplo + 1) % _pistas.length);
       });
     }
-    _foco.addListener(() => setState(() {}));
-    _ctrl.addListener(() => setState(() {}));
+    if (AsistenteIABar._abrirAlEntrar) {
+      AsistenteIABar._abrirAlEntrar = false;
+      _pendienteAbrir = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _abrirSiCorresponde());
+      // El nombre del saludo a veces llega un momento después (perfil del
+      // contador); se espera un poco, pero nunca más de 2 segundos.
+      _esperaSaludo = Timer(const Duration(seconds: 2), () => _abrirSiCorresponde(forzar: true));
+    }
+  }
+
+  bool _pendienteAbrir = false;
+  Timer? _esperaSaludo;
+
+  void _abrirSiCorresponde({bool forzar = false}) {
+    if (!_pendienteAbrir || !mounted) return;
+    if (widget.saludo == null && !forzar) return;
+    _pendienteAbrir = false;
+    _esperaSaludo?.cancel();
+    _abrir();
+  }
+
+  @override
+  void didUpdateWidget(covariant AsistenteIABar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_pendienteAbrir && widget.saludo != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _abrirSiCorresponde());
+    }
   }
 
   @override
   void dispose() {
+    _esperaSaludo?.cancel();
     _rotarEjemplo?.cancel();
-    _grabador?.cancelar();
-    _grabador?.dispose();
     _brillo.dispose();
-    _ctrl.dispose();
-    _foco.dispose();
     super.dispose();
   }
 
-  void _preguntar([String? texto, List<AdjuntoIA> adjuntos = const []]) {
-    final pregunta = (texto ?? _ctrl.text).trim();
-    if (pregunta.isEmpty && adjuntos.isEmpty) {
-      _foco.requestFocus();
-      return;
-    }
-    _ctrl.clear();
-    _foco.unfocus();
-    mostrarSoporteChat(
+  void _abrir({bool empezarGrabando = false}) {
+    abrirAsistentePantalla(
       context,
-      contexto: 'usuario',
       negocioId: widget.negocioId,
-      mensajeInicial: pregunta,
-      adjuntosIniciales: adjuntos,
       secciones: widget.secciones,
       onNavegar: widget.onNavegar,
+      sugerencias: widget.sugerencias,
+      saludo: widget.saludo,
+      empezarGrabando: empezarGrabando,
     );
-  }
-
-  Future<void> _empezarAGrabar() async {
-    _foco.unfocus();
-    final grabador = _grabador ??= GrabadorVoz();
-    try {
-      if (!await grabador.iniciar()) throw Exception('sin permiso');
-      if (mounted) setState(() => _grabando = true);
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('No pude usar el micrófono. Revisá que el navegador o Windows le den permiso a Equilibra.'),
-        duration: Duration(seconds: 6),
-      ));
-    }
-  }
-
-  Future<void> _mandarNotaDeVoz() async {
-    if (!_grabando) return;
-    setState(() => _grabando = false);
-    final nota = await _grabador!.detener();
-    if (nota == null || !mounted) return;
-    _preguntar(_ctrl.text, [nota]);
-  }
-
-  Future<void> _descartarNotaDeVoz() async {
-    setState(() => _grabando = false);
-    await _grabador?.cancelar();
-  }
-
-  Future<void> _adjuntar() async {
-    final archivos = await elegirArchivosParaIA(context);
-    if (archivos.isNotEmpty && mounted) _preguntar(_ctrl.text, archivos);
   }
 
   @override
   Widget build(BuildContext context) {
-    final ancho = MediaQuery.of(context).size.width;
-    final compacto = ancho < 600;
+    final compacto = MediaQuery.of(context).size.width < 600;
     final pistas = _pistas;
     final pista = pistas[_ejemplo % pistas.length];
 
     return AnimatedBuilder(
       animation: _brillo,
       builder: (context, child) {
-        // Un brillo cian que recorre el borde de la tarjeta, muy sutil.
+        // Un brillo cian que recorre el borde, muy sutil.
         final t = _brillo.value * 2 * math.pi;
         return Container(
           margin: const EdgeInsets.only(bottom: 22),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(20),
             gradient: SweepGradient(
               transform: GradientRotation(t),
               colors: const [Color(0x6622D3EE), Color(0x00312E81), Color(0x664F46E5), Color(0x0022D3EE), Color(0x6622D3EE)],
             ),
-            boxShadow: [BoxShadow(color: const Color(0xFF22D3EE).withOpacity(0.10), blurRadius: 30, offset: const Offset(0, 10))],
+            boxShadow: [BoxShadow(color: const Color(0xFF22D3EE).withOpacity(0.10), blurRadius: 24, offset: const Offset(0, 8))],
           ),
           padding: const EdgeInsets.all(1.5),
           child: child,
         );
       },
-      child: Container(
-        padding: EdgeInsets.fromLTRB(compacto ? 18 : 26, compacto ? 18 : 24, compacto ? 18 : 26, compacto ? 16 : 22),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(23),
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF0B1120), Color(0xFF16193A), Color(0xFF0E2A3A)],
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _abrir,
+          borderRadius: BorderRadius.circular(19),
+          child: Ink(
+            padding: EdgeInsets.fromLTRB(compacto ? 12 : 16, 12, 12, 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(19),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF0B1120), Color(0xFF16193A), Color(0xFF0E2A3A)],
+              ),
+            ),
+            child: Row(
               children: [
                 _IconoIA(animacion: _brillo),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      const _InsigniaAsistente(),
-                      const SizedBox(height: 8),
-                      if (widget.saludo != null)
-                        Text("${widget.saludo!} 👋", style: const TextStyle(color: _cianSuave, fontSize: 13, fontWeight: FontWeight.w700)),
-                      Text(
-                        "Soy Equilibra, ¿qué hacemos hoy?",
-                        style: TextStyle(color: Colors.white, fontSize: compacto ? 19 : 23, fontWeight: FontWeight.w800, letterSpacing: -0.3),
+                      Row(
+                        children: [
+                          Container(width: 7, height: 7, decoration: const BoxDecoration(color: Color(0xFF4ADE80), shape: BoxShape.circle)),
+                          const SizedBox(width: 6),
+                          const Flexible(
+                            child: Text(
+                              "Equilibra · tu asistente virtual",
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: _cianSuave, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.2),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        "Estoy para ayudarte: facturo, reviso tus números y te llevo a donde necesités. Escribime o mandame una nota de voz.",
-                        style: TextStyle(color: Colors.white.withOpacity(0.66), fontSize: 13),
+                      const SizedBox(height: 3),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 400),
+                        transitionBuilder: (c, a) => FadeTransition(
+                          opacity: a,
+                          child: SlideTransition(position: Tween(begin: const Offset(0, 0.4), end: Offset.zero).animate(a), child: c),
+                        ),
+                        child: Text(
+                          pista,
+                          key: ValueKey(pista),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: compacto ? 13.5 : 15),
+                        ),
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(width: 8),
+                if (!compacto) ...[
+                  Text("Abrir", style: TextStyle(color: Colors.white.withOpacity(0.55), fontWeight: FontWeight.w700, fontSize: 13)),
+                  Icon(Icons.chevron_right_rounded, color: Colors.white.withOpacity(0.55)),
+                  const SizedBox(width: 8),
+                ],
+                _BotonMicrofono(animacion: _brillo, onTap: () => _abrir(empezarGrabando: true)),
               ],
             ),
-            const SizedBox(height: 18),
-            // --- campo de pregunta
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(_foco.hasFocus ? 0.11 : 0.07),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: _foco.hasFocus ? _cian : Colors.white.withOpacity(0.14), width: _foco.hasFocus ? 1.5 : 1),
-              ),
-              padding: EdgeInsets.only(left: _grabando ? 4 : 16, right: 6, top: _grabando ? 4 : 0, bottom: _grabando ? 4 : 0),
-              child: _grabando
-                  ? GrabandoNotaVoz(grabador: _grabador!, onCancelar: _descartarNotaDeVoz, onEnviar: _mandarNotaDeVoz)
-                  : Row(
-                children: [
-                  Icon(Icons.search_rounded, color: Colors.white.withOpacity(0.55), size: 22),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Stack(
-                      alignment: Alignment.centerLeft,
-                      children: [
-                        if (_ctrl.text.isEmpty)
-                          IgnorePointer(
-                            child: AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 400),
-                              transitionBuilder: (c, a) => FadeTransition(
-                                opacity: a,
-                                child: SlideTransition(position: Tween(begin: const Offset(0, 0.4), end: Offset.zero).animate(a), child: c),
-                              ),
-                              child: Text(
-                                pista,
-                                key: ValueKey(pista),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(color: Colors.white.withOpacity(0.42), fontSize: 15),
-                              ),
-                            ),
-                          ),
-                        TextField(
-                          controller: _ctrl,
-                          focusNode: _foco,
-                          onSubmitted: (_) => _preguntar(),
-                          textInputAction: TextInputAction.send,
-                          cursorColor: _cian,
-                          style: const TextStyle(color: Colors.white, fontSize: 15),
-                          decoration: const InputDecoration(
-                            // El tema general de la app rellena los campos; acá
-                            // tiene que ser transparente para ver la pista.
-                            filled: false,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            border: InputBorder.none,
-                            isCollapsed: true,
-                            contentPadding: EdgeInsets.symmetric(vertical: 16),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: _adjuntar,
-                    icon: Icon(Icons.attach_file_rounded, color: Colors.white.withOpacity(0.7)),
-                    tooltip: 'Adjuntar foto, PDF o Excel',
-                  ),
-                  const SizedBox(width: 2),
-                  // Como en WhatsApp: sin texto, el botón principal es el
-                  // micrófono (hablarle es lo primero); con texto, enviar.
-                  _ctrl.text.trim().isNotEmpty
-                      ? _BotonEnviar(activo: true, onTap: () => _preguntar())
-                      : _BotonMicrofono(animacion: _brillo, onTap: _empezarAGrabar),
-                ],
-              ),
-            ),
-            if (widget.sugerencias.isNotEmpty) ...[
-              const SizedBox(height: 14),
-              // En celular, una debajo de la otra a todo el ancho (se leen y
-              // se tocan mejor); en pantalla ancha, todas en una fila.
-              if (compacto)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (final (icono, texto) in widget.sugerencias)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: _ChipSugerencia(icono: icono, texto: texto, onTap: () => _preguntar(texto), anchoCompleto: true),
-                      ),
-                  ],
-                )
-              else
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final (icono, texto) in widget.sugerencias)
-                      _ChipSugerencia(icono: icono, texto: texto, onTap: () => _preguntar(texto)),
-                  ],
-                ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// "● Tu asistente virtual · en línea" -- para que se sienta como alguien
-/// del equipo, no como un buscador.
-class _InsigniaAsistente extends StatelessWidget {
-  const _InsigniaAsistente();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFF22D3EE).withOpacity(0.12),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF22D3EE).withOpacity(0.35)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(width: 7, height: 7, decoration: const BoxDecoration(color: Color(0xFF4ADE80), shape: BoxShape.circle)),
-          const SizedBox(width: 6),
-          const Text(
-            "TU ASISTENTE VIRTUAL · EN LÍNEA",
-            style: TextStyle(color: Color(0xFF67E8F9), fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.8),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -348,22 +223,22 @@ class _IconoIA extends StatelessWidget {
         final t = animacion.value;
         final pulso = 0.5 + 0.5 * math.sin(t * 2 * math.pi * 2);
         return Container(
-          width: 50,
-          height: 50,
+          width: 42,
+          height: 42,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             gradient: SweepGradient(
               transform: GradientRotation(t * 2 * math.pi),
               colors: const [Color(0xFF22D3EE), Color(0xFF6366F1), Color(0xFFA855F7), Color(0xFF22D3EE)],
             ),
-            boxShadow: [BoxShadow(color: const Color(0xFF22D3EE).withOpacity(0.25 + 0.25 * pulso), blurRadius: 14 + 8 * pulso)],
+            boxShadow: [BoxShadow(color: const Color(0xFF22D3EE).withOpacity(0.25 + 0.25 * pulso), blurRadius: 12 + 6 * pulso)],
           ),
           padding: const EdgeInsets.all(2),
           child: Container(
             decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF0F1530)),
             child: Transform.scale(
               scale: 0.92 + 0.12 * pulso,
-              child: const Icon(Icons.auto_awesome, color: Colors.white, size: 24),
+              child: const Icon(Icons.auto_awesome, color: Colors.white, size: 20),
             ),
           ),
         );
@@ -372,8 +247,8 @@ class _IconoIA extends StatelessWidget {
   }
 }
 
-/// Botón principal cuando el campo está vacío: micrófono con degradado y
-/// un aro que respira, para invitar a hablarle.
+/// Micrófono con degradado y un aro que respira: abre el asistente ya
+/// grabando una nota de voz.
 class _BotonMicrofono extends StatelessWidget {
   final Animation<double> animacion;
   final VoidCallback onTap;
@@ -409,85 +284,6 @@ class _BotonMicrofono extends StatelessWidget {
               ),
               child: const Icon(Icons.mic_rounded, color: Colors.white, size: 24),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BotonEnviar extends StatelessWidget {
-  final bool activo;
-  final VoidCallback onTap;
-  const _BotonEnviar({required this.activo, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            gradient: activo
-                ? const LinearGradient(colors: [Color(0xFF22D3EE), Color(0xFF6366F1)])
-                : LinearGradient(colors: [Colors.white.withOpacity(0.10), Colors.white.withOpacity(0.10)]),
-          ),
-          child: Icon(Icons.arrow_upward_rounded, color: activo ? Colors.white : Colors.white54, size: 22),
-        ),
-      ),
-    );
-  }
-}
-
-class _ChipSugerencia extends StatefulWidget {
-  final IconData icono;
-  final String texto;
-  final VoidCallback onTap;
-  final bool anchoCompleto;
-  const _ChipSugerencia({required this.icono, required this.texto, required this.onTap, this.anchoCompleto = false});
-
-  @override
-  State<_ChipSugerencia> createState() => _ChipSugerenciaState();
-}
-
-class _ChipSugerenciaState extends State<_ChipSugerencia> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          padding: EdgeInsets.symmetric(horizontal: 12, vertical: widget.anchoCompleto ? 11 : 8),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(_hover ? 0.14 : 0.07),
-            borderRadius: BorderRadius.circular(widget.anchoCompleto ? 14 : 20),
-            border: Border.all(color: _hover ? const Color(0xFF22D3EE) : Colors.white.withOpacity(0.14)),
-          ),
-          child: Row(
-            mainAxisSize: widget.anchoCompleto ? MainAxisSize.max : MainAxisSize.min,
-            children: [
-              Icon(widget.icono, size: 16, color: const Color(0xFF67E8F9)),
-              const SizedBox(width: 8),
-              if (widget.anchoCompleto)
-                Expanded(
-                  child: Text(widget.texto, style: TextStyle(color: Colors.white.withOpacity(0.88), fontSize: 14, fontWeight: FontWeight.w600)),
-                )
-              else
-                Text(widget.texto, style: TextStyle(color: Colors.white.withOpacity(0.88), fontSize: 13, fontWeight: FontWeight.w600)),
-              if (widget.anchoCompleto) Icon(Icons.chevron_right_rounded, size: 18, color: Colors.white.withOpacity(0.4)),
-            ],
           ),
         ),
       ),

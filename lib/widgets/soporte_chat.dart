@@ -48,6 +48,46 @@ Future<void> mostrarSoporteChat(
   );
 }
 
+/// El asistente como pantalla propia (estilo Claude/Gemini): lo primero que
+/// se ve al iniciar sesión (ver AsistenteIABar) y desde ahí "Ir al panel".
+/// Misma conversación, herramientas y adjuntos que el chat en hoja, con
+/// diseño de pantalla completa.
+Future<void> abrirAsistentePantalla(
+  BuildContext context, {
+  int? negocioId,
+  required Map<String, String> secciones,
+  required void Function(String clave) onNavegar,
+  List<(IconData, String)> sugerencias = const [],
+  String? saludo,
+  String? mensajeInicial,
+  List<AdjuntoIA> adjuntosIniciales = const [],
+  bool empezarGrabando = false,
+}) {
+  return Navigator.of(context).push(PageRouteBuilder(
+    transitionDuration: const Duration(milliseconds: 380),
+    reverseTransitionDuration: const Duration(milliseconds: 260),
+    pageBuilder: (_, __, ___) => _SoporteChatSheet(
+      contexto: 'usuario',
+      negocioId: negocioId,
+      mensajeInicial: mensajeInicial,
+      adjuntosIniciales: adjuntosIniciales,
+      secciones: secciones,
+      onNavegar: onNavegar,
+      pantallaCompleta: true,
+      saludo: saludo,
+      sugerencias: sugerencias,
+      empezarGrabando: empezarGrabando,
+    ),
+    transitionsBuilder: (_, animacion, __, child) {
+      final curva = CurvedAnimation(parent: animacion, curve: Curves.easeOutCubic);
+      return FadeTransition(
+        opacity: curva,
+        child: ScaleTransition(scale: Tween(begin: 0.97, end: 1.0).animate(curva), child: child),
+      );
+    },
+  ));
+}
+
 class _ChatMensaje {
   final String role; // 'user' | 'assistant'
   final String content;
@@ -56,6 +96,10 @@ class _ChatMensaje {
   // Sección que la IA propuso abrir (clave de `secciones`), ver "navegar"
   // en SoporteChatView.
   final String? navegar;
+  // Acción genérica que la IA dejó lista para confirmar (crear cliente,
+  // registrar gasto o abono...), ver asistente_acciones.py en el backend.
+  final Map<String, dynamic>? propuestaAccion;
+  String estadoAccion = 'pendiente';
   // 'pendiente' | 'creando' | 'creada' -- aplica a `propuesta` (factura).
   String estadoPropuesta = 'pendiente';
   // 'pendiente' | 'creando' | 'creada' -- aplica a `propuestaProducto`.
@@ -66,7 +110,7 @@ class _ChatMensaje {
   // de voz): nunca se muestra, pero viaja en el historial para que la IA
   // lo recuerde en los turnos siguientes.
   String? notaOculta;
-  _ChatMensaje(this.role, this.content, {this.propuesta, this.propuestaProducto, this.navegar, this.adjuntos = const []});
+  _ChatMensaje(this.role, this.content, {this.propuesta, this.propuestaProducto, this.navegar, this.propuestaAccion, this.adjuntos = const []});
 
   Map<String, String> toJson() => {
         'role': role,
@@ -161,6 +205,11 @@ class _SoporteChatSheet extends StatefulWidget {
   final List<AdjuntoIA> adjuntosIniciales;
   final Map<String, String>? secciones;
   final void Function(String clave)? onNavegar;
+  // Solo en pantalla completa (ver abrirAsistentePantalla).
+  final bool pantallaCompleta;
+  final String? saludo;
+  final List<(IconData, String)> sugerencias;
+  final bool empezarGrabando;
   const _SoporteChatSheet({
     required this.contexto,
     this.negocioId,
@@ -168,6 +217,10 @@ class _SoporteChatSheet extends StatefulWidget {
     this.adjuntosIniciales = const [],
     this.secciones,
     this.onNavegar,
+    this.pantallaCompleta = false,
+    this.saludo,
+    this.sugerencias = const [],
+    this.empezarGrabando = false,
   });
 
   bool get modoAsistente => secciones != null;
@@ -197,6 +250,9 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
       WidgetsBinding.instance.addPostFrameCallback((_) => _enviarMensaje(adjuntos: widget.adjuntosIniciales));
     }
     _inputCtrl.addListener(() => setState(() {}));
+    if (widget.empezarGrabando) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _empezarAGrabar());
+    }
   }
   final TextEditingController _inputCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
@@ -350,6 +406,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
             propuesta: propuestaJson != null ? _PropuestaFactura.fromJson(propuestaJson) : null,
             propuestaProducto: propuestaProductoJson != null ? _PropuestaProducto.fromJson(propuestaProductoJson) : null,
             navegar: data['navegar'] as String?,
+            propuestaAccion: data['propuesta_accion'] is Map ? Map<String, dynamic>.from(data['propuesta_accion']) : null,
           )));
       // Si le hablaste con una nota de voz, te contesta en voz alta.
       if (porVoz) _hablar(respuesta);
@@ -661,6 +718,103 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
     );
   }
 
+  // Solo estos endpoints puede tocar una propuesta del chat (los mismos de
+  // los formularios normales, con sus permisos y validaciones).
+  static const _endpointsAccion = {'/clientes/', '/gastos-operativos/', '/abonos/'};
+
+  Future<void> _confirmarAccion(_ChatMensaje mensaje) async {
+    final accion = mensaje.propuestaAccion!;
+    final endpoint = accion['endpoint'] as String? ?? '';
+    if (!_endpointsAccion.contains(endpoint)) return;
+    setState(() => mensaje.estadoAccion = 'creando');
+    try {
+      final response = await ApiService.post(endpoint, Map<String, dynamic>.from(accion['datos'] as Map));
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        setState(() {
+          mensaje.estadoAccion = 'creada';
+          _mensajes.add(_ChatMensaje('assistant', (accion['exito'] as String?) ?? '¡Listo!'));
+        });
+      } else {
+        throw Exception(utf8.decode(response.bodyBytes));
+      }
+    } catch (e) {
+      setState(() => mensaje.estadoAccion = 'pendiente');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo completar: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
+        );
+      }
+    } finally {
+      _scrollAlFinal();
+    }
+  }
+
+  static const _iconosAccion = {
+    'cliente': Icons.person_add_alt_1_outlined,
+    'gasto': Icons.receipt_long_outlined,
+    'abono': Icons.payments_outlined,
+  };
+
+  Widget _buildTarjetaAccion(_ChatMensaje mensaje) {
+    final accion = mensaje.propuestaAccion!;
+    final filas = (accion['filas'] as List? ?? []).map((f) => (f as List).map((v) => '$v').toList()).toList();
+    return Container(
+      constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.85 > 460 ? 460 : MediaQuery.of(context).size.width * 0.85),
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primary.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(_iconosAccion[accion['icono']] ?? Icons.task_alt, size: 17, color: AppColors.primary),
+              const SizedBox(width: 6),
+              Text('${accion['titulo'] ?? 'Confirmar'}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          for (final f in filas)
+            if (f.length >= 2)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 5),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(width: 110, child: Text(f[0], style: TextStyle(fontSize: 12.5, color: AppColors.textMuted))),
+                    Expanded(child: Text(f[1], style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+                  ],
+                ),
+              ),
+          const SizedBox(height: 8),
+          if (mensaje.estadoAccion == 'creada')
+            Row(
+              children: const [
+                Icon(Icons.check_circle, color: Colors.green, size: 18),
+                SizedBox(width: 6),
+                Text('Hecho', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 13)),
+              ],
+            )
+          else
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: mensaje.estadoAccion == 'creando' ? null : () => _confirmarAccion(mensaje),
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.black),
+                child: mensaje.estadoAccion == 'creando'
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : Text('${accion['boton'] ?? 'Confirmar'}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   /// Botón para ir a la sección que la IA propuso (marca [[ABRIR:...]]).
   Widget _buildTarjetaNavegar(_ChatMensaje mensaje) {
     final clave = mensaje.navegar!;
@@ -713,8 +867,8 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
   }
 
   /// Nota de voz, fotos y archivos que mandó la persona, dentro de su burbuja.
-  List<Widget> _buildAdjuntosMensaje(_ChatMensaje m) {
-    final color = m.role == 'user' ? Colors.black : AppColors.textStrong;
+  List<Widget> _buildAdjuntosMensaje(_ChatMensaje m, {Color? colorTexto}) {
+    final color = colorTexto ?? (m.role == 'user' ? Colors.black : AppColors.textStrong);
     return [
       for (final a in m.adjuntos)
         Padding(
@@ -739,7 +893,330 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => widget.pantallaCompleta ? _buildPantalla(context) : _buildHoja(context);
+
+  // Colores fijos de marca de la pantalla completa (iguales en el tema
+  // claro del contador y en el oscuro del negocio).
+  static const _cian = Color(0xFF22D3EE);
+  static const _cianSuave = Color(0xFF67E8F9);
+
+  bool get _sinConversacion => !_mensajes.any((m) => m.role == 'user') && !_enviando;
+
+  Widget _buildListaMensajes({required bool estiloPantalla}) {
+    final anchoBurbuja = MediaQuery.of(context).size.width * 0.75;
+    return ListView.builder(
+      controller: _scrollCtrl,
+      padding: estiloPantalla ? const EdgeInsets.fromLTRB(16, 8, 16, 16) : const EdgeInsets.all(16),
+      itemCount: _mensajes.length + (estiloPantalla && _enviando ? 1 : 0),
+      itemBuilder: (context, index) {
+        if (index == _mensajes.length) return const _Pensando();
+        final m = _mensajes[index];
+        final esUsuario = m.role == 'user';
+        final colorTexto = estiloPantalla
+            ? Colors.white.withOpacity(esUsuario ? 0.95 : 0.9)
+            : (esUsuario ? Colors.black : AppColors.textStrong);
+        final contenido = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ..._buildAdjuntosMensaje(m, colorTexto: colorTexto),
+            if (m.content.isNotEmpty)
+              (estiloPantalla && !esUsuario)
+                  ? SelectableText(m.content, style: TextStyle(color: colorTexto, fontSize: 15, height: 1.55))
+                  : Text(m.content, style: TextStyle(color: colorTexto, fontSize: estiloPantalla ? 15 : 14, height: 1.4)),
+          ],
+        );
+        final Widget burbuja;
+        if (estiloPantalla && !esUsuario) {
+          // Como en Claude/Gemini: la IA escribe "suelta", sin burbuja.
+          burbuja = Padding(
+            padding: const EdgeInsets.only(bottom: 18),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _AvatarIA(tamano: 30),
+                const SizedBox(width: 12),
+                Expanded(child: Padding(padding: const EdgeInsets.only(top: 4), child: contenido)),
+              ],
+            ),
+          );
+        } else {
+          burbuja = Align(
+            alignment: esUsuario ? Alignment.centerRight : Alignment.centerLeft,
+            child: Container(
+              constraints: BoxConstraints(maxWidth: estiloPantalla ? (anchoBurbuja > 560 ? 560 : anchoBurbuja) : anchoBurbuja),
+              margin: EdgeInsets.only(bottom: estiloPantalla ? 18 : 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: estiloPantalla ? Colors.white.withOpacity(0.10) : (esUsuario ? AppColors.primary : AppColors.surfaceSubtle),
+                borderRadius: BorderRadius.circular(estiloPantalla ? 18 : 14),
+              ),
+              child: contenido,
+            ),
+          );
+        }
+        return Column(
+          crossAxisAlignment: esUsuario ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            burbuja,
+            if (m.propuesta != null) Padding(padding: EdgeInsets.only(left: estiloPantalla ? 42 : 0), child: _buildTarjetaPropuesta(m)),
+            if (m.propuestaProducto != null)
+              Padding(padding: EdgeInsets.only(left: estiloPantalla ? 42 : 0), child: _buildTarjetaPropuestaProducto(m)),
+            if (m.propuestaAccion != null) Padding(padding: EdgeInsets.only(left: estiloPantalla ? 42 : 0), child: _buildTarjetaAccion(m)),
+            if (m.navegar != null) Padding(padding: EdgeInsets.only(left: estiloPantalla ? 42 : 0), child: _buildTarjetaNavegar(m)),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildPendientes(EdgeInsets padding) {
+    if (_pendientes.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: padding,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final a in List.of(_pendientes)) ChipAdjunto(adjunto: a, onQuitar: () => setState(() => _pendientes.remove(a))),
+          ],
+        ),
+      ),
+    );
+  }
+
+  bool get _hayAlgoParaMandar => _inputCtrl.text.trim().isNotEmpty || _pendientes.isNotEmpty;
+
+  /// Caja de entrada de la pantalla completa: texto arriba (varias líneas),
+  /// abajo el clip a la izquierda y micrófono/enviar a la derecha.
+  Widget _buildEntradaPantalla() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.07),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(0.16)),
+        boxShadow: [BoxShadow(color: _cian.withOpacity(0.08), blurRadius: 30, offset: const Offset(0, 10))],
+      ),
+      padding: const EdgeInsets.fromLTRB(6, 6, 8, 8),
+      child: _grabando
+          ? GrabandoNotaVoz(grabador: _grabador!, onCancelar: _descartarNotaDeVoz, onEnviar: _mandarNotaDeVoz)
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildPendientes(const EdgeInsets.fromLTRB(10, 6, 10, 2)),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 6, 10, 0),
+                  child: TextField(
+                    controller: _inputCtrl,
+                    minLines: 1,
+                    maxLines: 6,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _enviarMensaje(),
+                    cursorColor: _cian,
+                    style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.4),
+                    decoration: InputDecoration(
+                      hintText: _hablando ? 'Hablando...' : 'Pedile algo a Equilibra o mandale una nota de voz...',
+                      hintStyle: TextStyle(color: Colors.white.withOpacity(0.42), fontSize: 16),
+                      filled: false,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      isCollapsed: true,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                    ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    IconButton(
+                      onPressed: _enviando ? null : _adjuntar,
+                      icon: Icon(Icons.attach_file_rounded, color: Colors.white.withOpacity(0.7)),
+                      tooltip: 'Adjuntar foto, PDF o Excel',
+                    ),
+                    const Spacer(),
+                    _BotonRedondoIA(
+                      icono: _hayAlgoParaMandar ? Icons.arrow_upward_rounded : (_hablando ? Icons.volume_off_rounded : Icons.mic_rounded),
+                      tooltip: _hayAlgoParaMandar ? 'Enviar' : (_hablando ? 'Callar' : 'Hablarle (nota de voz)'),
+                      pulso: !_hayAlgoParaMandar && !_hablando,
+                      onTap: _enviando ? null : (_hayAlgoParaMandar ? () => _enviarMensaje() : _empezarAGrabar),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+    );
+  }
+
+  void _usarSugerencia(String texto) {
+    _inputCtrl.text = texto;
+    _enviarMensaje();
+  }
+
+  Widget _buildBienvenida(bool compacto) {
+    final saludo = widget.saludo ?? 'Hola';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Center(child: _AvatarIA(tamano: 64)),
+        const SizedBox(height: 22),
+        ShaderMask(
+          shaderCallback: (r) => const LinearGradient(colors: [_cianSuave, Color(0xFFA5B4FC), Color(0xFFC4B5FD)]).createShader(r),
+          child: Text(
+            '$saludo 👋',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white, fontSize: compacto ? 26 : 36, fontWeight: FontWeight.w800, letterSpacing: -0.5),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '¿Qué hacemos hoy?',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.white.withOpacity(0.92), fontSize: compacto ? 24 : 34, fontWeight: FontWeight.w800, letterSpacing: -0.5),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'Soy Equilibra, tu asistente virtual. Pedime lo que necesités y lo resolvemos acá mismo. Escribime o mandame una nota de voz.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: compacto ? 14 : 15.5, height: 1.45),
+        ),
+        SizedBox(height: compacto ? 22 : 30),
+        _buildEntradaPantalla(),
+        if (widget.sugerencias.isNotEmpty) ...[
+          const SizedBox(height: 18),
+          if (compacto)
+            for (final (icono, texto) in widget.sugerencias)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _SugerenciaIA(icono: icono, texto: texto, anchoCompleto: true, onTap: () => _usarSugerencia(texto)),
+              )
+          else
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final (icono, texto) in widget.sugerencias)
+                  _SugerenciaIA(icono: icono, texto: texto, onTap: () => _usarSugerencia(texto)),
+              ],
+            ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildPantalla(BuildContext context) {
+    final compacto = MediaQuery.of(context).size.width < 600;
+    return Scaffold(
+      backgroundColor: const Color(0xFF0B1120),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF0B1120), Color(0xFF141838), Color(0xFF0B2230)],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // --- barra superior
+              Padding(
+                padding: EdgeInsets.fromLTRB(compacto ? 14 : 24, 12, compacto ? 8 : 18, 6),
+                child: Row(
+                  children: [
+                    const _AvatarIA(tamano: 34),
+                    const SizedBox(width: 10),
+                    const Text('Equilibra', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.2)),
+                    const SizedBox(width: 8),
+                    if (!compacto)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: _cian.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: _cian.withOpacity(0.35)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFF4ADE80), shape: BoxShape.circle)),
+                            const SizedBox(width: 5),
+                            const Text('TU ASISTENTE VIRTUAL', style: TextStyle(color: _cianSuave, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.8)),
+                          ],
+                        ),
+                      ),
+                    const Spacer(),
+                    if (!_sinConversacion)
+                      IconButton(
+                        onPressed: _enviando ? null : _nuevaConversacion,
+                        icon: Icon(Icons.edit_square, color: Colors.white.withOpacity(0.75), size: 21),
+                        tooltip: 'Nueva conversación',
+                      ),
+                    const SizedBox(width: 4),
+                    TextButton.icon(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.space_dashboard_outlined, size: 18),
+                      label: Text(compacto ? 'Panel' : 'Ir al panel'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: _cianSuave,
+                        backgroundColor: Colors.white.withOpacity(0.06),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.white.withOpacity(0.14))),
+                        textStyle: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  child: _sinConversacion
+                      ? Center(
+                          key: const ValueKey('bienvenida'),
+                          child: SingleChildScrollView(
+                            padding: EdgeInsets.fromLTRB(compacto ? 16 : 24, 12, compacto ? 16 : 24, 24),
+                            child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 720), child: _buildBienvenida(compacto)),
+                          ),
+                        )
+                      : Center(
+                          key: const ValueKey('conversacion'),
+                          child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 800), child: _buildListaMensajes(estiloPantalla: true)),
+                        ),
+                ),
+              ),
+              if (!_sinConversacion)
+                Padding(
+                  padding: EdgeInsets.fromLTRB(compacto ? 12 : 24, 0, compacto ? 12 : 24, 6),
+                  child: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 800), child: _buildEntradaPantalla())),
+                ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8, top: 2),
+                child: Text(
+                  'Equilibra puede equivocarse. Revisá los datos importantes antes de confirmar.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white.withOpacity(0.35), fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _nuevaConversacion() {
+    if (_hablando) _tts.stop();
+    setState(() {
+      _mensajes.removeRange(1, _mensajes.length);
+      _pendientes.clear();
+      _inputCtrl.clear();
+    });
+  }
+
+  Widget _buildHoja(BuildContext context) {
     final alto = MediaQuery.of(context).size.height * 0.82;
     return Padding(
       padding: MediaQuery.of(context).viewInsets,
@@ -770,49 +1247,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
               ),
             ),
             const Divider(height: 1),
-            Expanded(
-              child: ListView.builder(
-                controller: _scrollCtrl,
-                padding: const EdgeInsets.all(16),
-                itemCount: _mensajes.length,
-                itemBuilder: (context, index) {
-                  final m = _mensajes[index];
-                  final esUsuario = m.role == 'user';
-                  return Column(
-                    crossAxisAlignment: esUsuario ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                    children: [
-                      Align(
-                        alignment: esUsuario ? Alignment.centerRight : Alignment.centerLeft,
-                        child: Container(
-                          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: esUsuario ? AppColors.primary : AppColors.surfaceSubtle,
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              ..._buildAdjuntosMensaje(m),
-                              if (m.content.isNotEmpty)
-                                Text(
-                                  m.content,
-                                  style: TextStyle(color: esUsuario ? Colors.black : AppColors.textStrong, fontSize: 14, height: 1.35),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      if (m.propuesta != null) _buildTarjetaPropuesta(m),
-                      if (m.propuestaProducto != null) _buildTarjetaPropuestaProducto(m),
-                      if (m.navegar != null) _buildTarjetaNavegar(m),
-                    ],
-                  );
-                },
-              ),
-            ),
+            Expanded(child: _buildListaMensajes(estiloPantalla: false)),
             if (_enviando)
               const Padding(
                 padding: EdgeInsets.only(bottom: 8),
@@ -829,21 +1264,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
                 ),
               ),
             ),
-            if (_pendientes.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final a in List.of(_pendientes))
-                        ChipAdjunto(adjunto: a, onQuitar: () => setState(() => _pendientes.remove(a))),
-                    ],
-                  ),
-                ),
-              ),
+            _buildPendientes(const EdgeInsets.fromLTRB(16, 0, 16, 8)),
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 16, 16),
               child: _grabando
@@ -881,7 +1302,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
                         const SizedBox(width: 8),
                         // Como en WhatsApp: con algo escrito o adjunto se
                         // envía; si no, el micrófono.
-                        if (_inputCtrl.text.trim().isNotEmpty || _pendientes.isNotEmpty)
+                        if (_hayAlgoParaMandar)
                           IconButton.filled(
                             onPressed: _enviando ? null : () => _enviarMensaje(),
                             icon: const Icon(Icons.send),
@@ -893,6 +1314,149 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
                     ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Logo del asistente: destellos sobre un círculo con degradado de marca.
+class _AvatarIA extends StatelessWidget {
+  final double tamano;
+  const _AvatarIA({this.tamano = 32});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: tamano,
+      height: tamano,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF22D3EE), Color(0xFF6366F1), Color(0xFFA855F7)],
+        ),
+        boxShadow: [BoxShadow(color: const Color(0xFF22D3EE).withOpacity(0.35), blurRadius: tamano * 0.45)],
+      ),
+      child: Icon(Icons.auto_awesome, color: Colors.white, size: tamano * 0.52),
+    );
+  }
+}
+
+/// "Pensando..." mientras la IA responde (pantalla completa).
+class _Pensando extends StatefulWidget {
+  const _Pensando();
+
+  @override
+  State<_Pensando> createState() => _PensandoState();
+}
+
+class _PensandoState extends State<_Pensando> with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))..repeat();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Row(
+        children: [
+          RotationTransition(turns: _ctrl, child: const _AvatarIA(tamano: 30)),
+          const SizedBox(width: 12),
+          Text('Pensando...', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 14.5, fontStyle: FontStyle.italic)),
+        ],
+      ),
+    );
+  }
+}
+
+class _BotonRedondoIA extends StatelessWidget {
+  final IconData icono;
+  final String tooltip;
+  final bool pulso;
+  final VoidCallback? onTap;
+  const _BotonRedondoIA({required this.icono, required this.tooltip, required this.onTap, this.pulso = false});
+
+  @override
+  Widget build(BuildContext context) {
+    // La sombra va en un contenedor aparte: dentro del Material (Ink) se
+    // recortaba en cuadrado.
+    return Tooltip(
+      message: tooltip,
+      child: Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          boxShadow: pulso ? [BoxShadow(color: const Color(0xFF22D3EE).withOpacity(0.45), blurRadius: 16)] : null,
+        ),
+        child: Material(
+          color: Colors.transparent,
+          shape: const CircleBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Ink(
+              width: 44,
+              height: 44,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(colors: [Color(0xFF22D3EE), Color(0xFF6366F1)]),
+              ),
+              child: Icon(icono, color: Colors.white, size: 23),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SugerenciaIA extends StatefulWidget {
+  final IconData icono;
+  final String texto;
+  final VoidCallback onTap;
+  final bool anchoCompleto;
+  const _SugerenciaIA({required this.icono, required this.texto, required this.onTap, this.anchoCompleto = false});
+
+  @override
+  State<_SugerenciaIA> createState() => _SugerenciaIAState();
+}
+
+class _SugerenciaIAState extends State<_SugerenciaIA> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: EdgeInsets.symmetric(horizontal: 14, vertical: widget.anchoCompleto ? 12 : 9),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(_hover ? 0.13 : 0.06),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _hover ? const Color(0xFF22D3EE) : Colors.white.withOpacity(0.14)),
+          ),
+          child: Row(
+            mainAxisSize: widget.anchoCompleto ? MainAxisSize.max : MainAxisSize.min,
+            children: [
+              Icon(widget.icono, size: 17, color: const Color(0xFF67E8F9)),
+              const SizedBox(width: 8),
+              if (widget.anchoCompleto)
+                Expanded(child: Text(widget.texto, style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 14, fontWeight: FontWeight.w600)))
+              else
+                Text(widget.texto, style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 13.5, fontWeight: FontWeight.w600)),
+            ],
+          ),
         ),
       ),
     );

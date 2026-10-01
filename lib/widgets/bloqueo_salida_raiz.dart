@@ -13,15 +13,18 @@ import 'package:flutter/material.dart';
 /// sentía como "se sale del sistema" con uno o dos toques de la flecha de
 /// volver desde cualquier pantalla interna (ej. Inventario), sin haber
 /// cerrado sesión realmente. Cuando esta MISMA pantalla se abre empujada
-/// sobre otra (ej. DetalleNegocio desde Resumen Fiscal), `Navigator.canPop`
-/// es true y este widget no interviene: el volver normal sigue funcionando.
+/// sobre otra (ej. DetalleNegocio desde Resumen Fiscal), su ruta puede volver
+/// (canPop) y este widget no interviene: el volver normal sigue funcionando.
 class BloqueoSalidaRaiz extends StatelessWidget {
   final Widget child;
   const BloqueoSalidaRaiz({super.key, required this.child});
 
   @override
   Widget build(BuildContext context) {
-    final bool esRaiz = !Navigator.canPop(context);
+    // La ruta de ESTA pantalla, no el Navigator entero: con el asistente
+    // abierto encima (ver abrirAsistentePantalla) el Navigator sí puede
+    // volver, pero el panel sigue siendo la raíz.
+    final bool esRaiz = !(ModalRoute.of(context)?.canPop ?? false);
     return PopScope(
       canPop: !esRaiz,
       child: child,
