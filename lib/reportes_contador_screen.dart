@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
@@ -40,6 +41,11 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
   Color get _colorAcento => widget.esContador ? TemaContador.acento : const Color(0xFF4338CA);
 
   bool _generando = false;
+  // Progreso visible mientras se piden los reportes cliente por cliente
+  // (con "Todos" puede tardar) -- ver _tarjetaGenerando.
+  int _progresoHecho = 0;
+  int _progresoTotal = 0;
+  String _clienteEnCurso = '';
   // Un solo cliente seleccionado -> _reporte (vista detallada de siempre).
   // Dos o más -> _reportes (resumen por cliente + exportación combinada).
   Map<String, dynamic>? _reporte;
@@ -80,7 +86,18 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
   /// excepción quedaba en un Future sin capturar y no pasaba nada visible:
   /// "toco el ícono de Excel y no hace nada". Con esto al menos se ve el
   /// error real en pantalla en vez de fallar en silencio.
-  Future<void> _exportar(Future<void> Function() accion) async {
+  ///
+  /// Mientras se arma el archivo (con muchos clientes tarda unos segundos)
+  /// se muestra una ventana con animación -- antes la pantalla quedaba
+  /// quieta y parecía trabada.
+  Future<void> _exportar(Future<void> Function() accion, {required String formato}) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _DialogoExportando(formato: formato, acento: _colorAcento, fondo: _colorSuperficie, texto: _colorFuerte, tenue: _colorTenue),
+    );
+    // Un par de frames para que la ventana se dibuje antes del trabajo pesado.
+    await Future.delayed(const Duration(milliseconds: 150));
     try {
       await accion();
     } catch (e) {
@@ -89,6 +106,8 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
           SnackBar(content: Text("No se pudo exportar: $e"), backgroundColor: Colors.red),
         );
       }
+    } finally {
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
     }
   }
 
@@ -131,6 +150,9 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
       _error = null;
       _reporte = null;
       _reportes = null;
+      _progresoHecho = 0;
+      _progresoTotal = _negociosSeleccionados.length;
+      _clienteEnCurso = _negociosSeleccionados.first.nombreComercial;
     });
     final tipoStr = switch (_tipo) {
       _TipoReporteContador.ventas => 'ventas',
@@ -146,7 +168,9 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
         // contador elige "Todos" con una cartera grande de negocios.
         final reportes = <Map<String, dynamic>>[];
         for (final negocio in _negociosSeleccionados) {
+          if (mounted) setState(() => _clienteEnCurso = negocio.nombreComercial);
           reportes.add(await _pedirReporte(negocio.id, tipoStr));
+          if (mounted) setState(() => _progresoHecho++);
         }
         if (mounted) setState(() => _reportes = reportes);
       }
@@ -262,6 +286,10 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
                 decoration: BoxDecoration(color: Colors.red.withOpacity(0.08), borderRadius: BorderRadius.circular(10)),
                 child: Text(_error!, style: const TextStyle(color: Colors.red)),
               ),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              child: _generando ? _tarjetaGenerando() : const SizedBox.shrink(),
+            ),
             if (_reporte != null) _resultados(),
             if (_reportes != null) _resultadosMultiples(),
           ],
@@ -375,6 +403,70 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
     );
   }
 
+  /// Tarjeta animada mientras se genera: ícono que late, el cliente que se
+  /// está procesando, una barra que avanza cliente por cliente y mensajes
+  /// que van rotando, para que se note que está trabajando.
+  Widget _tarjetaGenerando() {
+    final varios = _progresoTotal > 1;
+    final valor = varios ? _progresoHecho / _progresoTotal : null;
+    return Container(
+      key: const ValueKey('generando'),
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _colorSuperficie,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _colorAcento.withOpacity(0.45)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _IconoPulsante(icono: Icons.insert_chart_outlined, color: _colorAcento),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("Generando reporte…", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: _colorFuerte)),
+                    const SizedBox(height: 2),
+                    Text(
+                      varios
+                          ? "Cliente ${(_progresoHecho + 1).clamp(1, _progresoTotal)} de $_progresoTotal: $_clienteEnCurso"
+                          : _clienteEnCurso,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 13, color: _colorTenue),
+                    ),
+                  ],
+                ),
+              ),
+              if (varios)
+                Text("${(valor! * 100).round()}%", style: TextStyle(fontWeight: FontWeight.w800, color: _colorAcento)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: valor ?? 0),
+              duration: const Duration(milliseconds: 400),
+              builder: (_, v, __) => LinearProgressIndicator(
+                value: varios ? v : null,
+                minHeight: 6,
+                backgroundColor: _colorBorde,
+                valueColor: AlwaysStoppedAnimation(_colorAcento),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          _MensajesRotativos(color: _colorTenue),
+        ],
+      ),
+    );
+  }
+
   Widget _resultadosMultiples() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -388,12 +480,12 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
               ),
             ),
             TextButton.icon(
-              onPressed: () => _exportar(() => ExportService.exportReportesConsolidadosToPdf(_reportes!, _periodoTexto)),
+              onPressed: () => _exportar(() => ExportService.exportReportesConsolidadosToPdf(_reportes!, _periodoTexto), formato: 'PDF'),
               icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent, size: 18),
               label: const Text("PDF"),
             ),
             TextButton.icon(
-              onPressed: () => _exportar(() => ExportService.exportReportesConsolidadosToExcel(_reportes!)),
+              onPressed: () => _exportar(() => ExportService.exportReportesConsolidadosToExcel(_reportes!), formato: 'Excel'),
               icon: const Icon(Icons.table_chart, color: Colors.green, size: 18),
               label: const Text("Excel"),
             ),
@@ -452,12 +544,12 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
               child: Text("Resultado", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _colorFuerte)),
             ),
             TextButton.icon(
-              onPressed: () => _exportar(() => ExportService.exportReporteConsolidadoToPdf(_reporte!, _periodoTexto)),
+              onPressed: () => _exportar(() => ExportService.exportReporteConsolidadoToPdf(_reporte!, _periodoTexto), formato: 'PDF'),
               icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent, size: 18),
               label: const Text("PDF"),
             ),
             TextButton.icon(
-              onPressed: () => _exportar(() => ExportService.exportReporteConsolidadoToExcel(_reporte!)),
+              onPressed: () => _exportar(() => ExportService.exportReporteConsolidadoToExcel(_reporte!), formato: 'Excel'),
               icon: const Icon(Icons.table_chart, color: Colors.green, size: 18),
               label: const Text("Excel"),
             ),
@@ -712,6 +804,137 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+
+/// Ícono que "late" (escala y opacidad) mientras se trabaja.
+class _IconoPulsante extends StatefulWidget {
+  final IconData icono;
+  final Color color;
+  const _IconoPulsante({required this.icono, required this.color});
+
+  @override
+  State<_IconoPulsante> createState() => _IconoPulsanteState();
+}
+
+class _IconoPulsanteState extends State<_IconoPulsante> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, __) {
+        final t = Curves.easeInOut.transform(_c.value);
+        return Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: widget.color.withOpacity(0.10 + 0.12 * t),
+          ),
+          child: Transform.scale(
+            scale: 0.9 + 0.15 * t,
+            child: Icon(widget.icono, color: widget.color, size: 24),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Mensajes cortos que van rotando mientras se genera.
+class _MensajesRotativos extends StatefulWidget {
+  final Color color;
+  const _MensajesRotativos({required this.color});
+
+  @override
+  State<_MensajesRotativos> createState() => _MensajesRotativosState();
+}
+
+class _MensajesRotativosState extends State<_MensajesRotativos> {
+  static const _mensajes = [
+    "Sumando ventas y notas de crédito…",
+    "Revisando las compras del período…",
+    "Calculando el IVA por tarifa…",
+    "Armando el resumen para la declaración…",
+  ];
+  int _i = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(milliseconds: 2200), (_) {
+      if (mounted) setState(() => _i = (_i + 1) % _mensajes.length);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 350),
+      transitionBuilder: (child, anim) => FadeTransition(
+        opacity: anim,
+        child: SlideTransition(position: Tween(begin: const Offset(0, 0.3), end: Offset.zero).animate(anim), child: child),
+      ),
+      child: Text(_mensajes[_i], key: ValueKey(_i), style: TextStyle(fontSize: 12.5, color: widget.color)),
+    );
+  }
+}
+
+/// Ventana mientras se arma el PDF/Excel exportado.
+class _DialogoExportando extends StatelessWidget {
+  final String formato;
+  final Color acento;
+  final Color fondo;
+  final Color texto;
+  final Color tenue;
+  const _DialogoExportando({required this.formato, required this.acento, required this.fondo, required this.texto, required this.tenue});
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: Dialog(
+        backgroundColor: fondo,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(28, 28, 28, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _IconoPulsante(icono: formato == 'Excel' ? Icons.table_chart_outlined : Icons.picture_as_pdf_outlined, color: acento),
+              const SizedBox(height: 16),
+              Text("Preparando tu $formato…", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: texto)),
+              const SizedBox(height: 6),
+              Text("Con muchos clientes puede tardar unos segundos.", textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: tenue)),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: 220,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(minHeight: 5, valueColor: AlwaysStoppedAnimation(acento), backgroundColor: acento.withOpacity(0.15)),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
