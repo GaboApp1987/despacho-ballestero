@@ -59,6 +59,7 @@ flutter_launcher_icons:
 flutter:
   uses-material-design: true
   assets:
+    - assets/branding/logo_equilibra_pdf.png
     - assets/fonts/arial.ttf
     - assets/fonts/arialbd.ttf
     - assets/data/ubicaciones_cr.json

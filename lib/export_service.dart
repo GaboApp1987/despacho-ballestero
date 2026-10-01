@@ -405,6 +405,12 @@ class ExportService {
   /// por defecto del paquete pdf (Helvetica) no lo tienen y lo dejan en blanco.
   static Future<pw.ThemeData> _cargarTema() async {
     if (_temaCache != null) return _temaCache!;
+    try {
+      final logo = await rootBundle.load('assets/branding/logo_equilibra_pdf.png');
+      _logoEquilibra = pw.MemoryImage(logo.buffer.asUint8List());
+    } catch (_) {
+      // Sin el logo el pie sale solo con el texto.
+    }
     final regular = await rootBundle.load('assets/fonts/arial.ttf');
     final bold = await rootBundle.load('assets/fonts/arialbd.ttf');
     _temaCache = pw.ThemeData.withFont(
@@ -413,6 +419,38 @@ class ExportService {
     );
     return _temaCache!;
   }
+
+  static pw.MemoryImage? _logoEquilibra;
+
+  /// Formato de página de todos los PDF: A4 con el pie "Generado con
+  /// Equilibra" y el logo en el margen de abajo de cada hoja (por fuera del
+  /// contenido, así no choca con los pies propios de cada documento).
+  static pw.PageTheme _temaPagina({pw.EdgeInsets? margin}) => pw.PageTheme(
+        pageFormat: PdfPageFormat.a4,
+        margin: margin,
+        buildForeground: (context) => pw.Align(
+          alignment: pw.Alignment.bottomCenter,
+          child: pw.Padding(
+            padding: const pw.EdgeInsets.only(bottom: 14),
+            child: _marcaEquilibra(),
+          ),
+        ),
+      );
+
+  static pw.Widget _marcaEquilibra() => pw.Row(
+        mainAxisSize: pw.MainAxisSize.min,
+        crossAxisAlignment: pw.CrossAxisAlignment.center,
+        children: [
+          if (_logoEquilibra != null) ...[
+            pw.Image(_logoEquilibra!, width: 12, height: 12),
+            pw.SizedBox(width: 5),
+          ],
+          pw.Text(
+            'Generado con Equilibra  ·  Facturación electrónica y contabilidad  ·  equilibracr.com',
+            style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+          ),
+        ],
+      );
 
   /// Descarga el logo (si hay URL) para insertarlo en un PDF. Si falla o no
   /// hay logo, devuelve null y el PDF simplemente no lo muestra.
@@ -465,7 +503,7 @@ class ExportService {
   static Future<void> exportFacturasToPdf(List<Factura> facturas, String negocioNombre, String periodo) async {
     final pdf = pw.Document(theme: await _cargarTema());
     pdf.addPage(pw.MultiPage(
-      pageFormat: PdfPageFormat.a4,
+      pageTheme: _temaPagina(),
       build: (pw.Context context) => [
         pw.Header(
           level: 0,
@@ -729,7 +767,7 @@ class ExportService {
   static Future<void> exportReporteConsolidadoToPdf(Map<String, dynamic> reporte, String periodo) async {
     final negocioNombre = reporte['negocio_nombre']?.toString() ?? '';
     final pdf = pw.Document(theme: await _cargarTema());
-    pdf.addPage(pw.MultiPage(pageFormat: PdfPageFormat.a4, build: (context) => _widgetsReporteConsolidado(reporte, periodo)));
+    pdf.addPage(pw.MultiPage(pageTheme: _temaPagina(), build: (context) => _widgetsReporteConsolidado(reporte, periodo)));
     await Printing.layoutPdf(onLayout: (format) async => pdf.save(), name: 'Reporte_$negocioNombre.pdf');
   }
 
@@ -767,7 +805,7 @@ class ExportService {
       widgets.addAll(_widgetsReporteConsolidado(reporte, periodo));
     }
     final pdf = pw.Document(theme: await _cargarTema());
-    pdf.addPage(pw.MultiPage(pageFormat: PdfPageFormat.a4, build: (context) => widgets));
+    pdf.addPage(pw.MultiPage(pageTheme: _temaPagina(), build: (context) => widgets));
     await Printing.layoutPdf(onLayout: (format) async => pdf.save(), name: 'Reportes_Clientes.pdf');
   }
 
@@ -1456,7 +1494,7 @@ class ExportService {
   static Future<void> exportSaldosToPdf(List<Map<String, dynamic>> saldos, String negocioNombre) async {
     final pdf = pw.Document(theme: await _cargarTema());
     pdf.addPage(pw.MultiPage(
-      pageFormat: PdfPageFormat.a4,
+      pageTheme: _temaPagina(),
       build: (pw.Context context) => [
         pw.Header(
           level: 0,
@@ -1547,7 +1585,7 @@ class ExportService {
     }
 
     pdf.addPage(pw.MultiPage(
-      pageFormat: PdfPageFormat.a4,
+      pageTheme: _temaPagina(),
       build: (pw.Context context) => [
         pw.Text('Estado de Cuenta: $clienteNombre', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
         pw.Text('Negocio: $negocioNombre'),
@@ -1657,7 +1695,7 @@ class ExportService {
     String fmt(num v) => esUsd ? formatearDolares(v * factorMoneda) : formatearColones(v * factorMoneda);
 
     pdf.addPage(pw.MultiPage(
-      pageFormat: PdfPageFormat.a4,
+      pageTheme: _temaPagina(),
       build: (pw.Context context) => [
         pw.Header(
           level: 0,
@@ -1871,7 +1909,7 @@ class ExportService {
   static Future<void> exportCotizacionToPdf(Map<String, dynamic> cotizacion, String negocioNombre, {bool share = false}) async {
     final pdf = pw.Document(theme: await _cargarTema());
     pdf.addPage(pw.MultiPage(
-      pageFormat: PdfPageFormat.a4,
+      pageTheme: _temaPagina(),
       build: (pw.Context context) => [
         pw.Header(
           level: 0,
@@ -1954,7 +1992,7 @@ class ExportService {
 
     pdf.addPage(
       pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
+        pageTheme: _temaPagina(),
         build: (pw.Context context) => [
           pw.Header(
             level: 0,
@@ -1993,7 +2031,7 @@ class ExportService {
 
     pdf.addPage(
       pw.Page(
-        pageFormat: PdfPageFormat.a4,
+        pageTheme: _temaPagina(),
         build: (pw.Context context) {
           final top5 = topProductos.take(5).toList();
           final menosVendidos = topProductos.reversed.take(5).toList();
@@ -2107,7 +2145,7 @@ class ExportService {
 
     pdf.addPage(
       pw.Page(
-        pageFormat: PdfPageFormat.a4,
+        pageTheme: _temaPagina(),
         build: (pw.Context context) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
@@ -2223,7 +2261,7 @@ class ExportService {
 
     pdf.addPage(
       pw.Page(
-        pageFormat: PdfPageFormat.a4,
+        pageTheme: _temaPagina(),
         build: (pw.Context context) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
@@ -2363,7 +2401,7 @@ class ExportService {
 
     pdf.addPage(
       pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
+        pageTheme: _temaPagina(),
         header: (context) => context.pageNumber == 1
             ? pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -2699,7 +2737,7 @@ class ExportService {
 
     pdf.addPage(
       pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
+        pageTheme: _temaPagina(),
         header: (context) => context.pageNumber == 1
             ? pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -3234,8 +3272,7 @@ class ExportService {
     }
 
     pdf.addPage(pw.MultiPage(
-      pageFormat: PdfPageFormat.a4,
-      margin: const pw.EdgeInsets.all(32),
+      pageTheme: _temaPagina(margin: const pw.EdgeInsets.all(32)),
       footer: (context) => pw.Align(
         alignment: pw.Alignment.centerRight,
         child: pw.Text('Página ${context.pageNumber} de ${context.pagesCount}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey500)),
@@ -3516,7 +3553,7 @@ class ExportService {
     String fmt(num v) => esUsd ? formatearDolares(v * factorMoneda) : formatearColones(v * factorMoneda);
 
     pdf.addPage(pw.MultiPage(
-      pageFormat: PdfPageFormat.a4,
+      pageTheme: _temaPagina(),
       build: (pw.Context context) => [
         pw.Header(
           level: 0,
@@ -3685,7 +3722,7 @@ class ExportService {
 
     final pdf = pw.Document(theme: await _cargarTema());
     pdf.addPage(pw.MultiPage(
-      pageFormat: PdfPageFormat.a4,
+      pageTheme: _temaPagina(),
       build: (pw.Context context) => [
         pw.Header(
           level: 0,
@@ -3945,7 +3982,7 @@ class ExportService {
 
     final pdf = pw.Document(theme: await _cargarTema());
     pdf.addPage(pw.MultiPage(
-      pageFormat: PdfPageFormat.a4,
+      pageTheme: _temaPagina(),
       build: (pw.Context context) => [
         pw.Header(
           level: 0,
@@ -4143,7 +4180,7 @@ class ExportService {
   static Future<void> exportGastosToPdf(List<GastoOperativo> gastos, String negocioNombre, String periodo) async {
     final pdf = pw.Document(theme: await _cargarTema());
     pdf.addPage(pw.MultiPage(
-      pageFormat: PdfPageFormat.a4,
+      pageTheme: _temaPagina(),
       build: (pw.Context context) => [
         pw.Header(
           level: 0,
@@ -4248,7 +4285,7 @@ class ExportService {
   static Future<void> exportNotasCreditoToPdf(List<NotaCredito> notas, String negocioNombre, String periodo) async {
     final pdf = pw.Document(theme: await _cargarTema());
     pdf.addPage(pw.MultiPage(
-      pageFormat: PdfPageFormat.a4,
+      pageTheme: _temaPagina(),
       build: (pw.Context context) => [
         pw.Header(
           level: 0,

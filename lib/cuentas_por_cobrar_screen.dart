@@ -373,7 +373,7 @@ class _DetalleCuentaClienteScreenState extends State<DetalleCuentaClienteScreen>
                     const DropdownMenuItem<Factura?>(value: null, child: Text("Abono general (sin REP)")),
                     ...facturasPendientes.map((f) => DropdownMenuItem<Factura?>(
                           value: f,
-                          child: Text("F-${f.consecutivo} · ${formatearColones(f.totalFactura)}", overflow: TextOverflow.ellipsis),
+                          child: Text("F-${f.consecutivo} · ${f.enSuMoneda(f.totalFactura)}", overflow: TextOverflow.ellipsis),
                         )),
                   ],
                   onChanged: (v) => setStateDialog(() => facturaSeleccionada = v),

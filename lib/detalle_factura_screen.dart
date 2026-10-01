@@ -21,6 +21,12 @@ class DetalleFacturaScreen extends StatefulWidget {
 }
 
 class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
+  // Los montos del detalle/totales vienen siempre en colones (ver
+  // Factura.moneda); una factura en dólares se muestra en dólares, igual
+  // que el PDF (exportFacturaDetalleToPdf), con el equivalente en colones
+  // solo como referencia.
+  bool get _esUsd => widget.factura.moneda == 'USD' && widget.factura.tipoCambio > 0;
+  String _fmt(num colones) => _esUsd ? formatearDolares(colones / widget.factura.tipoCambio) : formatearColones(colones);
   bool _isProcesando = false;
   bool _facturaAnulada = false;
   // Se emitió una factura nueva repitiendo esta: la lista tiene que recargar.
@@ -218,12 +224,12 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
                         contentPadding: EdgeInsets.zero,
                         value: seleccionados[d.id] ?? false,
                         title: Text(d.nombreProducto, style: const TextStyle(fontSize: 14)),
-                        subtitle: Text("${d.cantidad} x ${formatearColones(d.precioUnitario)} = ${formatearColones(d.total)}"),
+                        subtitle: Text("${d.cantidad} x ${_fmt(d.precioUnitario)} = ${_fmt(d.total)}"),
                         onChanged: (v) => setDialogState(() => seleccionados[d.id!] = v ?? false),
                       )),
                   const SizedBox(height: 8),
                   Text(
-                    "Subtotal ${formatearColones(subtotal)}  ·  IVA ${formatearColones(iva)}  ·  Total ${formatearColones(total)}",
+                    "Subtotal ${_fmt(subtotal)}  ·  IVA ${_fmt(iva)}  ·  Total ${_fmt(total)}",
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                   const SizedBox(height: 16),
@@ -479,19 +485,19 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
                                               style: TextStyle(fontSize: 11, color: Colors.grey[500]),
                                             ),
                                           Text(
-                                            "${linea.cantidad} x ${formatearColones(linea.precioUnitario)} = ${formatearColones(linea.montoBruto)}"
-                                            "${linea.montoIva > 0 ? '  ·  IVA ${formatearColones(linea.montoIva)}' : ''}",
+                                            "${linea.cantidad} x ${_fmt(linea.precioUnitario)} = ${_fmt(linea.montoBruto)}"
+                                            "${linea.montoIva > 0 ? '  ·  IVA ${_fmt(linea.montoIva)}' : ''}",
                                             style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                                           ),
                                           if (linea.montoDescuento > 0)
                                             Text(
-                                              "Descuento: -${formatearColones(linea.montoDescuento)}"
+                                              "Descuento: -${_fmt(linea.montoDescuento)}"
                                               "${linea.naturalezaDescuento.isNotEmpty ? ' (${linea.naturalezaDescuento})' : ''}",
                                               style: const TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.w600),
                                             ),
                                           if (linea.porcentajeExoneracion > 0)
                                             Text(
-                                              "Exonerado ${linea.porcentajeExoneracion.toStringAsFixed(0)}% del IVA: -${formatearColones(linea.montoExoneracion)}"
+                                              "Exonerado ${linea.porcentajeExoneracion.toStringAsFixed(0)}% del IVA: -${_fmt(linea.montoExoneracion)}"
                                               "${linea.nombreInstitucionExoneracion.isNotEmpty ? ' (${linea.nombreInstitucionExoneracion})' : ''}",
                                               style: const TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.w600),
                                             ),
@@ -499,7 +505,7 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
                                       ),
                                     ),
                                     Text(
-                                      formatearColones(linea.total),
+                                      _fmt(linea.total),
                                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                                     ),
                                   ],
@@ -509,19 +515,19 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
                         const Divider(),
                         Text("RESUMEN DE CUENTA", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary)),
                         const SizedBox(height: 15),
-                        _filaFinanciera("Subtotal:", formatearColones(factura.totalFactura - factura.totalIva), false),
+                        _filaFinanciera("Subtotal:", _fmt(factura.totalFactura - factura.totalIva), false),
                         const SizedBox(height: 8),
-                        _filaFinanciera("Impuesto (IVA):", formatearColones(factura.totalIva), false),
+                        _filaFinanciera("Impuesto (IVA):", _fmt(factura.totalIva), false),
                         const SizedBox(height: 12),
                         const Divider(thickness: 1.5),
                         const SizedBox(height: 8),
-                        _filaFinanciera(_notasCredito.isEmpty ? "TOTAL NETO:" : "Total Factura Original:", formatearColones(factura.totalFactura), _notasCredito.isEmpty),
-                        if (factura.moneda == 'USD') ...[
+                        _filaFinanciera(_notasCredito.isEmpty ? "TOTAL NETO:" : "Total Factura Original:", _fmt(factura.totalFactura), _notasCredito.isEmpty),
+                        if (_esUsd) ...[
                           const SizedBox(height: 4),
                           Align(
                             alignment: Alignment.centerRight,
                             child: Text(
-                              "≈ US\$ ${(factura.totalFactura / factura.tipoCambio).toStringAsFixed(2)}",
+                              "≈ ${formatearColones(factura.totalFactura)} (tipo de cambio ${formatearNumero(factura.tipoCambio)})",
                               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                             ),
                           ),
@@ -537,19 +543,19 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
                           const SizedBox(height: 8),
                           Text("FACTURA NETA DESPUÉS DE NC", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary)),
                           const SizedBox(height: 12),
-                          _filaFinanciera("Subtotal neto:", formatearColones((factura.totalFactura - factura.totalIva) - _subtotalAcreditado), false),
+                          _filaFinanciera("Subtotal neto:", _fmt((factura.totalFactura - factura.totalIva) - _subtotalAcreditado), false),
                           const SizedBox(height: 8),
-                          _filaFinanciera("IVA neto:", formatearColones(factura.totalIva - _ivaAcreditado), false),
+                          _filaFinanciera("IVA neto:", _fmt(factura.totalIva - _ivaAcreditado), false),
                           const SizedBox(height: 12),
                           const Divider(thickness: 1.5),
                           const SizedBox(height: 8),
-                          _filaFinanciera("TOTAL NETO:", formatearColones(factura.totalFactura - _totalAcreditado), true),
-                          if (factura.moneda == 'USD') ...[
+                          _filaFinanciera("TOTAL NETO:", _fmt(factura.totalFactura - _totalAcreditado), true),
+                          if (_esUsd) ...[
                             const SizedBox(height: 4),
                             Align(
                               alignment: Alignment.centerRight,
                               child: Text(
-                                "≈ US\$ ${((factura.totalFactura - _totalAcreditado) / factura.tipoCambio).toStringAsFixed(2)}",
+                                "≈ ${formatearColones(factura.totalFactura - _totalAcreditado)}",
                                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                               ),
                             ),
@@ -781,14 +787,14 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
                               children: [
                                 Text(d.nombreProducto, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                                 Text(
-                                  "${d.cantidad} x ${formatearColones(d.precioUnitario)}"
-                                  "${d.montoIva > 0 ? '  ·  IVA ${formatearColones(d.montoIva)}' : ''}",
+                                  "${d.cantidad} x ${_fmt(d.precioUnitario)}"
+                                  "${d.montoIva > 0 ? '  ·  IVA ${_fmt(d.montoIva)}' : ''}",
                                   style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                                 ),
                               ],
                             ),
                           ),
-                          Text(formatearColones(d.total), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          Text(_fmt(d.total), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                         ],
                       ),
                     )),
@@ -800,7 +806,7 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text("Total NC:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.orange.shade900)),
-                    Text("-${formatearColones(n.total)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.red)),
+                    Text("-${_fmt(n.total)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.red)),
                   ],
                 ),
               ],
@@ -818,7 +824,7 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(titulo, style: const TextStyle(fontSize: 13, color: Colors.grey)),
-          Text("-${formatearColones(monto)}", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.red)),
+          Text("-${_fmt(monto)}", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.red)),
         ],
       ),
     );

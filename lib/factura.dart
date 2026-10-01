@@ -1,3 +1,4 @@
+import 'formato.dart';
 import 'negocio.dart';
 
 class DetalleFacturaItem {
@@ -115,6 +116,12 @@ class Factura {
   final bool correoEnviado;
 
   bool get esTiquete => tipoDocumento == '04';
+
+  bool get esEnDolares => moneda == 'USD' && tipoCambio > 0;
+
+  /// Un monto de esta factura (guardado en colones) en la moneda en que se
+  /// emitió: US\$ para las facturas en dólares, ₡ para el resto.
+  String enSuMoneda(num colones) => esEnDolares ? formatearDolares(colones / tipoCambio) : formatearColones(colones);
 
   Factura({
     required this.id,

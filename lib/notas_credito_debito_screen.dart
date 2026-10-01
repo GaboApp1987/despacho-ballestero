@@ -181,7 +181,7 @@ class _NotasCreditoDebitoScreenState extends State<NotasCreditoDebitoScreen> wit
         children: facturas
             .map((f) => SimpleDialogOption(
                   onPressed: () => Navigator.pop(ctx, f),
-                  child: Text("F-${f.consecutivo} · ${formatearColones(f.totalFactura)}"),
+                  child: Text("F-${f.consecutivo} · ${f.enSuMoneda(f.totalFactura)}"),
                 ))
             .toList(),
       ),

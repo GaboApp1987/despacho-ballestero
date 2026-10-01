@@ -1542,10 +1542,10 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              Text(formatearColones(f.totalFactura), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                              if (f.moneda == 'USD' && f.tipoCambio > 0)
+                              Text(f.enSuMoneda(f.totalFactura), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                              if (f.esEnDolares)
                                 Text(
-                                  "≈ ${formatearDolares(f.totalFactura / f.tipoCambio)}",
+                                  "≈ ${formatearColones(f.totalFactura)}",
                                   style: const TextStyle(fontSize: 11, color: Colors.grey),
                                 ),
                               Text(horaCostaRica(f.fechaEmision), style: const TextStyle(fontSize: 10, color: Colors.grey)),
@@ -1809,7 +1809,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
                       leading: const Icon(Icons.warning_amber_rounded, color: Colors.red),
                       title: Text(f.receptorNombre, style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textStrong)),
                       subtitle: Text(detalleVencimiento, style: TextStyle(color: AppColors.textMuted)),
-                      trailing: Text(formatearColones(f.totalFactura), style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                      trailing: Text(f.enSuMoneda(f.totalFactura), style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
                       onTap: () async {
                         final bool? cambio = await Navigator.push(
                           context,

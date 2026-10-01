@@ -181,7 +181,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
   Future<void> _aplicarPlantilla(Factura p) async {
     final esDolares = p.moneda == 'USD';
     if (esDolares) {
-      _tipoCambioController.text = (await _obtenerTipoCambioDelDia()).toStringAsFixed(2);
+      _tipoCambioController.text = _textoTipoCambio(await _obtenerTipoCambioDelDia());
     }
     if (!mounted) return;
     final tcOriginal = p.tipoCambio > 0 ? p.tipoCambio : 1.0;
@@ -237,6 +237,9 @@ class _FormularioFacturaState extends State<FormularioFactura> {
     ));
   }
 
+  /// Tipo de cambio de venta de hoy (Hacienda/BCCR, ver /tipo-cambio/).
+  /// Si no se pudo obtener devuelve 0 y avisa: nunca 1, que facturaba
+  /// "en dólares" el mismo número que en colones.
   Future<double> _obtenerTipoCambioDelDia() async {
     try {
       final r = await ApiService.get('/tipo-cambio/');
@@ -245,8 +248,16 @@ class _FormularioFacturaState extends State<FormularioFactura> {
         if (d['disponible'] == true) return (d['venta'] as num).toDouble();
       }
     } catch (_) {}
-    return 1.0;
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text("No se pudo obtener el tipo de cambio de hoy: escribilo a mano."),
+      ));
+    }
+    return 0.0;
   }
+
+  /// Texto para el campo de tipo de cambio: vacío si no se pudo obtener.
+  String _textoTipoCambio(double tc) => tc > 1 ? tc.toStringAsFixed(2) : '';
 
   final TextEditingController _busquedaCtrl = TextEditingController();
   String _busqueda = '';
@@ -361,7 +372,8 @@ class _FormularioFacturaState extends State<FormularioFactura> {
     // Producto con precio en dólares en una factura en colones: hace falta
     // el tipo de cambio del día para convertirlo.
     if (p.monedaPrecio == 'USD' && !_enDolares && _tipoCambioDia == null) {
-      _tipoCambioDia = await _obtenerTipoCambioDelDia();
+      final tc = await _obtenerTipoCambioDelDia();
+      _tipoCambioDia = tc > 1 ? tc : null;
       if (!mounted) return;
     }
     setState(() => _carrito.add(LineaFactura(producto: p, cantidad: 1, impuesto: p.impuesto, tipoCambio: _tipoCambioConversion)));
@@ -846,7 +858,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
     // silenciosamente en 1 (factura en dólares con el mismo valor numérico
     // que en colones) -- mejor avisar y no dejar seguir.
     final tipoCambio = double.tryParse(_tipoCambioController.text.trim().replaceAll(',', '.'));
-    if (_moneda == 'USD' && (tipoCambio == null || tipoCambio <= 0)) {
+    if (_moneda == 'USD' && (tipoCambio == null || tipoCambio <= 1)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Ingrese un tipo de cambio válido para facturar en dólares.")),
       );
@@ -1334,13 +1346,15 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                         DropdownMenuItem(value: "USD", child: Text("Dólares")),
                       ],
                       onChanged: (val) async {
-                        if (val == 'USD' && _tipoCambioController.text.trim() == '1.00') {
-                          _tipoCambioController.text = (await _obtenerTipoCambioDelDia()).toStringAsFixed(2);
+                        final tcActual = double.tryParse(_tipoCambioController.text.trim().replaceAll(',', '.')) ?? 0;
+                        if (val == 'USD' && tcActual <= 1) {
+                          _tipoCambioController.text = _textoTipoCambio(await _obtenerTipoCambioDelDia());
                         }
                         // Si ya hay productos en dólares en el carrito, la factura en
                         // colones los convierte con el tipo de cambio del día.
                         if (val == 'CRC' && _tipoCambioDia == null && _carrito.any((l) => l.monedaPrecio == 'USD')) {
-                          _tipoCambioDia = await _obtenerTipoCambioDelDia();
+                          final tc = await _obtenerTipoCambioDelDia();
+                          _tipoCambioDia = tc > 1 ? tc : null;
                         }
                         setState(() => _moneda = val!);
                       },
