@@ -674,12 +674,19 @@ class DashboardDrawer extends StatelessWidget {
   final Future<void> Function(int negocioId) onAbrirNegocio;
   final bool mostrarContadores;
   final bool esContador;
+  /// Entradas de navegación del panel (Inicio, Clientes, Reportes...) que
+  /// van arriba de las alertas -- en celular el contador no tiene la barra
+  /// lateral de escritorio, así que el menú tiene que traer lo mismo.
+  final List<Widget> navegacion;
+  final Widget? encabezado;
   const DashboardDrawer({
     super.key,
     required this.dashboardFuture,
     required this.onAbrirNegocio,
     this.mostrarContadores = true,
     this.esContador = false,
+    this.navegacion = const [],
+    this.encabezado,
   });
 
   Widget _item(
@@ -718,24 +725,12 @@ class DashboardDrawer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Drawer(
       child: SafeArea(
-        child: FutureBuilder<Map<String, dynamic>>(
-          future: dashboardFuture,
-          builder: (context, snapshot) {
-            final d = snapshot.data ?? {};
-            if (snapshot.connectionState == ConnectionState.waiting || d.isEmpty) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            final alertasSuscripcion = (d['alertas_suscripcion'] as List?) ?? [];
-            final alertasHacienda = (d['alertas_hacienda'] as List?) ?? [];
-            final cuentasVencidas = (d['cuentas_por_cobrar_vencidas'] as List?) ?? [];
-            final certificados = (d['certificados_por_vencer'] as List?) ?? [];
-            final clientesInactivos = (d['clientes_inactivos'] as List?) ?? [];
-            final cargaContador = (d['carga_por_contador'] as List?) ?? [];
-            return ListView(
-              padding: EdgeInsets.zero,
-              children: [
-                DrawerHeader(
-                  decoration: const BoxDecoration(color: Color(0xFF4F46E5)),
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            encabezado ??
+                const DrawerHeader(
+                  decoration: BoxDecoration(color: Color(0xFF4F46E5)),
                   child: Align(
                     alignment: Alignment.bottomLeft,
                     child: Text(
@@ -744,54 +739,54 @@ class DashboardDrawer extends StatelessWidget {
                     ),
                   ),
                 ),
-                _item(
-                  context,
-                  icono: Icons.error_outline,
-                  titulo: "Alertas de Suscripción",
-                  items: alertasSuscripcion,
-                  constructor: (lista) => _buildSeccionAlertas(lista, onAbrirNegocio),
-                ),
-                _item(
-                  context,
-                  icono: Icons.receipt_long_outlined,
-                  titulo: "Pendientes en Hacienda",
-                  items: alertasHacienda,
-                  constructor: (lista) => _buildSeccionAlertasHacienda(lista, onAbrirNegocio),
-                ),
-                _item(
-                  context,
-                  icono: Icons.money_off_outlined,
-                  titulo: "Cuentas por Cobrar Vencidas",
-                  items: cuentasVencidas,
-                  constructor: (lista) => _buildSeccionCuentasVencidas(
-                    lista, (d['total_cuentas_por_cobrar_vencidas'] as num?) ?? 0, onAbrirNegocio,
-                  ),
-                ),
-                _item(
-                  context,
-                  icono: Icons.badge_outlined,
-                  titulo: "Certificados por Vencer",
-                  items: certificados,
-                  constructor: (lista) => _buildSeccionCertificados(lista, onAbrirNegocio),
-                ),
-                _item(
-                  context,
-                  icono: Icons.pause_circle_outline,
-                  titulo: "Clientes sin Actividad",
-                  items: clientesInactivos,
-                  constructor: (lista) => _buildSeccionClientesInactivos(lista, onAbrirNegocio),
-                ),
-                if (mostrarContadores)
-                  _item(
-                    context,
-                    icono: Icons.bar_chart_outlined,
-                    titulo: "Carga por Contador",
-                    items: cargaContador,
-                    constructor: (lista) => _buildSeccionCarga(lista),
-                  ),
-              ],
-            );
-          },
+            ...navegacion,
+            if (navegacion.isNotEmpty) ...[
+              const Divider(height: 24),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                child: Text("ALERTAS", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1, color: AppColors.textMuted)),
+              ),
+            ],
+            // Solo las alertas que tienen algo pendiente -- antes se listaban
+            // todas, y las vacías quedaban grises sin hacer nada al tocarlas.
+            FutureBuilder<Map<String, dynamic>>(
+              future: dashboardFuture,
+              builder: (context, snapshot) {
+                final d = snapshot.data ?? {};
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))),
+                  );
+                }
+                final alertas = <Widget>[
+                  for (final (icono, titulo, items, constructor) in <(IconData, String, List, List<Widget> Function(List))>[
+                    (Icons.error_outline, "Alertas de Suscripción", (d['alertas_suscripcion'] as List?) ?? [],
+                        (lista) => _buildSeccionAlertas(lista, onAbrirNegocio)),
+                    (Icons.receipt_long_outlined, "Pendientes en Hacienda", (d['alertas_hacienda'] as List?) ?? [],
+                        (lista) => _buildSeccionAlertasHacienda(lista, onAbrirNegocio)),
+                    (Icons.money_off_outlined, "Cuentas por Cobrar Vencidas", (d['cuentas_por_cobrar_vencidas'] as List?) ?? [],
+                        (lista) => _buildSeccionCuentasVencidas(lista, (d['total_cuentas_por_cobrar_vencidas'] as num?) ?? 0, onAbrirNegocio)),
+                    (Icons.badge_outlined, "Certificados por Vencer", (d['certificados_por_vencer'] as List?) ?? [],
+                        (lista) => _buildSeccionCertificados(lista, onAbrirNegocio)),
+                    (Icons.pause_circle_outline, "Clientes sin Actividad", (d['clientes_inactivos'] as List?) ?? [],
+                        (lista) => _buildSeccionClientesInactivos(lista, onAbrirNegocio)),
+                    if (mostrarContadores)
+                      (Icons.bar_chart_outlined, "Carga por Contador", (d['carga_por_contador'] as List?) ?? [],
+                          (lista) => _buildSeccionCarga(lista)),
+                  ])
+                    if (items.isNotEmpty) _item(context, icono: icono, titulo: titulo, items: items, constructor: constructor),
+                ];
+                if (alertas.isEmpty) {
+                  return ListTile(
+                    leading: const Icon(Icons.check_circle_outline, color: Colors.green),
+                    title: Text("Sin alertas pendientes", style: TextStyle(fontSize: 14, color: AppColors.textMuted)),
+                  );
+                }
+                return Column(children: alertas);
+              },
+            ),
+          ],
         ),
       ),
     );

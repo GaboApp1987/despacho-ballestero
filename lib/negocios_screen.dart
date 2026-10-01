@@ -101,6 +101,132 @@ class _NegociosScreenState extends State<NegociosScreen> {
   // Solo aplica en pantallas anchas -- en móvil se sigue mostrando todo
   // junto en un solo scroll, como antes.
   int _pestanaContador = 0;
+  // Celular: "Inicio" y "Clientes" del menú lateral desplazan la misma
+  // pantalla (en escritorio son pestañas de la barra lateral).
+  final ScrollController _scrollContador = ScrollController();
+  final GlobalKey _claveClientes = GlobalKey();
+
+  static const List<String> _ejemplosAsistenteContador = [
+    "¿Cuánto IVA tiene que pagar Soda La Esquina este mes?",
+    "¿Qué clientes van a pagar más Renta este año?",
+    "Registrale a Soda La Esquina un gasto de luz de ₡18.500",
+    "¿Cómo está la última factura de Ferretería El Tornillo?",
+    "¿Tengo solicitudes de certificación pendientes?",
+  ];
+  static const List<(IconData, String)> _sugerenciasAsistenteContador = [
+    (Icons.groups_outlined, "¿Cómo van mis clientes este mes?"),
+    (Icons.percent, "IVA estimado de mis clientes"),
+    (Icons.account_balance_outlined, "Renta estimada de mis clientes"),
+    (Icons.badge_outlined, "Solicitudes de certificación pendientes"),
+    (Icons.receipt_long_outlined, "Facturarle a un cliente"),
+  ];
+
+  void _abrirAsistenteContador() {
+    abrirAsistentePantalla(
+      context,
+      secciones: _seccionesAsistenteContador,
+      onNavegar: _irDesdeAsistenteContador,
+      sugerencias: _sugerenciasAsistenteContador,
+      saludo: _miSocio != null ? "Hola, ${_miSocio!.nombre}" : null,
+    );
+  }
+
+  Future<void> _cerrarSesion() async {
+    await ApiService.logout();
+    if (mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) => false,
+      );
+    }
+  }
+
+  /// Menú lateral del contador en celular: lo mismo que la barra lateral de
+  /// escritorio (ver _barraLateralContador), arriba de las alertas.
+  List<Widget> _navegacionMenuContador(BuildContext context) {
+    Widget entrada(IconData icono, String texto, VoidCallback accion, {int? badge, bool destacada = false}) {
+      return ListTile(
+        leading: Icon(icono, color: destacada ? _PaletaContador.acento : _PaletaContador.textoTenue),
+        title: Text(texto, style: TextStyle(fontSize: 14.5, fontWeight: destacada ? FontWeight.w700 : FontWeight.w500)),
+        trailing: (badge ?? 0) > 0
+            ? Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(20)),
+                child: Text("$badge", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+              )
+            : null,
+        onTap: () {
+          Navigator.pop(context); // cierra el menú
+          accion();
+        },
+      );
+    }
+
+    void irA(double Function() destino) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollContador.hasClients) {
+          _scrollContador.animateTo(destino(), duration: const Duration(milliseconds: 400), curve: Curves.easeOutCubic);
+        }
+      });
+    }
+
+    return [
+      entrada(Icons.auto_awesome, "Asistente Equilibra", _abrirAsistenteContador, destacada: true),
+      entrada(Icons.home_rounded, "Inicio", () => irA(() => 0)),
+      entrada(Icons.groups_outlined, "Clientes", () {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final ctx = _claveClientes.currentContext;
+          if (ctx != null) Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 400), curve: Curves.easeOutCubic);
+        });
+      }),
+      entrada(Icons.insert_chart_outlined, "Reportes",
+          () => Navigator.push(this.context, MaterialPageRoute(builder: (context) => const ReportesContadorScreen(esContador: true)))),
+      entrada(Icons.badge_outlined, "Certificaciones", () async {
+        await Navigator.push(this.context, MaterialPageRoute(builder: (context) => const DocumentosContadorScreen()));
+        _cargarPendientesCertificaciones();
+      }, badge: _pendientesCertificaciones),
+      entrada(Icons.chat_bubble_outline, "Chats", () async {
+        await Navigator.push(this.context, MaterialPageRoute(builder: (context) => const ChatsContadorScreen()));
+        _cargarNoLeidosChat();
+      }, badge: _noLeidosChat),
+      entrada(Icons.menu_book_outlined, "Asientos Contables",
+          () => Navigator.push(this.context, MaterialPageRoute(builder: (context) => const AsientosContablesScreen()))),
+      entrada(Icons.account_circle_rounded, "Mi Perfil", _abrirMiPerfil),
+      entrada(Icons.support_agent, "Soporte", () => mostrarSoporteChat(this.context, contexto: 'usuario')),
+      entrada(Icons.logout, "Cerrar sesión", _cerrarSesion),
+    ];
+  }
+
+  Widget _encabezadoMenuContador() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 28, 20, 20),
+      color: _PaletaContador.sidebarFondo,
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 22,
+            backgroundColor: Colors.white.withOpacity(0.12),
+            child: Text(
+              (_miSocio?.nombre ?? 'C').trim().isEmpty ? 'C' : (_miSocio?.nombre ?? 'C').trim()[0].toUpperCase(),
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("MODO CONTADOR", style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w800, fontSize: 10, letterSpacing: 1.2)),
+                Text(_miSocio?.nombre ?? 'Contador',
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
   // Solicitudes de Certificación pendientes -- se muestra como badge sobre
   // el ícono de "Certificaciones" en la sidebar, igual que en el menú de
   // Certificaciones (ver DocumentosContadorScreen), para que se note desde
@@ -271,6 +397,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
   @override
   void dispose() {
     _busquedaCtrl.dispose();
+    _scrollContador.dispose();
     super.dispose();
   }
 
@@ -970,7 +1097,14 @@ class _NegociosScreenState extends State<NegociosScreen> {
       child: Scaffold(
       backgroundColor: esContador ? _PaletaContador.fondo : AppColors.background,
       drawer: (!esAncho && widget.puedeCrear)
-          ? DashboardDrawer(dashboardFuture: _dashboardFuture, onAbrirNegocio: _abrirNegocioPorId, mostrarContadores: false, esContador: esContador)
+          ? DashboardDrawer(
+              dashboardFuture: _dashboardFuture,
+              onAbrirNegocio: _abrirNegocioPorId,
+              mostrarContadores: false,
+              esContador: esContador,
+              encabezado: esContador ? _encabezadoMenuContador() : null,
+              navegacion: esContador ? _navegacionMenuContador(context) : const [],
+            )
           : null,
       appBar: esAncho ? null : AppBar(
         leading: (ModalRoute.of(context)?.canPop ?? false)
@@ -1005,7 +1139,13 @@ class _NegociosScreenState extends State<NegociosScreen> {
                 "Mis Negocios",
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
               ),
-        actions: [
+        actions: esContador
+            ? [
+                _accionAppBarClara(icono: Icons.auto_awesome, tooltip: "Asistente Equilibra", onPressed: _abrirAsistenteContador),
+                _accionAppBarClara(icono: Icons.refresh_rounded, tooltip: "Recargar", onPressed: _recargarTodo),
+                const SizedBox(width: 4),
+              ]
+            : [
           if (esContador)
             _accionAppBarClara(icono: Icons.refresh_rounded, tooltip: "Recargar", onPressed: _recargarTodo)
           else
@@ -1152,6 +1292,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
     return Container(
         color: esContador ? _PaletaContador.fondo : AppColors.surfaceSubtle,
         child: CustomScrollView(
+          controller: _scrollContador,
           slivers: [
             if (esAncho)
               SliverToBoxAdapter(
@@ -1190,20 +1331,8 @@ class _NegociosScreenState extends State<NegociosScreen> {
                       saludo: _miSocio != null ? "Hola, ${_miSocio!.nombre}" : null,
                       secciones: _seccionesAsistenteContador,
                       onNavegar: _irDesdeAsistenteContador,
-                      ejemplos: const [
-                        "¿Cuánto IVA tiene que pagar Soda La Esquina este mes?",
-                        "¿Qué clientes van a pagar más Renta este año?",
-                        "Registrale a Soda La Esquina un gasto de luz de ₡18.500",
-                        "¿Cómo está la última factura de Ferretería El Tornillo?",
-                        "¿Tengo solicitudes de certificación pendientes?",
-                      ],
-                      sugerencias: const [
-                        (Icons.groups_outlined, "¿Cómo van mis clientes este mes?"),
-                        (Icons.percent, "IVA estimado de mis clientes"),
-                        (Icons.account_balance_outlined, "Renta estimada de mis clientes"),
-                        (Icons.badge_outlined, "Solicitudes de certificación pendientes"),
-                        (Icons.receipt_long_outlined, "Facturarle a un cliente"),
-                      ],
+                      ejemplos: _ejemplosAsistenteContador,
+                      sugerencias: _sugerenciasAsistenteContador,
                     ),
                   ),
                 ),
@@ -1272,6 +1401,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
             if (_negocios.isNotEmpty)
               SliverToBoxAdapter(
                 child: Column(
+                  key: _claveClientes,
                   children: [
                     Padding(
                       padding: EdgeInsets.fromLTRB(16, widget.puedeCrear ? 24 : 12, 16, 4),
