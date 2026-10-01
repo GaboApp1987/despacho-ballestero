@@ -11,6 +11,7 @@ import 'impuesto.dart';
 import 'formato.dart';
 import 'historial_precio_cliente.dart';
 import 'actividad_economica.dart';
+import 'factura.dart';
 
 // Modelo temporal para los items del carrito
 class LineaFactura {
@@ -86,7 +87,12 @@ class LineaFactura {
 
 class FormularioFactura extends StatefulWidget {
   final Negocio negocio;
-  const FormularioFactura({super.key, required this.negocio});
+  /// "Repetir factura": se arma una nueva con los mismos datos que esta
+  /// (cliente, productos, cantidades, precios, descuentos, moneda,
+  /// condición) para revisarla y emitirla con la fecha de hoy -- nunca se
+  /// emite sola.
+  final Factura? plantilla;
+  const FormularioFactura({super.key, required this.negocio, this.plantilla});
 
   @override
   State<FormularioFactura> createState() => _FormularioFacturaState();
@@ -169,6 +175,68 @@ class _FormularioFacturaState extends State<FormularioFactura> {
 
   String get _simbolo => _enDolares ? r'$' : '₡';
 
+  /// Llena el formulario con los datos de [p] (ver FormularioFactura.plantilla).
+  /// Los precios se respetan en la moneda original de la factura: una de
+  /// US$1500 se repite por US$1500 con el tipo de cambio de hoy.
+  Future<void> _aplicarPlantilla(Factura p) async {
+    final esDolares = p.moneda == 'USD';
+    if (esDolares) {
+      _tipoCambioController.text = (await _obtenerTipoCambioDelDia()).toStringAsFixed(2);
+    }
+    if (!mounted) return;
+    final tcOriginal = p.tipoCambio > 0 ? p.tipoCambio : 1.0;
+    final faltantes = <String>[];
+    setState(() {
+      _tipoDocumento = p.tipoDocumento;
+      _esInterno = p.esInterno;
+      _moneda = esDolares ? 'USD' : 'CRC';
+      _condicionVenta = p.condicionVenta;
+      _plazoCreditoController.text = '${p.plazoCredito}';
+      _clienteSeleccionado = _listaClientes.where((c) => c.id == p.clienteId).firstOrNull ??
+          _listaClientes.where((c) => c.cedula.isNotEmpty && c.cedula == p.receptorCedula).firstOrNull;
+      _actividadSeleccionada = _actividades.where((a) => a.codigoActividad == p.codigoActividad).firstOrNull;
+      _carrito.clear();
+      for (final d in p.detalles) {
+        final producto = _listaProductos.where((x) => x.id == d.productoId).firstOrNull;
+        if (producto == null) {
+          faltantes.add(d.nombreProducto);
+          continue;
+        }
+        final linea = LineaFactura(
+          producto: producto,
+          cantidad: d.cantidad,
+          impuesto: producto.impuesto,
+          tipoCambio: _tipoCambioConversion,
+          porcentajeExoneracion: d.porcentajeExoneracion,
+          tipoDocExoneracion: d.tipoDocExoneracion,
+          numeroDocExoneracion: d.numeroDocExoneracion,
+          nombreInstitucionExoneracion: d.nombreInstitucionExoneracion,
+          fechaEmisionDocExoneracion: DateTime.tryParse(d.fechaEmisionDocExoneracion ?? ''),
+          naturalezaDescuento: d.naturalezaDescuento,
+        );
+        // Mismo precio y descuento que la original, en su moneda.
+        if (esDolares) {
+          linea.fijarPrecio(d.precioUnitario / tcOriginal, 'USD');
+          linea.montoDescuento = d.montoDescuento / tcOriginal * _tipoCambioFactura;
+        } else {
+          linea.fijarPrecio(d.precioUnitario, 'CRC');
+          linea.montoDescuento = d.montoDescuento;
+        }
+        _carrito.add(linea);
+      }
+    });
+    if (_clienteSeleccionado != null) _cargarUltimosPreciosDe(_clienteSeleccionado!);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      duration: const Duration(seconds: 6),
+      content: Text(
+        "Nueva factura armada a partir de la ${p.consecutivo}: revisala y emitila (sale con la fecha de hoy)."
+        "${faltantes.isEmpty ? '' : ' No se agregaron porque ya no están en el catálogo: ${faltantes.join(', ')}.'}"
+        "${!p.esTiquete && _clienteSeleccionado == null ? ' Elegí el cliente: ya no está en tu lista.' : ''}",
+      ),
+    ));
+  }
+
   Future<double> _obtenerTipoCambioDelDia() async {
     try {
       final r = await ApiService.get('/tipo-cambio/');
@@ -224,6 +292,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
             _actividades = actividadesData.map((j) => ActividadEconomica.fromJson(j)).toList();
             _isLoading = false;
           });
+          if (widget.plantilla != null) await _aplicarPlantilla(widget.plantilla!);
         }
       } else {
         if (mounted) setState(() => _isLoading = false);
@@ -878,7 +947,9 @@ class _FormularioFacturaState extends State<FormularioFactura> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(_esInterno ? "Nuevo Tiquete Interno" : (_esTiquete ? "Nuevo Tiquete" : "Nueva Factura")),
+        title: Text(widget.plantilla != null
+            ? "Repetir ${widget.plantilla!.esTiquete ? 'tiquete' : 'factura'} ${widget.plantilla!.consecutivo}"
+            : (_esInterno ? "Nuevo Tiquete Interno" : (_esTiquete ? "Nuevo Tiquete" : "Nueva Factura"))),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
       ),

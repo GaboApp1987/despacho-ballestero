@@ -8,6 +8,8 @@ import 'export_service.dart';
 import 'formato.dart';
 import 'api_service.dart';
 import 'nota_credito.dart';
+import 'negocio.dart';
+import 'formulario_factura.dart';
 
 class DetalleFacturaScreen extends StatefulWidget {
   final Factura factura;
@@ -21,6 +23,35 @@ class DetalleFacturaScreen extends StatefulWidget {
 class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
   bool _isProcesando = false;
   bool _facturaAnulada = false;
+  // Se emitió una factura nueva repitiendo esta: la lista tiene que recargar.
+  bool _seRepitio = false;
+
+  Future<void> _repetirFactura() async {
+    final factura = widget.factura;
+    setState(() => _isProcesando = true);
+    try {
+      final r = await ApiService.get('/negocios/${factura.negocio}/');
+      if (r.statusCode != 200) throw Exception('No se pudo cargar el negocio.');
+      final negocio = Negocio.fromJson(json.decode(utf8.decode(r.bodyBytes)));
+      if (!mounted) return;
+      setState(() => _isProcesando = false);
+      final creada = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(builder: (context) => FormularioFactura(negocio: negocio, plantilla: factura)),
+      );
+      if (creada == true && mounted) {
+        _seRepitio = true;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Listo, se emitió la factura nueva."), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isProcesando = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo repetir: $e"), backgroundColor: Colors.red));
+      }
+    }
+  }
   // Lineas ya acreditadas por una Nota de Credito, ya sea de antes (ver
   // DetalleFacturaItem.yaAcreditado) o generadas en esta misma pantalla sin
   // haber vuelto a cargar la factura desde el backend todavia.
@@ -309,11 +340,22 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const BackButtonIcon(),
-          onPressed: () => Navigator.pop(context, _facturaAnulada),
+          onPressed: () => Navigator.pop(context, _facturaAnulada || _seRepitio),
         ),
         title: Text("Documento F-${factura.consecutivo}"),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
+        actions: [
+          // Misma venta otra vez (ej. un alquiler mensual): abre una factura
+          // nueva con los mismos datos y la fecha de hoy, para revisar y emitir.
+          if (!factura.esInterno)
+            TextButton.icon(
+              onPressed: _isProcesando ? null : _repetirFactura,
+              icon: const Icon(Icons.replay_rounded, size: 18),
+              label: const Text("Repetir"),
+            ),
+          const SizedBox(width: 6),
+        ],
       ),
       backgroundColor: AppColors.background,
       body: Center(

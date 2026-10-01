@@ -20,6 +20,9 @@ class DetalleFacturaItem {
   final double porcentajeExoneracion;
   final double montoExoneracion;
   final String nombreInstitucionExoneracion;
+  final String tipoDocExoneracion;
+  final String numeroDocExoneracion;
+  final String? fechaEmisionDocExoneracion;
 
   DetalleFacturaItem({
     this.id,
@@ -36,6 +39,9 @@ class DetalleFacturaItem {
     this.porcentajeExoneracion = 0,
     this.montoExoneracion = 0,
     this.nombreInstitucionExoneracion = '',
+    this.tipoDocExoneracion = '',
+    this.numeroDocExoneracion = '',
+    this.fechaEmisionDocExoneracion,
   });
 
   double get total => subtotal + montoIva;
@@ -58,6 +64,9 @@ class DetalleFacturaItem {
       porcentajeExoneracion: double.tryParse(json['porcentaje_exoneracion']?.toString() ?? '') ?? 0.0,
       montoExoneracion: double.tryParse(json['monto_exoneracion']?.toString() ?? '') ?? 0.0,
       nombreInstitucionExoneracion: json['nombre_institucion_exoneracion'] ?? '',
+      tipoDocExoneracion: json['tipo_doc_exoneracion'] ?? '',
+      numeroDocExoneracion: json['numero_doc_exoneracion'] ?? '',
+      fechaEmisionDocExoneracion: json['fecha_emision_doc_exoneracion'],
     );
   }
 }
@@ -94,6 +103,9 @@ class Factura {
   // dato en otra columna.
   final String moneda;
   final double tipoCambio;
+  // Para "Repetir factura" (ver FormularioFactura.plantilla).
+  final int? clienteId;
+  final String codigoActividad;
   // Solo se llena en el camino directo a Hacienda (sin Alanube, ver
   // FacturaViewSet._enviar_a_hacienda_directo): el XML firmado exacto que
   // se transmitió, la única forma de confirmar qué recibió Hacienda
@@ -129,6 +141,8 @@ class Factura {
     this.motivoRechazo,
     this.moneda = 'CRC',
     this.tipoCambio = 1.0,
+    this.clienteId,
+    this.codigoActividad = '',
     this.xmlFirmado,
     this.correoEnviado = false,
   });
@@ -139,6 +153,8 @@ class Factura {
       negocio: json['negocio'],
       tipoDocumento: json['tipo_documento'] ?? '01',
       esInterno: json['es_interno'] ?? false,
+      clienteId: json['cliente'] is int ? json['cliente'] : int.tryParse('${json['cliente'] ?? ''}'),
+      codigoActividad: (json['codigo_actividad'] ?? '').toString(),
       consecutivo: json['consecutivo'] ?? '',
       clave: json['clave'],
       fechaEmision: json['fecha_emision'] ?? '',
