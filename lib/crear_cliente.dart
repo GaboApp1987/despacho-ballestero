@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
@@ -33,8 +34,160 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
 
   bool get _esEdicion => widget.clienteExistente != null;
 
+  // ---- Búsqueda en Hacienda por cédula (GET /consultar-cedula/, ver
+  // hacienda_cedula.py en el backend): al terminar de escribir la cédula
+  // se cargan solos el nombre, el tipo y la actividad económica.
+  Timer? _esperaBusqueda;
+  bool _buscando = false;
+  String? _cedulaConsultada;
+  Map<String, dynamic>? _hacienda; // respuesta con encontrado=true
+  String? _avisoBusqueda; // no encontrada / Hacienda caída
+  // Lo que se cargó solo: si la persona lo cambió a mano, no se pisa.
+  String? _nombreCargado;
+  String? _actividadCargada;
+
+  String get _soloDigitos => _cedulaController.text.replaceAll(RegExp(r'\D'), '');
+
+  void _alCambiarCedula(String _) {
+    _esperaBusqueda?.cancel();
+    final digitos = _soloDigitos;
+    if (digitos.length < 9 || digitos.length > 12 || digitos == _cedulaConsultada) return;
+    _esperaBusqueda = Timer(const Duration(milliseconds: 700), _buscarEnHacienda);
+  }
+
+  Future<void> _buscarEnHacienda() async {
+    final digitos = _soloDigitos;
+    if (digitos.length < 9 || digitos.length > 12) {
+      setState(() => _avisoBusqueda = "La cédula debe tener entre 9 y 12 dígitos.");
+      return;
+    }
+    setState(() {
+      _buscando = true;
+      _avisoBusqueda = null;
+      _cedulaConsultada = digitos;
+    });
+    try {
+      final r = await ApiService.get('/consultar-cedula/?cedula=$digitos');
+      final data = json.decode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
+      if (!mounted || digitos != _soloDigitos) return; // la cambiaron mientras tanto
+      if (r.statusCode != 200) {
+        setState(() {
+          _hacienda = null;
+          _avisoBusqueda = data['detail']?.toString() ?? "No se pudo consultar Hacienda.";
+        });
+        return;
+      }
+      if (data['encontrado'] != true) {
+        setState(() {
+          _hacienda = null;
+          _avisoBusqueda = "Hacienda no tiene registrada esa cédula. Podés escribir el nombre a mano.";
+        });
+        return;
+      }
+      setState(() {
+        _hacienda = data;
+        final nombre = (data['nombre'] ?? '').toString();
+        final actual = _nombreController.text.trim();
+        if (nombre.isNotEmpty && (actual.isEmpty || actual == _nombreCargado)) {
+          _nombreController.text = nombre;
+          _nombreCargado = nombre;
+        }
+        final tipo = (data['tipo_cedula'] ?? '').toString();
+        if (const ['01', '02', '03', '04'].contains(tipo)) _tipoCedulaSeleccionada = tipo;
+        final principal = data['actividad_principal'] as Map<String, dynamic>?;
+        final actividadActual = _actividadController.text.trim();
+        if (principal != null && _esCiiu(principal['codigo']) && (actividadActual.isEmpty || actividadActual == _actividadCargada)) {
+          _actividadController.text = principal['codigo'];
+          _actividadCargada = principal['codigo'];
+        }
+      });
+    } catch (e) {
+      if (mounted) setState(() => _avisoBusqueda = "No se pudo consultar Hacienda ($e).");
+    } finally {
+      if (mounted) setState(() => _buscando = false);
+    }
+  }
+
+  bool _esCiiu(dynamic codigo) => RegExp(r'^[0-9]{4}\.[0-9]$').hasMatch('${codigo ?? ''}');
+
+  List<Map<String, dynamic>> get _actividadesActivas => ((_hacienda?['actividades'] as List?) ?? [])
+      .cast<Map<String, dynamic>>()
+      .where((a) => a['activa'] == true && _esCiiu(a['codigo']))
+      .toList();
+
+  Widget _tarjetaHacienda() {
+    if (_hacienda == null && _avisoBusqueda == null) return const SizedBox.shrink();
+    if (_hacienda == null) {
+      return Container(
+        margin: const EdgeInsets.only(top: 10),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: Colors.orange.withOpacity(0.10), borderRadius: BorderRadius.circular(10)),
+        child: Row(
+          children: [
+            const Icon(Icons.info_outline, color: Colors.orange, size: 20),
+            const SizedBox(width: 8),
+            Expanded(child: Text(_avisoBusqueda!, style: const TextStyle(fontSize: 13))),
+          ],
+        ),
+      );
+    }
+    final h = _hacienda!;
+    final detalles = [h['tipo_texto'], h['estado'], h['regimen']].where((x) => (x ?? '').toString().isNotEmpty).join(' · ');
+    final actividades = _actividadesActivas;
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.green.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.green.withOpacity(0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.verified, color: Colors.green, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text("${h['nombre']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+              ),
+            ],
+          ),
+          if (detalles.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 28, top: 2),
+              child: Text("Datos de Hacienda: $detalles", style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+            ),
+          if (actividades.length > 1) ...[
+            const SizedBox(height: 10),
+            Text("Actividad económica (tocá la que corresponda):", style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final a in actividades)
+                  ChoiceChip(
+                    label: Text("${a['codigo']} · ${a['descripcion']}${a['principal'] == true ? ' (principal)' : ''}",
+                        style: const TextStyle(fontSize: 12)),
+                    selected: _actividadController.text.trim() == a['codigo'],
+                    onSelected: (_) => setState(() {
+                      _actividadController.text = a['codigo'];
+                      _actividadCargada = a['codigo'];
+                    }),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   @override
   void dispose() {
+    _esperaBusqueda?.cancel();
     _nombreController.dispose();
     _cedulaController.dispose();
     _correoController.dispose();
@@ -122,20 +275,8 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
               Icon(_esEdicion ? Icons.edit : Icons.person_add, size: 50, color: AppColors.primary),
               const SizedBox(height: 20),
 
-              // Nombre Completo
-              TextFormField(
-                controller: _nombreController,
-                decoration: const InputDecoration(
-                  labelText: "Nombre Completo",
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.person),
-                ),
-                validator: (v) =>
-                v == null || v.trim().isEmpty ? "El nombre es obligatorio" : null,
-              ),
-              const SizedBox(height: 15),
-
-              // Tipo de Cédula y Número
+              // Cédula primero: al escribirla se buscan en Hacienda el
+              // nombre, el tipo y la actividad económica.
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -162,13 +303,40 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
                     child: TextFormField(
                       controller: _cedulaController,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
+                      onChanged: _alCambiarCedula,
+                      onFieldSubmitted: (_) => _buscarEnHacienda(),
+                      decoration: InputDecoration(
                         labelText: "Cédula",
-                        border: OutlineInputBorder(),
+                        helperText: "Se buscan solos el nombre y la actividad",
+                        border: const OutlineInputBorder(),
+                        suffixIcon: _buscando
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                              )
+                            : IconButton(
+                                icon: const Icon(Icons.search),
+                                tooltip: "Buscar en Hacienda",
+                                onPressed: _buscarEnHacienda,
+                              ),
                       ),
                     ),
                   ),
                 ],
+              ),
+              _tarjetaHacienda(),
+              const SizedBox(height: 15),
+
+              // Nombre Completo
+              TextFormField(
+                controller: _nombreController,
+                decoration: const InputDecoration(
+                  labelText: "Nombre Completo",
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.person),
+                ),
+                validator: (v) =>
+                v == null || v.trim().isEmpty ? "El nombre es obligatorio" : null,
               ),
               const SizedBox(height: 15),
 
