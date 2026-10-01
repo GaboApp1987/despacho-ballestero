@@ -5,6 +5,8 @@ import 'package:flutter_tts/flutter_tts.dart';
 import '../theme/app_theme.dart';
 import '../api_service.dart';
 import '../formato.dart';
+import '../export_service.dart';
+import '../factura.dart';
 import 'adjuntos_ia.dart';
 
 /// Abre el chat de soporte con IA en una hoja modal -- se puede llamar desde
@@ -100,6 +102,10 @@ class _ChatMensaje {
   // registrar gasto o abono...), ver asistente_acciones.py en el backend.
   final Map<String, dynamic>? propuestaAccion;
   String estadoAccion = 'pendiente';
+  // Reporte/documento descargable que preparó la IA (ver preparar_reporte
+  // en asistente_acciones.py); se arma acá con ExportService.
+  final Map<String, dynamic>? propuestaDocumento;
+  String? descargando; // 'pdf' | 'excel' mientras se genera
   // 'pendiente' | 'creando' | 'creada' -- aplica a `propuesta` (factura).
   String estadoPropuesta = 'pendiente';
   // 'pendiente' | 'creando' | 'creada' -- aplica a `propuestaProducto`.
@@ -110,7 +116,8 @@ class _ChatMensaje {
   // de voz): nunca se muestra, pero viaja en el historial para que la IA
   // lo recuerde en los turnos siguientes.
   String? notaOculta;
-  _ChatMensaje(this.role, this.content, {this.propuesta, this.propuestaProducto, this.navegar, this.propuestaAccion, this.adjuntos = const []});
+  _ChatMensaje(this.role, this.content,
+      {this.propuesta, this.propuestaProducto, this.navegar, this.propuestaAccion, this.propuestaDocumento, this.adjuntos = const []});
 
   Map<String, String> toJson() => {
         'role': role,
@@ -438,6 +445,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
             propuestaProducto: propuestaProductoJson != null ? _PropuestaProducto.fromJson(propuestaProductoJson) : null,
             navegar: data['navegar'] as String?,
             propuestaAccion: data['propuesta_accion'] is Map ? Map<String, dynamic>.from(data['propuesta_accion']) : null,
+            propuestaDocumento: data['propuesta_documento'] is Map ? Map<String, dynamic>.from(data['propuesta_documento']) : null,
           )));
       // Si le hablaste con una nota de voz, te contesta en voz alta.
       if (porVoz) _hablar(respuesta);
@@ -886,6 +894,153 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
     );
   }
 
+  // ---- Documentos descargables (reportes y PDF de facturas)
+
+  Future<Map<String, dynamic>> _getJson(String endpoint) async {
+    final r = await ApiService.get(endpoint);
+    final data = json.decode(utf8.decode(r.bodyBytes));
+    if (r.statusCode != 200) {
+      throw Exception(data is Map ? (data['detail'] ?? data['error'] ?? 'Error ${r.statusCode}') : 'Error ${r.statusCode}');
+    }
+    return data is Map<String, dynamic> ? data : {'lista': data};
+  }
+
+  String _fechaCorta(String iso) {
+    final d = DateTime.tryParse(iso);
+    return d == null ? iso : '${d.day}/${d.month}/${d.year}';
+  }
+
+  /// Pide los datos del reporte y lo arma con las MISMAS funciones de la
+  /// pantalla de Reportes (mismo PDF/Excel con dashboard y formato).
+  Future<void> _descargarDocumento(_ChatMensaje mensaje, String formato) async {
+    final doc = mensaje.propuestaDocumento!;
+    final pdf = formato == 'pdf';
+    final ids = ((doc['negocio_ids'] as List?) ?? [doc['negocio_id'] ?? widget.negocioId]).whereType<int>().toList();
+    setState(() => mensaje.descargando = formato);
+    try {
+      switch (doc['tipo']) {
+        case 'ventas_compras':
+          final desde = doc['fecha_inicio'] as String;
+          final hasta = doc['fecha_fin'] as String;
+          final periodo = '${_fechaCorta(desde)} - ${_fechaCorta(hasta)}';
+          final reportes = <Map<String, dynamic>>[];
+          for (final id in ids) {
+            reportes.add(await _getJson('/reportes/consolidado/?negocio=$id&fecha_inicio=$desde&fecha_fin=$hasta&tipo=ambos'));
+          }
+          if (reportes.length == 1) {
+            pdf
+                ? await ExportService.exportReporteConsolidadoToPdf(reportes.first, periodo)
+                : await ExportService.exportReporteConsolidadoToExcel(reportes.first);
+          } else {
+            pdf
+                ? await ExportService.exportReportesConsolidadosToPdf(reportes, periodo)
+                : await ExportService.exportReportesConsolidadosToExcel(reportes, periodo: periodo);
+          }
+        case 'renta':
+          final anio = (doc['anio'] as num).toInt();
+          final rentas = <Map<String, dynamic>>[];
+          for (final id in ids) {
+            rentas.add(await _getJson('/facturas/declaracion-renta/?negocio=$id&periodo_fiscal=$anio'));
+          }
+          pdf ? await ExportService.exportRentaContadorToPdf(rentas, anio) : await ExportService.exportRentaContadorToExcel(rentas, anio);
+        case 'cuentas_por_cobrar':
+          final r = await ApiService.get('/clientes/saldos/?negocio=${ids.first}');
+          if (r.statusCode != 200) throw Exception('No se pudieron leer las cuentas por cobrar.');
+          final saldos = (json.decode(utf8.decode(r.bodyBytes)) as List).cast<Map<String, dynamic>>();
+          pdf
+              ? await ExportService.exportSaldosToPdf(saldos, (doc['negocio_nombre'] ?? '').toString())
+              : await ExportService.exportSaldosToExcel(saldos);
+        case 'factura':
+          final factura = Factura.fromJson(await _getJson('/facturas/${doc['factura_id']}/'));
+          await ExportService.exportFacturaDetalleToPdf(factura);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo generar el documento: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => mensaje.descargando = null);
+    }
+  }
+
+  Widget _buildTarjetaDocumento(_ChatMensaje mensaje) {
+    final doc = mensaje.propuestaDocumento!;
+    final formatos = ((doc['formatos'] as List?) ?? ['pdf']).map((f) => '$f').toList();
+    final icono = switch (doc['tipo']) {
+      'renta' => Icons.account_balance_outlined,
+      'cuentas_por_cobrar' => Icons.monetization_on_outlined,
+      'factura' => Icons.receipt_long_outlined,
+      _ => Icons.insert_chart_outlined,
+    };
+    Widget boton(String formato) {
+      final esPdf = formato == 'pdf';
+      final ocupado = mensaje.descargando != null;
+      return Expanded(
+        child: OutlinedButton.icon(
+          onPressed: ocupado ? null : () => _descargarDocumento(mensaje, formato),
+          icon: mensaje.descargando == formato
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : Icon(esPdf ? Icons.picture_as_pdf : Icons.table_chart, size: 18, color: esPdf ? Colors.redAccent : Colors.green),
+          label: Text(esPdf ? 'PDF' : 'Excel', style: const TextStyle(fontWeight: FontWeight.w700)),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            side: BorderSide(color: AppColors.border),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+      );
+    }
+
+    final ancho = MediaQuery.of(context).size.width * 0.85;
+    return Container(
+      constraints: BoxConstraints(maxWidth: ancho > 420 ? 420 : ancho),
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primary.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+                child: Icon(icono, color: AppColors.primary, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('${doc['titulo'] ?? 'Documento'}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+                    if ((doc['descripcion'] ?? '').toString().isNotEmpty)
+                      Text('${doc['descripcion']}', style: TextStyle(fontSize: 12, color: AppColors.textMuted), maxLines: 2, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              for (var i = 0; i < formatos.length; i++) ...[
+                if (i > 0) const SizedBox(width: 8),
+                boton(formatos[i]),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Botón para ir a la sección que la IA propuso (marca [[ABRIR:...]]).
   Widget _buildTarjetaNavegar(_ChatMensaje mensaje) {
     final clave = mensaje.navegar!;
@@ -1034,6 +1189,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
             if (m.propuestaProducto != null)
               Padding(padding: EdgeInsets.only(left: estiloPantalla ? 42 : 0), child: _buildTarjetaPropuestaProducto(m)),
             if (m.propuestaAccion != null) Padding(padding: EdgeInsets.only(left: estiloPantalla ? 42 : 0), child: _buildTarjetaAccion(m)),
+            if (m.propuestaDocumento != null) Padding(padding: EdgeInsets.only(left: estiloPantalla ? 42 : 0), child: _buildTarjetaDocumento(m)),
             if (m.navegar != null) Padding(padding: EdgeInsets.only(left: estiloPantalla ? 42 : 0), child: _buildTarjetaNavegar(m)),
           ],
         );

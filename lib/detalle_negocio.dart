@@ -1664,7 +1664,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
               (Icons.receipt_long_outlined, "Hacer una factura"),
               (Icons.trending_up, "¿Cuánto vendí este mes?"),
               (Icons.monetization_on_outlined, "¿Quién me debe?"),
-              (Icons.inventory_2_outlined, "Agregar un producto"),
+              (Icons.insert_chart_outlined, "Mandame el reporte del mes"),
               (Icons.percent, "¿Cuánto IVA voy a pagar?"),
             ],
           ),
