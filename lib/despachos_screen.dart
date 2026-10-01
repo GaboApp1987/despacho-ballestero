@@ -10,6 +10,7 @@ import 'planes_screen.dart';
 import 'login.dart';
 import 'widgets/bloqueo_salida_raiz.dart';
 import 'widgets/soporte_chat.dart';
+import 'widgets/asistente_ia_bar.dart';
 import 'whatsapp_bandeja_screen.dart';
 import 'estadisticas_screen.dart';
 
@@ -501,7 +502,46 @@ class _DespachosScreenState extends State<DespachosScreen> {
           ),
         ],
       ),
-      body: _isLoading
+      body: Column(
+        children: [
+          // Lo primero del panel: preguntarle a la IA qué hacer.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: AsistenteIABar(
+              saludo: "Panel de administrador",
+              secciones: const {
+                'whatsapp': 'Bandeja de WhatsApp: conversaciones de clientes nuevos y respuestas del equipo',
+                'estadisticas': 'Estadísticas del landing: visitas, registros y conversión',
+                'planes': 'Planes de suscripción: precios y límites',
+                'negocios': 'Negocios: todos los negocios de la plataforma',
+              },
+              onNavegar: (clave) async {
+                switch (clave) {
+                  case 'whatsapp':
+                    await Navigator.push(context, MaterialPageRoute(builder: (_) => const WhatsAppBandejaScreen()));
+                    _cargarPendientesWhatsApp();
+                  case 'estadisticas':
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const EstadisticasScreen()));
+                  case 'planes':
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const PlanesScreen()));
+                  case 'negocios':
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const NegociosScreen(puedeCrear: false, puedeGestionarPlanes: true, esSuperusuario: true)));
+                }
+              },
+              ejemplos: const [
+                "¿Cuántas personas se registraron esta semana?",
+                "Abrí la bandeja de WhatsApp",
+                "¿Cómo cambio el precio de un plan?",
+              ],
+              sugerencias: const [
+                (Icons.chat_outlined, "Bandeja de WhatsApp"),
+                (Icons.insights_outlined, "Estadísticas"),
+                (Icons.workspace_premium_outlined, "Planes"),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _despachos.isEmpty
               ? const Center(child: Text("Todavía no hay despachos registrados.", style: TextStyle(color: Colors.grey)))
@@ -545,6 +585,9 @@ class _DespachosScreenState extends State<DespachosScreen> {
                     );
                   },
                 ),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _mostrarFormularioCrear,
         icon: const Icon(Icons.add),

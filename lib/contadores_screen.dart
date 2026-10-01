@@ -15,6 +15,7 @@ import 'dashboard_despacho_widgets.dart';
 import 'login.dart';
 import 'widgets/bloqueo_salida_raiz.dart';
 import 'widgets/soporte_chat.dart';
+import 'widgets/asistente_ia_bar.dart';
 
 class ContadoresScreen extends StatefulWidget {
   const ContadoresScreen({super.key});
@@ -384,6 +385,40 @@ class _ContadoresScreenState extends State<ContadoresScreen> {
               child: ListView(
                 padding: EdgeInsets.zero,
                 children: [
+                  // Lo primero del panel: preguntarle a la IA qué hacer.
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    child: AsistenteIABar(
+                      saludo: _miDespacho != null ? "Hola, ${_miDespacho!.nombre}" : null,
+                      secciones: const {
+                        'negocios': 'Negocios: todos los negocios de los clientes del despacho y sus planes',
+                        'reportes': 'Reportes: ventas, compras e IVA de uno o varios clientes en PDF/Excel',
+                        'perfil': 'Mi perfil: datos del despacho y logo',
+                      },
+                      onNavegar: (clave) {
+                        switch (clave) {
+                          case 'negocios':
+                            Navigator.push(context, MaterialPageRoute(builder: (context) => const NegociosScreen(puedeCrear: false, puedeGestionarPlanes: true)));
+                          case 'reportes':
+                            Navigator.push(context, MaterialPageRoute(builder: (context) => const ReportesContadorScreen()));
+                          case 'perfil':
+                            _abrirMiPerfil();
+                        }
+                      },
+                      ejemplos: const [
+                        "¿Cómo reasigno un cliente a otro contador?",
+                        "Quiero el reporte de IVA de todos los clientes",
+                        "¿Cómo agrego un contador a mi equipo?",
+                        "¿Qué contador tiene más clientes?",
+                      ],
+                      sugerencias: const [
+                        (Icons.insert_chart_outlined, "Reportes de clientes"),
+                        (Icons.person_add_alt_1_outlined, "Agregar un contador"),
+                        (Icons.swap_horiz, "Reasignar un cliente"),
+                        (Icons.business_center_outlined, "Ver todos los negocios"),
+                      ],
+                    ),
+                  ),
                   if (_miDespacho != null)
                     Container(
                       width: double.infinity,

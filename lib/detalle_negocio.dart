@@ -38,6 +38,7 @@ import 'perfil_usuario_screen.dart';
 import 'widgets/bloqueo_salida_raiz.dart';
 import 'widgets/soporte_chat.dart';
 import 'widgets/primeros_pasos_card.dart';
+import 'widgets/asistente_ia_bar.dart';
 
 /// Envuelve a un hijo y le avisa a [builder] si el cursor está encima
 /// (hover) -- solo tiene efecto real con mouse (escritorio/web), en touch no
@@ -483,6 +484,41 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         _clientesFuture = obtenerClientes();
       }
     });
+  }
+
+  /// Secciones que la barra de IA puede proponer abrir (ver AsistenteIABar).
+  static const Map<String, (int, String)> _seccionesAsistente = {
+    'facturas': (0, 'Facturas: ver, reenviar o anular facturas emitidas'),
+    'nueva_factura': (-1, 'Nueva factura: abrir el formulario para emitir una factura o tiquete'),
+    'clientes': (2, 'Clientes: agregar o editar clientes'),
+    'inventario': (3, 'Inventario: productos, existencias, categorías y carga masiva con IA'),
+    'cotizaciones': (4, 'Cotizaciones: crear cotizaciones, también desde una foto de un pedido'),
+    'cuentas_cobrar': (6, 'Cuentas por cobrar: quién te debe y registrar abonos'),
+    'recibos_pago': (16, 'Recibos de pago: recibos electrónicos de pago (REP)'),
+    'notas_credito': (15, 'Notas de crédito/débito: anular o corregir facturas'),
+    'compras': (8, 'Compras: registrar facturas de proveedores (XML, PDF o foto) y aceptarlas'),
+    'correos_compra': (17, 'Correos de compra: facturas de proveedores que llegaron por correo'),
+    'cuentas_pagar': (13, 'Cuentas por pagar: lo que le debés a proveedores'),
+    'gastos': (9, 'Gastos: registrar gastos del negocio'),
+    'ingresos': (18, 'Ingresos: otros ingresos y carga masiva de ventas'),
+    'reportes': (10, 'Reportes: reportes de facturación, compras e ingresos en PDF/Excel'),
+    'impuestos': (7, 'Impuestos: declaración de IVA y de Renta'),
+    'tarjeta_lealtad': (11, 'Tarjeta de lealtad: programa de puntos para clientes'),
+    'colaboradores': (14, 'Colaboradores: usuarios del negocio (cajeros, etc.)'),
+    'ajustes': (5, 'Ajustes: datos del negocio, llave criptográfica de Hacienda, logo, numeración'),
+  };
+
+  void _irDesdeAsistente(String clave) {
+    final destino = _seccionesAsistente[clave];
+    if (destino == null) return;
+    if (destino.$1 == -1) {
+      Navigator.push<bool>(context, MaterialPageRoute(builder: (context) => FormularioFactura(negocio: widget.negocio)))
+          .then((guardado) {
+        if (guardado == true) _recargarDatos();
+      });
+      return;
+    }
+    _cambiarSeccion(destino.$1);
   }
 
   void _cambiarSeccion(int id) {
@@ -1611,6 +1647,27 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Lo primero del panel: preguntarle a la IA qué hacer.
+          AsistenteIABar(
+            negocioId: widget.negocio.id,
+            saludo: "Hola, ${widget.negocio.nombreComercial}",
+            secciones: {for (final e in _seccionesAsistente.entries) e.key: e.value.$2},
+            onNavegar: _irDesdeAsistente,
+            ejemplos: const [
+              "¿Cuánto vendí este mes?",
+              "Hacé una factura de 2 productos para Juan Pérez",
+              "¿Quién me debe plata?",
+              "Agregá un producto: martillo a ₡6.500",
+              "¿Cómo subo mi llave criptográfica?",
+            ],
+            sugerencias: const [
+              (Icons.receipt_long_outlined, "Hacer una factura"),
+              (Icons.trending_up, "¿Cuánto vendí este mes?"),
+              (Icons.monetization_on_outlined, "¿Quién me debe?"),
+              (Icons.inventory_2_outlined, "Agregar un producto"),
+              (Icons.percent, "¿Cuánto IVA voy a pagar?"),
+            ],
+          ),
           _buildBannerBienvenida(),
           const SizedBox(height: 25),
           // Guía para cuentas nuevas -- se oculta sola al completarla (y

@@ -13,12 +13,31 @@ import '../formato.dart';
 /// logueado, ver _SOPORTE_SYSTEM_PROMPT_* en el backend). `negocioId` es
 /// opcional y solo se manda si hay uno logueado, para que un mensaje que
 /// deje el usuario quede asociado a su negocio.
-Future<void> mostrarSoporteChat(BuildContext context, {required String contexto, int? negocioId}) {
+///
+/// Desde la barra "¿Qué querés hacer hoy?" de los dashboards (ver
+/// widgets/asistente_ia_bar.dart) se abre en modo asistente: con la
+/// pregunta ya enviada (`mensajeInicial`), las secciones de ese perfil
+/// (`secciones`, clave -> descripción) para que la IA pueda proponer abrir
+/// una, y `onNavegar` para llevar a la persona ahí al tocar el botón.
+Future<void> mostrarSoporteChat(
+  BuildContext context, {
+  required String contexto,
+  int? negocioId,
+  String? mensajeInicial,
+  Map<String, String>? secciones,
+  void Function(String clave)? onNavegar,
+}) {
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (ctx) => _SoporteChatSheet(contexto: contexto, negocioId: negocioId),
+    builder: (ctx) => _SoporteChatSheet(
+      contexto: contexto,
+      negocioId: negocioId,
+      mensajeInicial: mensajeInicial,
+      secciones: secciones,
+      onNavegar: onNavegar,
+    ),
   );
 }
 
@@ -27,11 +46,14 @@ class _ChatMensaje {
   final String content;
   final _PropuestaFactura? propuesta;
   final _PropuestaProducto? propuestaProducto;
+  // Sección que la IA propuso abrir (clave de `secciones`), ver "navegar"
+  // en SoporteChatView.
+  final String? navegar;
   // 'pendiente' | 'creando' | 'creada' -- aplica a `propuesta` (factura).
   String estadoPropuesta = 'pendiente';
   // 'pendiente' | 'creando' | 'creada' -- aplica a `propuestaProducto`.
   String estadoPropuestaProducto = 'pendiente';
-  _ChatMensaje(this.role, this.content, {this.propuesta, this.propuestaProducto});
+  _ChatMensaje(this.role, this.content, {this.propuesta, this.propuestaProducto, this.navegar});
 
   Map<String, String> toJson() => {'role': role, 'content': content};
 }
@@ -119,16 +141,38 @@ class _PropuestaFactura {
 class _SoporteChatSheet extends StatefulWidget {
   final String contexto;
   final int? negocioId;
-  const _SoporteChatSheet({required this.contexto, this.negocioId});
+  final String? mensajeInicial;
+  final Map<String, String>? secciones;
+  final void Function(String clave)? onNavegar;
+  const _SoporteChatSheet({required this.contexto, this.negocioId, this.mensajeInicial, this.secciones, this.onNavegar});
+
+  bool get modoAsistente => secciones != null;
 
   @override
   State<_SoporteChatSheet> createState() => _SoporteChatSheetState();
 }
 
 class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerProviderStateMixin {
-  final List<_ChatMensaje> _mensajes = [
-    _ChatMensaje('assistant', '¡Hola! Soy el asistente de soporte de Equilibra. ¿En qué te ayudo?'),
+  late final List<_ChatMensaje> _mensajes = [
+    _ChatMensaje(
+      'assistant',
+      widget.modoAsistente
+          ? '¡Hola! Soy el asistente de Equilibra. Preguntame lo que necesites o pedime que haga algo por vos.'
+          : '¡Hola! Soy el asistente de soporte de Equilibra. ¿En qué te ayudo?',
+    ),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // Viene de la barra del dashboard: la pregunta ya se escribió afuera,
+    // se manda apenas se abre el panel.
+    final inicial = widget.mensajeInicial?.trim() ?? '';
+    if (inicial.isNotEmpty) {
+      _inputCtrl.text = inicial;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _enviarMensaje());
+    }
+  }
   final TextEditingController _inputCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
   bool _enviando = false;
@@ -333,6 +377,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
         'mensajes': _mensajes.map((m) => m.toJson()).toList(),
         'contexto': widget.contexto,
         if (widget.negocioId != null) 'negocio': widget.negocioId,
+        if (widget.secciones != null) 'secciones': widget.secciones,
       });
       final data = json.decode(utf8.decode(response.bodyBytes));
       if (response.statusCode != 200) {
@@ -346,6 +391,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
             respuesta,
             propuesta: propuestaJson != null ? _PropuestaFactura.fromJson(propuestaJson) : null,
             propuestaProducto: propuestaProductoJson != null ? _PropuestaProducto.fromJson(propuestaProductoJson) : null,
+            navegar: data['navegar'] as String?,
           )));
       // Si la pregunta vino por voz, la respuesta se lee en voz alta y al
       // terminar el micrófono se reactiva solo (ver setCompletionHandler).
@@ -658,6 +704,32 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
     );
   }
 
+  /// Botón para ir a la sección que la IA propuso (marca [[ABRIR:...]]).
+  Widget _buildTarjetaNavegar(_ChatMensaje mensaje) {
+    final clave = mensaje.navegar!;
+    final descripcion = widget.secciones?[clave] ?? clave;
+    final titulo = descripcion.split(':').first.split('(').first.trim();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: FilledButton.icon(
+        onPressed: widget.onNavegar == null
+            ? null
+            : () {
+                Navigator.pop(context);
+                widget.onNavegar!(clave);
+              },
+        icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+        label: Text('Abrir $titulo', style: const TextStyle(fontWeight: FontWeight.w700)),
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.black,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      ),
+    );
+  }
+
   /// Botón de micrófono con un aro que pulsa -- rojo mientras escucha, azul
   /// mientras la IA habla (mismo botón: tocarlo ahí la interrumpe y pasa a
   /// escuchar, "barge-in" como Alexa/Siri). Fuera de eso es un IconButton
@@ -719,9 +791,14 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
               padding: const EdgeInsets.fromLTRB(20, 12, 12, 8),
               child: Row(
                 children: [
-                  Icon(Icons.support_agent, color: AppColors.primary),
+                  Icon(widget.modoAsistente ? Icons.auto_awesome : Icons.support_agent, color: AppColors.primary),
                   const SizedBox(width: 8),
-                  const Expanded(child: Text('Soporte Equilibra', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                  Expanded(
+                    child: Text(
+                      widget.modoAsistente ? 'Asistente Equilibra' : 'Soporte Equilibra',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                  ),
                   IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
                 ],
               ),
@@ -756,6 +833,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
                       ),
                       if (m.propuesta != null) _buildTarjetaPropuesta(m),
                       if (m.propuestaProducto != null) _buildTarjetaPropuestaProducto(m),
+                      if (m.navegar != null) _buildTarjetaNavegar(m),
                     ],
                   );
                 },

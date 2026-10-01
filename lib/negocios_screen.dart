@@ -17,6 +17,7 @@ import 'socio.dart';
 import 'login.dart';
 import 'widgets/bloqueo_salida_raiz.dart';
 import 'widgets/soporte_chat.dart';
+import 'widgets/asistente_ia_bar.dart';
 
 /// Paleta "Blanco & Cobalto" -- solo para cuando esta pantalla la ve un
 /// CONTADOR viendo su propia cartera (widget.puedeCrear), a propósito
@@ -1092,6 +1093,38 @@ class _NegociosScreenState extends State<NegociosScreen> {
     );
   }
 
+  /// Secciones del panel del contador que la barra de IA puede abrir.
+  static const Map<String, String> _seccionesAsistenteContador = {
+    'clientes': 'Clientes: tu cartera de negocios, entrar a uno, ver su resumen fiscal',
+    'nuevo_cliente': 'Nuevo cliente: agregar un negocio a tu cartera',
+    'reportes': 'Reportes: ventas, compras e IVA de uno o varios clientes en PDF/Excel',
+    'certificaciones': 'Certificaciones: certificaciones de ingresos, atestiguamientos, flujos de caja y solicitudes de clientes',
+    'chats': 'Chats: conversaciones con tus clientes',
+    'asientos': 'Asientos contables: catálogo de cuentas y asientos automáticos',
+    'perfil': 'Mi perfil: datos de CPA, firmantes, membrete y plantilla de certificación',
+  };
+
+  Future<void> _irDesdeAsistenteContador(String clave) async {
+    switch (clave) {
+      case 'clientes':
+        setState(() => _pestanaContador = 1);
+      case 'nuevo_cliente':
+        _mostrarFormularioCrear();
+      case 'reportes':
+        Navigator.push(context, MaterialPageRoute(builder: (context) => const ReportesContadorScreen(esContador: true)));
+      case 'certificaciones':
+        await Navigator.push(context, MaterialPageRoute(builder: (context) => const DocumentosContadorScreen()));
+        _cargarPendientesCertificaciones();
+      case 'chats':
+        await Navigator.push(context, MaterialPageRoute(builder: (context) => const ChatsContadorScreen()));
+        _cargarNoLeidosChat();
+      case 'asientos':
+        Navigator.push(context, MaterialPageRoute(builder: (context) => const AsientosContablesScreen()));
+      case 'perfil':
+        _abrirMiPerfil();
+    }
+  }
+
   Widget _contenidoNegocios(BuildContext context, bool esContador, bool esAncho) {
     return Container(
         color: esContador ? _PaletaContador.fondo : AppColors.surfaceSubtle,
@@ -1125,6 +1158,32 @@ class _NegociosScreenState extends State<NegociosScreen> {
             // todo vive en un mismo CustomScrollView, dashboard y lista de
             // clientes incluidos, así que la pantalla entera se desplaza junta.
             if (!esAncho || _pestanaContador == 0) ...[
+              // Lo primero del panel: preguntarle a la IA qué hacer.
+              if (widget.puedeCrear)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                    child: AsistenteIABar(
+                      saludo: _miSocio != null ? "Hola, ${_miSocio!.nombre}" : null,
+                      secciones: _seccionesAsistenteContador,
+                      onNavegar: _irDesdeAsistenteContador,
+                      ejemplos: const [
+                        "¿Cuánto IVA tiene que pagar Soda La Esquina este mes?",
+                        "Quiero hacer una certificación de ingresos",
+                        "Mandame la última certificación en Word",
+                        "Generá el reporte de IVA de todos mis clientes",
+                        "¿Cómo agrego un cliente nuevo?",
+                      ],
+                      sugerencias: const [
+                        (Icons.percent, "IVA estimado de un cliente"),
+                        (Icons.badge_outlined, "Hacer una certificación"),
+                        (Icons.insert_chart_outlined, "Reportes de mis clientes"),
+                        (Icons.person_add_alt_1_outlined, "Agregar un cliente"),
+                        (Icons.chat_bubble_outline, "Ver mis chats"),
+                      ],
+                    ),
+                  ),
+                ),
               if (widget.puedeCrear && _miSocio != null)
                 SliverToBoxAdapter(
                   child: Container(
