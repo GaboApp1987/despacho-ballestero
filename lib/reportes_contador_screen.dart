@@ -485,7 +485,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
               label: const Text("PDF"),
             ),
             TextButton.icon(
-              onPressed: () => _exportar(() => ExportService.exportReportesConsolidadosToExcel(_reportes!), formato: 'Excel'),
+              onPressed: () => _exportar(() => ExportService.exportReportesConsolidadosToExcel(_reportes!, periodo: _periodoTexto), formato: 'Excel'),
               icon: const Icon(Icons.table_chart, color: Colors.green, size: 18),
               label: const Text("Excel"),
             ),

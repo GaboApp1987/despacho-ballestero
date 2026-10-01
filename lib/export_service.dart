@@ -3,7 +3,7 @@ import 'dart:io' show File;
 import 'dart:typed_data';
 import 'package:excel/excel.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:pdf/pdf.dart';
@@ -114,13 +114,163 @@ class ExportService {
     }
   }
 
+  // =====================================================================
+  // DASHBOARD -- primera pestaña de TODOS los Excel exportados. Antes la
+  // primera pestaña era la "Sheet1" vacía que trae Excel.createExcel(); ahora
+  // es un resumen visual: indicadores grandes (tipo tarjeta) y gráficos de
+  // barras dibujados dentro de las celdas (el paquete excel no soporta
+  // gráficos nativos; estas barras se ven igual en Excel, Google Sheets y el
+  // celular). Uso: crear la hoja con excel['Dashboard'] ANTES que las demás
+  // (así queda primera), y al final llamar a _escribirDashboard.
+  // =====================================================================
+
+  static final CellStyle _dashTitulo = CellStyle(bold: true, fontSize: 18, fontColorHex: _colorMarca);
+  static final CellStyle _dashSubtitulo = CellStyle(italic: true, fontColorHex: ExcelColor.fromHexString('FF6B7280'));
+  static final ExcelColor _dashFondoTarjeta = ExcelColor.fromHexString('FFEEF2FF');
+
+  static CellStyle _dashEtiqueta() => CellStyle(
+        bold: true, fontSize: 9, fontColorHex: ExcelColor.fromHexString('FF4B5563'),
+        backgroundColorHex: _dashFondoTarjeta, topBorder: Border(borderStyle: BorderStyle.Thick, borderColorHex: _colorMarca),
+      );
+
+  static CellStyle _dashValor(String formato) => CellStyle(
+        bold: true, fontSize: 15, fontColorHex: _colorMarca, backgroundColorHex: _dashFondoTarjeta,
+        horizontalAlign: HorizontalAlign.Left,
+        numberFormat: switch (formato) {
+          'porcentaje' => NumFormat.standard_10,
+          'numero' => NumFormat.standard_3,
+          _ => NumFormat.custom(formatCode: '"₡"#,##0.00'),
+        },
+      );
+
+  static CellStyle _dashNota() => CellStyle(
+        fontSize: 9, italic: true, fontColorHex: ExcelColor.fromHexString('FF6B7280'), backgroundColorHex: _dashFondoTarjeta,
+      );
+
+  /// [indicadores]: (etiqueta, valor, formato 'moneda'|'numero'|'porcentaje', nota opcional).
+  /// [graficos]: (título, datos etiqueta->valor, formato de los valores). Se
+  /// muestran los 8 más grandes y el resto se agrupa en "Otros".
+  static void _escribirDashboard(
+    Excel excel, {
+    required String titulo,
+    String subtitulo = '',
+    required List<(String, double, String, String?)> indicadores,
+    List<(String, Map<String, double>, String)> graficos = const [],
+  }) {
+    final hoja = excel['Dashboard'];
+    _anchoColumnas(hoja, [2, 30, 30, 26, 26]);
+
+    void celda(int col, CellValue valor, CellStyle estilo) {
+      final c = hoja.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: hoja.maxRows - 1));
+      c.value = valor;
+      c.cellStyle = estilo;
+    }
+
+    final hoy = DateTime.now();
+    hoja.appendRow([TextCellValue('')]);
+    hoja.appendRow([TextCellValue(''), TextCellValue(titulo)]);
+    _estilarCeldaUltimaFila(hoja, 1, _dashTitulo);
+    hoja.appendRow([
+      TextCellValue(''),
+      TextCellValue([if (subtitulo.isNotEmpty) subtitulo, 'Generado el ${hoy.day}/${hoy.month}/${hoy.year} con Equilibra'].join('   ·   ')),
+    ]);
+    _estilarCeldaUltimaFila(hoja, 1, _dashSubtitulo);
+    hoja.appendRow([TextCellValue('')]);
+
+    // --- tarjetas de indicadores: 4 por fila (columnas B a E), 3 renglones cada una
+    for (var i = 0; i < indicadores.length; i += 4) {
+      final grupo = indicadores.sublist(i, (i + 4).clamp(0, indicadores.length));
+      hoja.appendRow([TextCellValue('')]);
+      for (var j = 0; j < grupo.length; j++) {
+        celda(j + 1, TextCellValue(grupo[j].$1.toUpperCase()), _dashEtiqueta());
+      }
+      hoja.appendRow([TextCellValue('')]);
+      for (var j = 0; j < grupo.length; j++) {
+        celda(j + 1, DoubleCellValue(grupo[j].$2), _dashValor(grupo[j].$3));
+      }
+      hoja.appendRow([TextCellValue('')]);
+      for (var j = 0; j < grupo.length; j++) {
+        celda(j + 1, TextCellValue(grupo[j].$4 ?? ''), _dashNota());
+      }
+      hoja.appendRow([TextCellValue('')]);
+    }
+
+    // --- gráficos de barras en celdas
+    final estiloBarra = CellStyle(fontColorHex: _colorMarca);
+    final estiloPct = CellStyle(numberFormat: NumFormat.standard_9, fontColorHex: ExcelColor.fromHexString('FF6B7280'), horizontalAlign: HorizontalAlign.Right);
+    for (final (tituloGrafico, datosOriginales, formato) in graficos) {
+      final datos = datosOriginales.entries.where((e) => e.value.abs() > 0.004).toList()..sort((a, b) => b.value.compareTo(a.value));
+      if (datos.isEmpty) continue;
+      final visibles = datos.take(8).toList();
+      if (datos.length > 8) {
+        visibles.add(MapEntry('Otros (${datos.length - 8})', datos.skip(8).fold(0.0, (a, e) => a + e.value)));
+      }
+      final total = datos.fold(0.0, (a, e) => a + e.value.abs());
+      final maximo = visibles.fold(0.0, (a, e) => e.value.abs() > a ? e.value.abs() : a);
+
+      hoja.appendRow([TextCellValue(''), TextCellValue(tituloGrafico)]);
+      _estilarCeldaUltimaFila(hoja, 1, _estiloEncabezadoSeccion());
+      for (final e in visibles) {
+        final largo = maximo == 0 ? 0 : ((e.value.abs() / maximo) * 24).round().clamp(1, 24);
+        hoja.appendRow([
+          TextCellValue(''),
+          TextCellValue(e.key),
+          TextCellValue(_bloqueBarra * largo),
+          DoubleCellValue(e.value),
+          DoubleCellValue(total == 0 ? 0 : e.value.abs() / total),
+        ]);
+        _estilarCeldaUltimaFila(hoja, 2, estiloBarra);
+        _estilarCeldaUltimaFila(hoja, 3, formato == 'numero'
+            ? CellStyle(numberFormat: NumFormat.standard_3, horizontalAlign: HorizontalAlign.Right)
+            : CellStyle(numberFormat: NumFormat.custom(formatCode: '"₡"#,##0.00'), horizontalAlign: HorizontalAlign.Right));
+        _estilarCeldaUltimaFila(hoja, 4, estiloPct);
+      }
+      hoja.appendRow([TextCellValue('')]);
+    }
+  }
+
+  static const String _bloqueBarra = '█';
+
+  /// Deja el Dashboard como pestaña inicial y quita la "Sheet1" vacía.
+  static void _dashboardPrimero(Excel excel) {
+    excel.setDefaultSheet('Dashboard');
+    if (excel.sheets.containsKey('Sheet1')) excel.delete('Sheet1');
+  }
+
+  /// Suma valores agrupados por una llave (para los gráficos).
+  static Map<String, double> _agrupar<T>(Iterable<T> items, String Function(T) llave, double Function(T) valor) {
+    final m = <String, double>{};
+    for (final it in items) {
+      final k = llave(it).trim().isEmpty ? '(sin nombre)' : llave(it).trim();
+      m[k] = (m[k] ?? 0) + valor(it);
+    }
+    return m;
+  }
+
+  static String _mesCorto(String fechaIso) {
+    const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'set', 'oct', 'nov', 'dic'];
+    final d = DateTime.tryParse(fechaIso);
+    return d == null ? '(sin fecha)' : '${meses[d.month - 1]} ${d.year}';
+  }
+
+  static double _div(double a, double b) => b == 0 ? 0 : a / b;
+
   /// Guarda un archivo Excel ya armado, pidiéndole al usuario dónde. En Web
   /// no existe un sistema de archivos real: hay que pasarle los bytes
   /// directo a saveFile() para que dispare la descarga del navegador. En
   /// escritorio, saveFile() solo devuelve la ruta elegida y hay que escribir
   /// el archivo aparte.
+  /// Solo para pruebas automáticas (test/export_dashboard_test.dart): si se
+  /// asigna, recibe el archivo generado en vez de descargarlo/guardarlo.
+  @visibleForTesting
+  static void Function(List<int> bytes, String fileName)? capturarExcelParaPruebas;
+
   static Future<void> _guardarExcel(Excel excel, {required String dialogTitle, required String fileName}) async {
     final bytes = excel.encode()!;
+    if (capturarExcelParaPruebas != null) {
+      capturarExcelParaPruebas!(bytes, fileName);
+      return;
+    }
     if (kIsWeb) {
       // file_picker NO implementa saveFile() en Web -- lanza
       // "UnimplementedError: saveFile() has not been implemented" (lo
@@ -322,6 +472,7 @@ class ExportService {
   /// aparte con el desglose agrupado por tarifa de IVA.
   static Future<void> exportFacturasToExcel(List<Factura> facturas) async {
     var excel = Excel.createExcel();
+    excel['Dashboard']; // primera pestaña (ver _escribirDashboard)
     Sheet sheetObject = excel['Facturas'];
 
     final sumaSubtotal = facturas.fold<double>(0.0, (s, f) => s + (f.totalFactura - f.totalIva));
@@ -425,6 +576,39 @@ class ExportService {
     celda(colTarifas + 3, filaTarifa, DoubleCellValue(baseTotal + ivaTotal));
     estilarCelda(colTarifas + 3, filaTarifa, _estiloTotalMoneda());
     _anchoColumnas(sheetObject, [14, 14, 26, 14, 12, 14, 10, 14, 14, 3, 14, 14, 14, 14]);
+
+
+    {
+      final validas = facturas.where((f) => !f.anulada && f.estadoHacienda != '4' && f.estadoHacienda != '5').toList();
+      final total = validas.fold(0.0, (a, f) => a + f.totalFactura);
+      final iva = validas.fold(0.0, (a, f) => a + f.totalIva);
+      final credito = validas.where((f) => f.condicionVenta == '02');
+      final porCobrar = credito.where((f) => !f.pagada).fold(0.0, (a, f) => a + f.totalFactura);
+      final aceptadas = facturas.where((f) => f.estadoHacienda == '3').length;
+      const estados = {'1': 'Sin enviar', '2': 'Procesando', '3': 'Aceptada', '4': 'Rechazada', '5': 'Error técnico', '6': 'Interno'};
+      _escribirDashboard(
+        excel,
+        titulo: 'Dashboard de facturación',
+        subtitulo: '${facturas.length} comprobante(s)',
+        indicadores: [
+          ('Total facturado', total, 'moneda', 'Sin anuladas ni rechazadas'),
+          ('Subtotal (sin IVA)', total - iva, 'moneda', null),
+          ('IVA facturado', iva, 'moneda', null),
+          ('Ticket promedio', _div(total, validas.length.toDouble()), 'moneda', 'Por comprobante'),
+          ('Comprobantes', validas.length.toDouble(), 'numero', null),
+          ('Aceptadas por Hacienda', _div(aceptadas.toDouble(), facturas.length.toDouble()), 'porcentaje', '$aceptadas de ${facturas.length}'),
+          ('Ventas a crédito', _div(credito.fold(0.0, (a, f) => a + f.totalFactura), total), 'porcentaje', 'Del total facturado'),
+          ('Pendiente de cobro', porCobrar, 'moneda', 'Facturas a crédito sin pagar'),
+        ],
+        graficos: [
+          ('Ventas por cliente', _agrupar<Factura>(validas, (f) => f.receptorNombre, (f) => f.totalFactura), 'moneda'),
+          ('Ventas por mes', _agrupar<Factura>(validas, (f) => _mesCorto(f.fechaEmision), (f) => f.totalFactura), 'moneda'),
+          ('Contado vs. crédito', _agrupar<Factura>(validas, (f) => f.condicionVenta == '02' ? 'Crédito' : 'Contado', (f) => f.totalFactura), 'moneda'),
+          ('Comprobantes por estado ante Hacienda', _agrupar<Factura>(facturas, (f) => estados[f.estadoHacienda] ?? f.estadoHacienda, (_) => 1), 'numero'),
+        ],
+      );
+    }
+    _dashboardPrimero(excel);
 
     await _guardarExcel(excel, dialogTitle: 'Guardar Reporte de Facturación', fileName: 'reporte_facturacion.xlsx');
   }
@@ -688,6 +872,7 @@ class ExportService {
   /// Crédito/Compras/Notas de Débito).
   static Future<void> exportReporteConsolidadoToExcel(Map<String, dynamic> reporte) async {
     var excel = Excel.createExcel();
+    excel['Dashboard']; // primera pestaña (ver _escribirDashboard)
     _escribirReporteConsolidadoEnExcel(excel, reporte);
 
     // NO se borra la hoja "Sheet1" que trae Excel.createExcel() por defecto:
@@ -698,6 +883,40 @@ class ExportService {
     // exportación no generara ningún archivo. Queda como una pestaña extra
     // vacía en el archivo, sin romper nada.
     final negocioNombre = reporte['negocio_nombre']?.toString() ?? 'reporte';
+
+    {
+      double n(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0.0;
+      final ventas = reporte['ventas'] as Map<String, dynamic>?;
+      final compras = reporte['compras'] as Map<String, dynamic>?;
+      final docsV = (ventas?['documentos'] as List?) ?? [];
+      final docsC = (compras?['documentos'] as List?) ?? [];
+      final ventasNetas = n(ventas?['total_neto']);
+      final comprasTot = n(compras?['total_neto']);
+      final ivaV = ((ventas?['desglose_impuestos'] as List?) ?? []).fold(0.0, (a, d) => a + n(d['monto_impuesto']));
+      final ivaC = ((compras?['desglose_impuestos'] as List?) ?? []).fold(0.0, (a, d) => a + n(d['monto_impuesto']));
+      _escribirDashboard(
+        excel,
+        titulo: 'Dashboard · ${reporte['negocio_nombre'] ?? ''}',
+        subtitulo: 'Ventas y compras del periodo',
+        indicadores: [
+          ('Ventas netas', ventasNetas, 'moneda', 'Ventas menos notas de crédito'),
+          ('Compras', comprasTot, 'moneda', 'Incluye notas de débito'),
+          ('Resultado bruto', ventasNetas - comprasTot, 'moneda', 'Ventas netas - compras'),
+          ('Margen bruto', _div(ventasNetas - comprasTot, ventasNetas), 'porcentaje', 'Aproximado'),
+          ('IVA de ventas', ivaV, 'moneda', 'Débito fiscal'),
+          ('IVA de compras', ivaC, 'moneda', 'Crédito fiscal (estimado)'),
+          ('IVA a pagar', ivaV - ivaC, 'moneda', null),
+          ('Facturas emitidas', docsV.length.toDouble(), 'numero', '${docsC.length} compra(s)'),
+        ],
+        graficos: [
+          ('Ventas por cliente', _agrupar<dynamic>(docsV, (d) => d['cliente']?.toString() ?? '', (d) => n(d['total'])), 'moneda'),
+          ('Compras por proveedor', _agrupar<dynamic>(docsC, (d) => d['proveedor']?.toString() ?? '', (d) => n(d['total'])), 'moneda'),
+          ('Ventas por tarifa de IVA (base)', _agrupar<dynamic>((ventas?['desglose_impuestos'] as List?) ?? [], (d) => d['tarifa']?.toString() ?? '', (d) => n(d['base_imponible'])), 'moneda'),
+        ],
+      );
+    }
+    _dashboardPrimero(excel);
+
     await _guardarExcel(
       excel,
       dialogTitle: 'Guardar Reporte de Ventas y Compras',
@@ -709,24 +928,11 @@ class ExportService {
   /// una hoja "Resumen" con el total de cada cliente, y luego las hojas de
   /// detalle de cada uno con el nombre del cliente como prefijo (truncado a
   /// lo que entra en el límite de 31 caracteres que exige xlsx).
-  static Future<void> exportReportesConsolidadosToExcel(List<Map<String, dynamic>> reportes) async {
+  static Future<void> exportReportesConsolidadosToExcel(List<Map<String, dynamic>> reportes, {String periodo = ''}) async {
     var excel = Excel.createExcel();
-
-    final hojaResumen = excel['Resumen'];
-    hojaResumen.appendRow([
-      TextCellValue('Cliente'), TextCellValue('Total Ventas'), TextCellValue('Total Compras'), TextCellValue('IVA a pagar'),
-    ]);
-    for (final r in reportes) {
-      final resumen = r['resumen_declaracion'] as Map<String, dynamic>?;
-      final ventas = r['ventas'] as Map<String, dynamic>?;
-      final compras = r['compras'] as Map<String, dynamic>?;
-      hojaResumen.appendRow([
-        TextCellValue(r['negocio_nombre']?.toString() ?? ''),
-        ventas != null ? DoubleCellValue(double.tryParse(ventas['total'].toString()) ?? 0) : TextCellValue('-'),
-        compras != null ? DoubleCellValue(double.tryParse(compras['total'].toString()) ?? 0) : TextCellValue('-'),
-        resumen != null ? DoubleCellValue(double.tryParse(resumen['iva_a_pagar'].toString()) ?? 0) : TextCellValue('-'),
-      ]);
-    }
+    excel['Dashboard']; // primera pestaña (ver _escribirDashboard)
+    final hoja = excel['Resumen'];
+    _escribirResumenClientes(hoja, reportes, periodo);
 
     for (var i = 0; i < reportes.length; i++) {
       final nombreCorto = (reportes[i]['negocio_nombre']?.toString() ?? 'Cliente ${i + 1}');
@@ -734,11 +940,218 @@ class ExportService {
       _escribirReporteConsolidadoEnExcel(excel, reportes[i], prefijo: prefijo);
     }
 
+
+    {
+      double n(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0.0;
+      final ventasPorCliente = <String, double>{};
+      final ivaPorCliente = <String, double>{};
+      double ventas = 0, compras = 0, iva = 0;
+      var conMovimiento = 0;
+      for (final r in reportes) {
+        final nombre = r['negocio_nombre']?.toString() ?? '';
+        final v = n((r['ventas'] as Map?)?['total_neto']);
+        final c = n((r['compras'] as Map?)?['total_neto']);
+        final i = n((r['resumen_declaracion'] as Map?)?['iva_a_pagar']);
+        ventas += v;
+        compras += c;
+        iva += i;
+        if (v != 0 || c != 0) conMovimiento++;
+        ventasPorCliente[nombre] = v;
+        ivaPorCliente[nombre] = i;
+      }
+      _escribirDashboard(
+        excel,
+        titulo: 'Dashboard de la cartera',
+        subtitulo: [if (periodo.isNotEmpty) 'Periodo: $periodo', '${reportes.length} cliente(s)'].join('   ·   '),
+        indicadores: [
+          ('Ventas netas (todos)', ventas, 'moneda', null),
+          ('Compras (todos)', compras, 'moneda', null),
+          ('IVA a pagar (todos)', iva, 'moneda', 'Suma de los saldos por cliente'),
+          ('Clientes con movimiento', conMovimiento.toDouble(), 'numero', 'De ${reportes.length} en el reporte'),
+        ],
+        graficos: [
+          ('Ventas netas por cliente', ventasPorCliente, 'moneda'),
+          ('IVA a pagar por cliente', ivaPorCliente, 'moneda'),
+        ],
+      );
+    }
+    _dashboardPrimero(excel);
+
     await _guardarExcel(
       excel,
       dialogTitle: 'Guardar Reportes de Ventas y Compras',
       fileName: 'reportes_clientes.xlsx',
     );
+  }
+
+  /// Hoja "Resumen" del Excel de varios clientes: totales por cliente
+  /// (subtotal, IVA y total de ventas y compras, notas de crédito, IVA a
+  /// pagar), el detalle por tarifa de IVA de cada uno y los totales por
+  /// tarifa de toda la cartera. Los datos vienen tal cual de
+  /// /reportes/consolidado/ (ver ReporteConsolidadoView).
+  static void _escribirResumenClientes(Sheet hoja, List<Map<String, dynamic>> reportes, String periodo) {
+    double n(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0.0;
+    double sumar(List? docs, String campo) => (docs ?? []).fold(0.0, (a, d) => a + n((d as Map)[campo]));
+
+    // Anchos: cliente ancho, el resto montos.
+    _anchoColumnas(hoja, [34, 17, 15, 16, 17, 17, 15, 17, 17]);
+
+    hoja.appendRow([TextCellValue('Resumen de ventas, compras e IVA por cliente')]);
+    _estilarCeldaUltimaFila(hoja, 0, _estiloTitulo());
+    hoja.appendRow([TextCellValue([
+      if (periodo.isNotEmpty) 'Periodo: $periodo',
+      '${reportes.length} cliente(s)',
+      'Generado: ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}',
+    ].join('   ·   '))]);
+    _estilarCeldaUltimaFila(hoja, 0, _estiloSubtitulo());
+    hoja.appendRow([]);
+
+    // ---------------- 1. Totales por cliente
+    hoja.appendRow([TextCellValue('Totales por cliente')]);
+    _estilarCeldaUltimaFila(hoja, 0, _estiloEncabezadoSeccion());
+    final grupos = [
+      '', 'VENTAS', '', '', '', 'COMPRAS', '', '', '',
+    ];
+    hoja.appendRow(grupos.map((g) => TextCellValue(g)).toList());
+    _estilarUltimaFila(hoja, 9, CellStyle(bold: true, fontColorHex: _colorMarca, horizontalAlign: HorizontalAlign.Center));
+    final filaGrupos = hoja.maxRows - 1;
+    // "VENTAS" sobre sus 4 columnas y "COMPRAS" sobre sus 3.
+    hoja.merge(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: filaGrupos), CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: filaGrupos), customValue: TextCellValue('VENTAS'));
+    hoja.merge(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: filaGrupos), CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: filaGrupos), customValue: TextCellValue('COMPRAS'));
+    final encabezados = [
+      'Cliente', 'Subtotal', 'IVA', 'Notas de crédito', 'Total ventas',
+      'Subtotal', 'IVA (estimado)', 'Total compras', 'IVA a pagar',
+    ];
+    hoja.appendRow(encabezados.map((e) => TextCellValue(e)).toList());
+    _estilarUltimaFila(hoja, encabezados.length, _estiloEncabezadoTabla());
+
+    final totales = List<double>.filled(8, 0);
+    for (final r in reportes) {
+      final ventas = r['ventas'] as Map<String, dynamic>?;
+      final compras = r['compras'] as Map<String, dynamic>?;
+      final resumen = r['resumen_declaracion'] as Map<String, dynamic>?;
+      final valores = <double?>[
+        ventas == null ? null : sumar(ventas['documentos'] as List?, 'subtotal'),
+        ventas == null ? null : sumar(ventas['documentos'] as List?, 'monto_iva'),
+        ventas == null ? null : n(ventas['total_notas_credito']),
+        ventas == null ? null : n(ventas['total']),
+        compras == null ? null : sumar(compras['documentos'] as List?, 'subtotal_estimado'),
+        compras == null ? null : sumar(compras['documentos'] as List?, 'monto_iva_estimado'),
+        compras == null ? null : n(compras['total']),
+        resumen == null ? null : n(resumen['iva_a_pagar']),
+      ];
+      hoja.appendRow([
+        TextCellValue(r['negocio_nombre']?.toString() ?? ''),
+        for (final v in valores) v == null ? TextCellValue('-') : DoubleCellValue(v),
+      ]);
+      for (var c = 0; c < valores.length; c++) {
+        if (valores[c] != null) {
+          totales[c] += valores[c]!;
+          _estilarCeldaUltimaFila(hoja, c + 1, _estiloMoneda(negrita: c == 3 || c == 6 || c == 7));
+        }
+      }
+    }
+    hoja.appendRow([TextCellValue('TOTALES'), for (final t in totales) DoubleCellValue(t)]);
+    _estilarCeldaUltimaFila(hoja, 0, _estiloTotalTexto());
+    for (var c = 1; c <= totales.length; c++) {
+      _estilarCeldaUltimaFila(hoja, c, _estiloTotalMoneda());
+    }
+    hoja.appendRow([]);
+    hoja.appendRow([]);
+
+    // ---------------- 2. Detalle por tarifa de IVA de cada cliente
+    hoja.appendRow([TextCellValue('Detalle por tarifa de IVA')]);
+    _estilarCeldaUltimaFila(hoja, 0, _estiloEncabezadoSeccion());
+    final encTarifa = ['Cliente', 'Tarifa', 'Ventas: base imponible', 'Ventas: IVA', 'Compras: base imponible', 'Compras: IVA'];
+    hoja.appendRow(encTarifa.map((e) => TextCellValue(e)).toList());
+    _estilarUltimaFila(hoja, encTarifa.length, _estiloEncabezadoTabla());
+
+    // tarifa -> [base ventas, iva ventas, base compras, iva compras] para toda la cartera
+    final porTarifaGeneral = <String, List<double>>{};
+    final estiloCliente = CellStyle(bold: true, fontColorHex: _colorMarca);
+
+    for (final r in reportes) {
+      final ventas = r['ventas'] as Map<String, dynamic>?;
+      final compras = r['compras'] as Map<String, dynamic>?;
+      final porTarifa = <String, List<double>>{};
+      for (final d in (ventas?['desglose_impuestos'] as List? ?? [])) {
+        final fila = porTarifa.putIfAbsent(d['tarifa']?.toString() ?? '-', () => List<double>.filled(4, 0));
+        fila[0] += n(d['base_imponible']);
+        fila[1] += n(d['monto_impuesto']);
+      }
+      for (final d in (compras?['desglose_impuestos'] as List? ?? [])) {
+        final fila = porTarifa.putIfAbsent(d['tarifa']?.toString() ?? '-', () => List<double>.filled(4, 0));
+        fila[2] += n(d['base_imponible']);
+        fila[3] += n(d['monto_impuesto']);
+      }
+      final nombre = r['negocio_nombre']?.toString() ?? '';
+      if (porTarifa.isEmpty) {
+        hoja.appendRow([TextCellValue(nombre), TextCellValue('Sin movimientos en el periodo')]);
+        _estilarCeldaUltimaFila(hoja, 0, estiloCliente);
+        _estilarCeldaUltimaFila(hoja, 1, _estiloSubtitulo());
+        continue;
+      }
+      final subtotal = List<double>.filled(4, 0);
+      var primera = true;
+      for (final e in porTarifa.entries) {
+        hoja.appendRow([
+          TextCellValue(primera ? nombre : ''),
+          TextCellValue(e.key),
+          for (final v in e.value) DoubleCellValue(v),
+        ]);
+        if (primera) _estilarCeldaUltimaFila(hoja, 0, estiloCliente);
+        for (var c = 2; c < 6; c++) {
+          _estilarCeldaUltimaFila(hoja, c, _estiloMoneda());
+        }
+        primera = false;
+        final general = porTarifaGeneral.putIfAbsent(e.key, () => List<double>.filled(4, 0));
+        for (var i = 0; i < 4; i++) {
+          subtotal[i] += e.value[i];
+          general[i] += e.value[i];
+        }
+      }
+      if (porTarifa.length > 1) {
+        hoja.appendRow([TextCellValue(''), TextCellValue('Subtotal $nombre'), for (final v in subtotal) DoubleCellValue(v)]);
+        _estilarCeldaUltimaFila(hoja, 1, _estiloTotalTexto());
+        for (var c = 2; c < 6; c++) {
+          _estilarCeldaUltimaFila(hoja, c, _estiloTotalMoneda());
+        }
+      }
+    }
+    hoja.appendRow([]);
+    hoja.appendRow([]);
+
+    // ---------------- 3. Totales por tarifa (toda la cartera)
+    hoja.appendRow([TextCellValue('Totales por tarifa (todos los clientes)')]);
+    _estilarCeldaUltimaFila(hoja, 0, _estiloEncabezadoSeccion());
+    final encGeneral = ['Tarifa', 'Ventas: base imponible', 'Ventas: IVA', 'Compras: base imponible', 'Compras: IVA', 'IVA neto'];
+    hoja.appendRow(encGeneral.map((e) => TextCellValue(e)).toList());
+    _estilarUltimaFila(hoja, encGeneral.length, _estiloEncabezadoTabla());
+    final granTotal = List<double>.filled(5, 0);
+    for (final e in porTarifaGeneral.entries) {
+      final neto = e.value[1] - e.value[3];
+      final fila = [...e.value, neto];
+      hoja.appendRow([TextCellValue(e.key), for (final v in fila) DoubleCellValue(v)]);
+      for (var c = 1; c < 6; c++) {
+        _estilarCeldaUltimaFila(hoja, c, _estiloMoneda(negrita: c == 5));
+      }
+      for (var i = 0; i < 5; i++) {
+        granTotal[i] += fila[i];
+      }
+    }
+    hoja.appendRow([TextCellValue('TOTAL'), for (final v in granTotal) DoubleCellValue(v)]);
+    _estilarCeldaUltimaFila(hoja, 0, _estiloTotalTexto());
+    for (var c = 1; c < 6; c++) {
+      _estilarCeldaUltimaFila(hoja, c, _estiloTotalMoneda());
+    }
+
+    hoja.appendRow([]);
+    hoja.appendRow([TextCellValue(
+      'Notas: la base imponible de ventas ya descuenta las notas de crédito. El IVA de compras se calcula con la '
+      'tarifa que cada producto tiene asignada en el catálogo. El detalle documento por documento de cada cliente '
+      'está en las hojas siguientes.',
+    )]);
+    _estilarCeldaUltimaFila(hoja, 0, _estiloSubtitulo());
   }
 
   /// Escribe las hojas de un reporte consolidado (Ventas/Compras/Notas/
@@ -902,6 +1315,7 @@ class ExportService {
   /// Exporta el listado general de Cuentas por Cobrar a Excel
   static Future<void> exportSaldosToExcel(List<Map<String, dynamic>> saldos) async {
     var excel = Excel.createExcel();
+    excel['Dashboard']; // primera pestaña (ver _escribirDashboard)
     Sheet sheet = excel['Saldos'];
     sheet.appendRow([
       TextCellValue('Cliente'),
@@ -915,6 +1329,28 @@ class ExportService {
         DoubleCellValue(double.parse(item['saldo'].toString())),
       ]);
     }
+
+    {
+      double n(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0.0;
+      final conSaldo = saldos.where((x) => n(x['saldo']) > 0).toList();
+      final total = conSaldo.fold(0.0, (a, x) => a + n(x['saldo']));
+      final mayor = conSaldo.fold(0.0, (a, x) => n(x['saldo']) > a ? n(x['saldo']) : a);
+      _escribirDashboard(
+        excel,
+        titulo: 'Dashboard de cuentas por cobrar',
+        indicadores: [
+          ('Total por cobrar', total, 'moneda', null),
+          ('Clientes con saldo', conSaldo.length.toDouble(), 'numero', null),
+          ('Saldo promedio', _div(total, conSaldo.length.toDouble()), 'moneda', 'Por cliente con saldo'),
+          ('Concentración del mayor', _div(mayor, total), 'porcentaje', 'Peso del cliente que más debe'),
+        ],
+        graficos: [
+          ('Saldo pendiente por cliente', _agrupar<Map<String, dynamic>>(conSaldo, (x) => x['nombre']?.toString() ?? '', (x) => n(x['saldo'])), 'moneda'),
+        ],
+      );
+    }
+    _dashboardPrimero(excel);
+
     await _guardarExcel(excel, dialogTitle: 'Guardar Reporte de Saldos', fileName: 'reporte_saldos.xlsx');
   }
 
@@ -971,6 +1407,7 @@ class ExportService {
   /// Exporta el historial individual de un cliente a Excel
   static Future<void> exportHistorialToExcel(String clienteNombre, List<dynamic> historial) async {
     var excel = Excel.createExcel();
+    excel['Dashboard']; // primera pestaña (ver _escribirDashboard)
     Sheet sheet = excel['Historial'];
     sheet.appendRow([
       TextCellValue('Fecha'),
@@ -987,6 +1424,28 @@ class ExportService {
         DoubleCellValue(double.parse(item['monto'].toString()) * (esFactura ? 1 : -1))
       ]);
     }
+
+    {
+      double n(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0.0;
+      final facturado = historial.where((x) => x['tipo'] == 'FACTURA').fold(0.0, (a, x) => a + n(x['monto']));
+      final abonado = historial.where((x) => x['tipo'] != 'FACTURA').fold(0.0, (a, x) => a + n(x['monto']));
+      _escribirDashboard(
+        excel,
+        titulo: 'Estado de cuenta · $clienteNombre',
+        indicadores: [
+          ('Total facturado', facturado, 'moneda', null),
+          ('Total abonado', abonado, 'moneda', null),
+          ('Saldo pendiente', facturado - abonado, 'moneda', null),
+          ('Cobrado', _div(abonado, facturado), 'porcentaje', 'Del total facturado'),
+        ],
+        graficos: [
+          ('Facturado vs. abonado', {'Facturado': facturado, 'Abonado': abonado, 'Saldo pendiente': facturado - abonado}, 'moneda'),
+          ('Movimientos por mes', _agrupar<dynamic>(historial, (x) => _mesCorto(x['fecha']?.toString() ?? ''), (x) => n(x['monto'])), 'moneda'),
+        ],
+      );
+    }
+    _dashboardPrimero(excel);
+
     await _guardarExcel(excel, dialogTitle: 'Guardar Historial de $clienteNombre', fileName: 'historial_${clienteNombre.replaceAll(' ', '_')}.xlsx');
   }
 
@@ -1865,6 +2324,7 @@ class ExportService {
   }) async {
     double numDe(String llave) => double.tryParse(declaracion[llave]?.toString() ?? '') ?? 0.0;
     var excel = Excel.createExcel();
+    excel['Dashboard']; // primera pestaña (ver _escribirDashboard)
 
     final resumen = excel['Resumen'];
     excel.setDefaultSheet('Resumen');
@@ -1992,6 +2452,35 @@ class ExportService {
     _estilarCeldaUltimaFila(hojaCompras, 3, _estiloTotalMoneda());
 
     excel.delete('Sheet1');
+
+
+    {
+      double t(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0.0;
+      final debito = numDe('debito_fiscal');
+      final creditoF = numDe('credito_fiscal');
+      _escribirDashboard(
+        excel,
+        titulo: 'Dashboard de IVA · $negocioNombre',
+        subtitulo: 'Periodo: $periodo',
+        indicadores: [
+          ('Débito fiscal', debito, 'moneda', 'IVA de tus ventas'),
+          ('Crédito fiscal', creditoF, 'moneda', 'IVA de tus compras'),
+          (declaracion['a_pagar'] == true ? 'IVA a pagar' : 'Saldo a favor', numDe('saldo_iva').abs(), 'moneda', null),
+          ('Crédito sobre débito', _div(creditoF, debito), 'porcentaje', 'Cuánto del IVA cobrado compensás'),
+          ('Ventas gravadas', numDe('ventas_gravadas'), 'moneda', null),
+          ('Compras totales', numDe('compras_totales'), 'moneda', null),
+          ('Facturas', facturas.length.toDouble(), 'numero', '${notasCredito.length} nota(s) de crédito'),
+          ('Compras', compras.length.toDouble(), 'numero', null),
+        ],
+        graficos: [
+          ('Débito fiscal por tarifa', {for (final x in (declaracion['debito_por_tarifa'] as List?) ?? []) '${x['tarifa']}%': t(x['iva'])}, 'moneda'),
+          ('Crédito fiscal por tarifa', {for (final x in (declaracion['credito_por_tarifa'] as List?) ?? []) '${x['tarifa']}%': t(x['iva'])}, 'moneda'),
+          ('Ventas por cliente', _agrupar<Factura>(facturas, (f) => f.receptorNombre, (f) => f.totalFactura), 'moneda'),
+          ('Compras por proveedor', _agrupar<Compra>(compras, (c) => c.nombreProveedor ?? '', (c) => c.totalCompra), 'moneda'),
+        ],
+      );
+    }
+    _dashboardPrimero(excel);
 
     await _guardarExcel(excel, dialogTitle: 'Guardar Declaración de IVA (Excel)', fileName: 'Declaracion_IVA_Detalle.xlsx');
   }
@@ -2162,6 +2651,7 @@ class ExportService {
     double numDe(String llave) => double.tryParse(declaracion[llave]?.toString() ?? '') ?? 0.0;
     final periodoFiscal = declaracion['periodo_fiscal']?.toString() ?? '';
     var excel = Excel.createExcel();
+    excel['Dashboard']; // primera pestaña (ver _escribirDashboard)
 
     final resumen = excel['Resumen'];
     excel.setDefaultSheet('Resumen');
@@ -2226,6 +2716,36 @@ class ExportService {
     hojaGastos.appendRow([TextCellValue('TOTAL DEDUCIBLE'), TextCellValue(''), TextCellValue(''), DoubleCellValue(gastos.where((g) => g.deducible).fold(0.0, (s, g) => s + g.monto)), TextCellValue('')]);
 
     excel.delete('Sheet1');
+
+
+    {
+      double t(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0.0;
+      final ingresos = numDe('ingresos_brutos');
+      final costo = numDe('costo_ventas');
+      final gastos = numDe('gastos_deducibles');
+      final renta = numDe('renta_liquida_gravable');
+      _escribirDashboard(
+        excel,
+        titulo: 'Dashboard de Renta · $negocioNombre',
+        subtitulo: 'Periodo fiscal: $periodoFiscal',
+        indicadores: [
+          ('Ingresos brutos', ingresos, 'moneda', null),
+          ('Costo de ventas', costo, 'moneda', null),
+          ('Gastos deducibles', gastos, 'moneda', null),
+          ('Renta líquida gravable', renta, 'moneda', null),
+          ('Margen neto', _div(renta, ingresos), 'porcentaje', 'Renta líquida / ingresos'),
+          ('Impuesto estimado', numDe('impuesto_estimado'), 'moneda', null),
+          ('Tasa efectiva', _div(numDe('impuesto_estimado'), renta), 'porcentaje', 'Impuesto / renta líquida'),
+          ('Gastos no deducibles', numDe('gastos_no_deducibles'), 'moneda', null),
+        ],
+        graficos: [
+          ('¿A dónde van tus ingresos?', {'Costo de ventas': costo, 'Gastos deducibles': gastos, 'Renta líquida': renta < 0 ? 0 : renta}, 'moneda'),
+          ('Gastos deducibles por categoría', {for (final g in (declaracion['gastos_por_categoria'] as List?) ?? []) (_categoriasGastoPdf[g['categoria']] ?? g['categoria'].toString()): t(g['total'])}, 'moneda'),
+          ('Ventas por cliente', _agrupar<Factura>(facturas, (f) => f.receptorNombre, (f) => f.totalFactura), 'moneda'),
+        ],
+      );
+    }
+    _dashboardPrimero(excel);
 
     await _guardarExcel(excel, dialogTitle: 'Guardar Declaración de Renta (Excel)', fileName: 'Declaracion_Renta_Detalle_$periodoFiscal.xlsx');
   }
@@ -2519,6 +3039,7 @@ class ExportService {
   /// desde la fila 5 el detalle, y el Detalle por Tarifa a la par (columna L).
   static Future<void> exportComprasToExcel(List<Compra> compras) async {
     var excel = Excel.createExcel();
+    excel['Dashboard']; // primera pestaña (ver _escribirDashboard)
     Sheet sheet = excel['Compras'];
 
     final sumaSubtotal = compras.fold<double>(0.0, (s, c) => s + c.totalCompra);
@@ -2615,6 +3136,30 @@ class ExportService {
     celda(colTarifas + 3, filaTarifa, DoubleCellValue(baseTotal + ivaTotal));
     estilarCelda(colTarifas + 3, filaTarifa, _estiloTotalMoneda());
     _anchoColumnas(sheet, [14, 28, 18, 14, 10, 14, 14, 3, 3, 12, 14, 14, 14]);
+
+
+    {
+      final total = compras.fold(0.0, (a, c) => a + c.totalCompra);
+      final credito = compras.where((c) => c.condicionCompra == '02');
+      final porPagar = credito.where((c) => !c.pagada).fold(0.0, (a, c) => a + c.totalCompra);
+      _escribirDashboard(
+        excel,
+        titulo: 'Dashboard de compras',
+        subtitulo: '${compras.length} compra(s)',
+        indicadores: [
+          ('Total comprado', total, 'moneda', null),
+          ('Compras', compras.length.toDouble(), 'numero', null),
+          ('Compra promedio', _div(total, compras.length.toDouble()), 'moneda', null),
+          ('Pendiente de pago', porPagar, 'moneda', 'Compras a crédito sin pagar'),
+        ],
+        graficos: [
+          ('Compras por proveedor', _agrupar<Compra>(compras, (c) => c.nombreProveedor ?? '', (c) => c.totalCompra), 'moneda'),
+          ('Compras por mes', _agrupar<Compra>(compras, (c) => _mesCorto(c.fechaCompra), (c) => c.totalCompra), 'moneda'),
+          ('Contado vs. crédito', _agrupar<Compra>(compras, (c) => c.condicionCompra == '02' ? 'Crédito' : 'Contado', (c) => c.totalCompra), 'moneda'),
+        ],
+      );
+    }
+    _dashboardPrimero(excel);
 
     await _guardarExcel(excel, dialogTitle: 'Guardar Reporte de Compras', fileName: 'reporte_compras.xlsx');
   }
@@ -2719,6 +3264,7 @@ class ExportService {
   /// Detalle por Tarifa a la par (columna L).
   static Future<void> exportIngresosToExcel(List<IngresoOperativo> ingresos) async {
     var excel = Excel.createExcel();
+    excel['Dashboard']; // primera pestaña (ver _escribirDashboard)
     Sheet sheet = excel['Ingresos'];
 
     final sumaSubtotal = ingresos.fold<double>(0.0, (s, i) => s + i.monto);
@@ -2783,6 +3329,29 @@ class ExportService {
     celda(colTarifas + 2, filaTarifa, DoubleCellValue(ivaTotal));
     celda(colTarifas + 3, filaTarifa, DoubleCellValue(baseTotal + ivaTotal));
 
+
+    {
+      final subtotal = ingresos.fold(0.0, (a, x) => a + x.monto);
+      final iva = ingresos.fold(0.0, (a, x) => a + x.montoIva);
+      _escribirDashboard(
+        excel,
+        titulo: 'Dashboard de ingresos',
+        subtitulo: '${ingresos.length} ingreso(s)',
+        indicadores: [
+          ('Total de ingresos', subtotal + iva, 'moneda', null),
+          ('Subtotal', subtotal, 'moneda', 'Antes de impuesto'),
+          ('IVA', iva, 'moneda', null),
+          ('Ingreso promedio', _div(subtotal + iva, ingresos.length.toDouble()), 'moneda', null),
+        ],
+        graficos: [
+          ('Ingresos por cliente', _agrupar<IngresoOperativo>(ingresos, (x) => x.clienteNombre, (x) => x.monto + x.montoIva), 'moneda'),
+          ('Ingresos por mes', _agrupar<IngresoOperativo>(ingresos, (x) => _mesCorto(x.fecha), (x) => x.monto + x.montoIva), 'moneda'),
+          ('Contado vs. crédito', _agrupar<IngresoOperativo>(ingresos, (x) => x.condicionVenta == '02' ? 'Crédito' : 'Contado', (x) => x.monto + x.montoIva), 'moneda'),
+        ],
+      );
+    }
+    _dashboardPrimero(excel);
+
     await _guardarExcel(excel, dialogTitle: 'Guardar Reporte de Ingresos', fileName: 'reporte_ingresos.xlsx');
   }
 
@@ -2836,6 +3405,7 @@ class ExportService {
   /// Exporta el listado de gastos operativos (Reportes) a Excel
   static Future<void> exportGastosToExcel(List<GastoOperativo> gastos) async {
     var excel = Excel.createExcel();
+    excel['Dashboard']; // primera pestaña (ver _escribirDashboard)
     Sheet sheet = excel['Gastos'];
     sheet.appendRow([
       TextCellValue('Fecha'),
@@ -2853,6 +3423,29 @@ class ExportService {
         DoubleCellValue(g.monto),
       ]);
     }
+
+    {
+      final total = gastos.fold(0.0, (a, g) => a + g.monto);
+      final deducible = gastos.where((g) => g.deducible).fold(0.0, (a, g) => a + g.monto);
+      _escribirDashboard(
+        excel,
+        titulo: 'Dashboard de gastos',
+        subtitulo: '${gastos.length} gasto(s)',
+        indicadores: [
+          ('Total de gastos', total, 'moneda', null),
+          ('Deducibles', deducible, 'moneda', 'Cuentan para Renta'),
+          ('% deducible', _div(deducible, total), 'porcentaje', null),
+          ('Gasto promedio', _div(total, gastos.length.toDouble()), 'moneda', null),
+        ],
+        graficos: [
+          ('Gastos por categoría', _agrupar<GastoOperativo>(gastos, (g) => _categoriasGastoPdf[g.categoria] ?? g.categoria, (g) => g.monto), 'moneda'),
+          ('Gastos por proveedor', _agrupar<GastoOperativo>(gastos, (g) => g.nombreProveedor ?? '', (g) => g.monto), 'moneda'),
+          ('Gastos por mes', _agrupar<GastoOperativo>(gastos, (g) => _mesCorto(g.fecha), (g) => g.monto), 'moneda'),
+        ],
+      );
+    }
+    _dashboardPrimero(excel);
+
     await _guardarExcel(excel, dialogTitle: 'Guardar Reporte de Gastos', fileName: 'reporte_gastos.xlsx');
   }
 
@@ -2906,6 +3499,7 @@ class ExportService {
   /// Exporta el listado de notas de crédito (Reportes) a Excel
   static Future<void> exportNotasCreditoToExcel(List<NotaCredito> notas) async {
     var excel = Excel.createExcel();
+    excel['Dashboard']; // primera pestaña (ver _escribirDashboard)
     Sheet sheet = excel['NotasCredito'];
     sheet.appendRow([
       TextCellValue('Fecha'),
@@ -2923,6 +3517,27 @@ class ExportService {
         DoubleCellValue(n.total),
       ]);
     }
+
+    {
+      final total = notas.fold(0.0, (a, x) => a + x.total);
+      _escribirDashboard(
+        excel,
+        titulo: 'Dashboard de notas de crédito',
+        subtitulo: '${notas.length} nota(s)',
+        indicadores: [
+          ('Total acreditado', total, 'moneda', null),
+          ('IVA revertido', notas.fold(0.0, (a, x) => a + x.montoIva), 'moneda', null),
+          ('Notas emitidas', notas.length.toDouble(), 'numero', null),
+          ('Monto promedio', _div(total, notas.length.toDouble()), 'moneda', null),
+        ],
+        graficos: [
+          ('Notas por cliente', _agrupar<NotaCredito>(notas, (x) => x.receptorNombre, (x) => x.total), 'moneda'),
+          ('Notas por motivo', _agrupar<NotaCredito>(notas, (x) => x.motivo, (x) => x.total), 'moneda'),
+        ],
+      );
+    }
+    _dashboardPrimero(excel);
+
     await _guardarExcel(excel, dialogTitle: 'Guardar Reporte de Notas de Crédito', fileName: 'reporte_notas_credito.xlsx');
   }
 }
