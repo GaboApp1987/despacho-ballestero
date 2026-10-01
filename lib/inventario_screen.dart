@@ -442,7 +442,7 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
                 ),
                 title: Text(p.nombre, style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
                 subtitle: Text(
-                  "${formatearColones(p.precioUnitario)} · ${p.nombreCategoria ?? 'Sin Categoría'}",
+                  "${p.monedaPrecio == 'USD' ? formatearDolares(p.precioUnitario) : formatearColones(p.precioUnitario)} · ${p.nombreCategoria ?? 'Sin Categoría'}",
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: AppColors.textMuted, fontSize: 12.5),

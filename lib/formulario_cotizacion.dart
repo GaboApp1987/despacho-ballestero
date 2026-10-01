@@ -19,8 +19,10 @@ class LineaCotizacion {
   double precioUnitario;
   Impuesto? impuesto;
 
-  LineaCotizacion({required this.producto, required this.cantidad, this.impuesto})
-      : precioUnitario = producto.precioUnitario;
+  /// Las cotizaciones son en colones: un producto con precio en dólares se
+  /// convierte con [tipoCambio] (el del día, ver _tipoCambioDia).
+  LineaCotizacion({required this.producto, required this.cantidad, this.impuesto, double tipoCambio = 1})
+      : precioUnitario = producto.monedaPrecio == 'USD' ? producto.precioUnitario * tipoCambio : producto.precioUnitario;
 
   double get porcentajeIva => impuesto?.porcentaje ?? 0.0;
   double get subtotal => precioUnitario * cantidad;
@@ -67,6 +69,7 @@ class _FormularioCotizacionState extends State<FormularioCotizacion> {
   void initState() {
     super.initState();
     _cargarDatos();
+    _cargarTipoCambio();
     _busquedaCtrl.addListener(() {
       setState(() => _busqueda = _busquedaCtrl.text.trim().toLowerCase());
     });
@@ -119,13 +122,30 @@ class _FormularioCotizacionState extends State<FormularioCotizacion> {
   /// producto ya está en el carrito, simplemente le suma una unidad más. El
   /// impuesto de una línea siempre es el del producto — se cambia editando
   /// el producto, no aquí.
-  void _agregarRapido(Producto p) {
+  // Tipo de cambio del día (BCCR) para los productos con precio en dólares.
+  double? _tipoCambioDia;
+
+  Future<void> _cargarTipoCambio() async {
+    try {
+      final r = await ApiService.get('/tipo-cambio/');
+      if (r.statusCode == 200) {
+        final d = json.decode(utf8.decode(r.bodyBytes));
+        if (d['disponible'] == true) _tipoCambioDia = (d['venta'] as num).toDouble();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _agregarRapido(Producto p) async {
     final idx = _carrito.indexWhere((l) => l.producto.id == p.id);
     if (idx != -1) {
       setState(() => _carrito[idx].cantidad++);
-    } else {
-      setState(() => _carrito.add(LineaCotizacion(producto: p, cantidad: 1, impuesto: p.impuesto)));
+      return;
     }
+    if (p.monedaPrecio == 'USD' && _tipoCambioDia == null) {
+      await _cargarTipoCambio();
+      if (!mounted) return;
+    }
+    setState(() => _carrito.add(LineaCotizacion(producto: p, cantidad: 1, impuesto: p.impuesto, tipoCambio: _tipoCambioDia ?? 1)));
   }
 
   /// Le manda una foto de una nota de pedido (a mano o no) a Claude
@@ -240,7 +260,7 @@ class _FormularioCotizacionState extends State<FormularioCotizacion> {
         if (idx != -1) {
           _carrito[idx].cantidad += cantidad;
         } else {
-          _carrito.add(LineaCotizacion(producto: producto, cantidad: cantidad, impuesto: producto.impuesto));
+          _carrito.add(LineaCotizacion(producto: producto, cantidad: cantidad, impuesto: producto.impuesto, tipoCambio: _tipoCambioDia ?? 1));
         }
         agregados++;
       }
@@ -368,7 +388,7 @@ class _FormularioCotizacionState extends State<FormularioCotizacion> {
       if (idx != -1) {
         _carrito[idx].cantidad += cantidadTotal;
       } else {
-        _carrito.add(LineaCotizacion(producto: producto, cantidad: cantidadTotal, impuesto: producto.impuesto));
+        _carrito.add(LineaCotizacion(producto: producto, cantidad: cantidadTotal, impuesto: producto.impuesto, tipoCambio: _tipoCambioDia ?? 1));
       }
       agregados++;
     }
@@ -702,7 +722,8 @@ class _FormularioCotizacionState extends State<FormularioCotizacion> {
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textStrong),
                 ),
                 const SizedBox(height: 6),
-                Text(formatearColones(p.precioUnitario), style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 14)),
+                Text(p.monedaPrecio == 'USD' ? formatearDolares(p.precioUnitario) : formatearColones(p.precioUnitario),
+                    style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 14)),
                 const SizedBox(height: 2),
                 Text(
                   "Stock: ${p.stock}",

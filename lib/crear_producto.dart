@@ -42,6 +42,11 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
   Impuesto? _impuestoSeleccionado;
   String _unidadSeleccionada = 'Unid';
   String _tipoSeleccionado = 'mercancia';
+  // Moneda del precio (y del costo): un alquiler que se cobra en dólares
+  // queda en US$ y la factura lo respeta (ver LineaFactura en
+  // formulario_factura.dart).
+  String _monedaPrecio = 'CRC';
+  String get _simboloPrecio => _monedaPrecio == 'USD' ? r'$' : '₡';
   bool _cargandoInicial = true;
   bool _guardando = false;
 
@@ -64,6 +69,7 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
     _categoriaSeleccionada = p?.categoriaId;
     _unidadSeleccionada = unidadesMedidaHacienda.containsKey(p?.unidadMedida) ? p!.unidadMedida : 'Unid';
     _tipoSeleccionado = tiposProducto.containsKey(p?.tipo) ? p!.tipo : 'mercancia';
+    _monedaPrecio = p?.monedaPrecio == 'USD' ? 'USD' : 'CRC';
     _imagenUrlActual = p?.imagenUrl;
     _presentaciones = List.of(p?.presentaciones ?? []);
 
@@ -333,6 +339,7 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
       'codigo_cabys': _cabysCtrl.text.trim(),
       'unidad_medida': _unidadSeleccionada,
       'tipo': _tipoSeleccionado,
+      'moneda_precio': _monedaPrecio,
       'precio_unitario': double.parse(_precioCtrl.text.trim()),
       'costo': double.tryParse(_costoCtrl.text.replaceAll(',', '.').trim()) ?? 0,
       'margen_ganancia': double.tryParse(_margenCtrl.text.replaceAll(',', '.').trim()) ?? 30,
@@ -578,15 +585,38 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
               _buildSeccionPresentaciones(esEdicion),
               const SizedBox(height: 16),
               Row(
+                children: [
+                  const Text("Moneda del precio:", style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(width: 12),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(value: 'CRC', label: Text("₡ Colones")),
+                      ButtonSegment(value: 'USD', label: Text(r"$ Dólares")),
+                    ],
+                    selected: {_monedaPrecio},
+                    onSelectionChanged: (v) => setState(() => _monedaPrecio = v.first),
+                  ),
+                ],
+              ),
+              if (_monedaPrecio == 'USD')
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    "Se factura en dólares tal cual; si hacés la factura en colones, se convierte con el tipo de cambio del día.",
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                ),
+              const SizedBox(height: 16),
+              Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: TextFormField(
                       controller: _costoCtrl,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: "Costo (₡)",
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        labelText: "Costo ($_simboloPrecio)",
+                        border: const OutlineInputBorder(),
                         prefixIcon: Icon(Icons.point_of_sale_outlined),
                         helperText: "Lo que te cuesta",
                       ),
@@ -614,9 +644,9 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
                     child: TextFormField(
                       controller: _precioCtrl,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: "Precio Unitario (₡) *",
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        labelText: "Precio Unitario ($_simboloPrecio) *",
+                        border: const OutlineInputBorder(),
                         prefixIcon: Icon(Icons.attach_money),
                         helperText: "Se calcula solo; edítalo si quieres otro precio",
                       ),

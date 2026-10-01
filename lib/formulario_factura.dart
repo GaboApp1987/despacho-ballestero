@@ -16,7 +16,13 @@ import 'actividad_economica.dart';
 class LineaFactura {
   final Producto producto;
   int cantidad;
-  double precioUnitario;
+  // Precio en la moneda en que se definió (la del producto, o la de la
+  // factura si se editó a mano): un alquiler cobrado en dólares queda en
+  // US$ exactos aunque cambie el tipo de cambio. precioUnitario (abajo)
+  // siempre da colones, que es como lo guarda el backend.
+  double precioBase;
+  String monedaPrecio; // 'CRC' | 'USD'
+  final double Function() tipoCambio;
   Impuesto? impuesto;
   // Descuento por línea (AUDITORIA.md hallazgo A3) -- monto fijo en
   // colones, no porcentaje, para que quede claro exactamente cuánto se
@@ -36,6 +42,7 @@ class LineaFactura {
   LineaFactura({
     required this.producto,
     required this.cantidad,
+    required this.tipoCambio,
     this.impuesto,
     this.montoDescuento = 0,
     this.naturalezaDescuento = '',
@@ -44,7 +51,22 @@ class LineaFactura {
     this.numeroDocExoneracion = '',
     this.nombreInstitucionExoneracion = '',
     this.fechaEmisionDocExoneracion,
-  }) : precioUnitario = producto.precioUnitario;
+  })  : precioBase = producto.precioUnitario,
+        monedaPrecio = producto.monedaPrecio;
+
+  /// Precio unitario en COLONES (lo que se guarda y se manda al backend).
+  double get precioUnitario => monedaPrecio == 'USD' ? precioBase * tipoCambio() : precioBase;
+
+  /// Fija un precio en colones (ej. el precio que se le dio antes a este cliente).
+  set precioUnitario(double colones) {
+    precioBase = colones;
+    monedaPrecio = 'CRC';
+  }
+
+  void fijarPrecio(double valor, String moneda) {
+    precioBase = valor;
+    monedaPrecio = moneda;
+  }
 
   double get porcentajeIva => impuesto?.porcentaje ?? 0.0;
   double get montoBruto => precioUnitario * cantidad;
@@ -122,6 +144,30 @@ class _FormularioFacturaState extends State<FormularioFactura> {
   // la vista previa del total en dólares acá abajo.
   String _moneda = 'CRC';
   final TextEditingController _tipoCambioController = TextEditingController(text: '1.00');
+
+  // Tipo de cambio del día para convertir productos con precio en dólares
+  // cuando la factura es en colones (con factura en dólares se usa el del
+  // campo "Tipo de cambio").
+  double? _tipoCambioDia;
+
+  bool get _enDolares => _moneda == 'USD';
+
+  double get _tipoCambioFactura {
+    final tc = double.tryParse(_tipoCambioController.text.trim().replaceAll(',', '.')) ?? 0;
+    return tc > 0 ? tc : 1.0;
+  }
+
+  /// Tipo de cambio para pasar precios en dólares a colones.
+  double _tipoCambioConversion() => _enDolares ? _tipoCambioFactura : (_tipoCambioDia ?? _tipoCambioFactura);
+
+  /// Muestra un monto (guardado en colones) en la moneda de la factura.
+  String _fmt(double colones) => _enDolares ? formatearDolares(colones / _tipoCambioFactura) : formatearColones(colones);
+
+  double _enMonedaFactura(double colones) => _enDolares ? colones / _tipoCambioFactura : colones;
+
+  double _aColones(double valorEnMonedaFactura) => _enDolares ? valorEnMonedaFactura * _tipoCambioFactura : valorEnMonedaFactura;
+
+  String get _simbolo => _enDolares ? r'$' : '₡';
 
   Future<double> _obtenerTipoCambioDelDia() async {
     try {
@@ -237,13 +283,19 @@ class _FormularioFacturaState extends State<FormularioFactura> {
   /// producto ya está en el carrito, simplemente le suma una unidad más. El
   /// impuesto de una línea siempre es el del producto — se cambia editando
   /// el producto en el catálogo, no aquí.
-  void _agregarRapido(Producto p) {
+  Future<void> _agregarRapido(Producto p) async {
     final idx = _carrito.indexWhere((l) => l.producto.id == p.id);
     if (idx != -1) {
       setState(() => _carrito[idx].cantidad++);
-    } else {
-      setState(() => _carrito.add(LineaFactura(producto: p, cantidad: 1, impuesto: p.impuesto)));
+      return;
     }
+    // Producto con precio en dólares en una factura en colones: hace falta
+    // el tipo de cambio del día para convertirlo.
+    if (p.monedaPrecio == 'USD' && !_enDolares && _tipoCambioDia == null) {
+      _tipoCambioDia = await _obtenerTipoCambioDelDia();
+      if (!mounted) return;
+    }
+    setState(() => _carrito.add(LineaFactura(producto: p, cantidad: 1, impuesto: p.impuesto, tipoCambio: _tipoCambioConversion)));
   }
 
   void _incrementar(int index) => setState(() => _carrito[index].cantidad++);
@@ -337,7 +389,8 @@ class _FormularioFacturaState extends State<FormularioFactura> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
           final valor = double.tryParse(valorCtrl.text.replaceAll(',', '.')) ?? 0;
-          final montoResultante = tipo == 'porcentaje' ? totalBruto * (valor / 100) : valor;
+          // En colones: el monto fijo se escribe en la moneda de la factura.
+          final montoResultante = tipo == 'porcentaje' ? totalBruto * (valor / 100) : _aColones(valor);
           return AlertDialog(
             title: const Text("Descuento general de la factura"),
             content: SingleChildScrollView(
@@ -365,9 +418,9 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     autofocus: true,
                     decoration: InputDecoration(
-                      labelText: tipo == 'porcentaje' ? "Porcentaje de descuento" : "Monto del descuento (₡)",
+                      labelText: tipo == 'porcentaje' ? "Porcentaje de descuento" : "Monto del descuento ($_simbolo)",
                       border: const OutlineInputBorder(),
-                      prefixText: tipo == 'porcentaje' ? null : "₡ ",
+                      prefixText: tipo == 'porcentaje' ? null : "$_simbolo ",
                       suffixText: tipo == 'porcentaje' ? "%" : null,
                     ),
                     onChanged: (_) => setDialogState(() {}),
@@ -380,7 +433,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                   if (valor > 0) ...[
                     const SizedBox(height: 12),
                     Text(
-                      "Descuento total: ${formatearColones(montoResultante)}",
+                      "Descuento total: ${_fmt(montoResultante)}",
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ],
@@ -442,8 +495,10 @@ class _FormularioFacturaState extends State<FormularioFactura> {
   void _editarLineaCarrito(int index) {
     final item = _carrito[index];
     final cantidadCtrl = TextEditingController(text: item.cantidad.toString());
-    final precioCtrl = TextEditingController(text: item.precioUnitario.toStringAsFixed(2));
-    final descuentoCtrl = TextEditingController(text: item.montoDescuento > 0 ? item.montoDescuento.toStringAsFixed(2) : '');
+    final precioCtrl = TextEditingController(
+      text: (item.monedaPrecio == _moneda ? item.precioBase : _enMonedaFactura(item.precioUnitario)).toStringAsFixed(2),
+    );
+    final descuentoCtrl = TextEditingController(text: item.montoDescuento > 0 ? _enMonedaFactura(item.montoDescuento).toStringAsFixed(2) : '');
     final naturalezaCtrl = TextEditingController(text: item.naturalezaDescuento);
     bool exonerado = item.porcentajeExoneracion > 0;
     final porcentajeExoneracionCtrl = TextEditingController(
@@ -484,10 +539,10 @@ class _FormularioFacturaState extends State<FormularioFactura> {
               TextField(
                 controller: precioCtrl,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: "Precio unitario (₡)", border: OutlineInputBorder(), prefixText: "₡ "),
+                decoration: InputDecoration(labelText: "Precio unitario ($_simbolo)", border: const OutlineInputBorder(), prefixText: "$_simbolo "),
                 onChanged: (_) => setDialogState(() {}),
               ),
-              if (anterior != null && precioCtrl.text != anterior.precioUnitario.toStringAsFixed(2)) ...[
+              if (anterior != null && precioCtrl.text != _enMonedaFactura(anterior.precioUnitario).toStringAsFixed(2)) ...[
                 const SizedBox(height: 10),
                 Container(
                   width: double.infinity,
@@ -497,14 +552,14 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                     children: [
                       Expanded(
                         child: Text(
-                          "A este cliente se le vendió antes a ${formatearColones(anterior.precioUnitario)} "
+                          "A este cliente se le vendió antes a ${_fmt(anterior.precioUnitario)} "
                           "(F-${anterior.facturaConsecutivo}).",
                           style: TextStyle(fontSize: 12, color: AppColors.primary),
                         ),
                       ),
                       TextButton(
                         onPressed: () => setDialogState(() {
-                          precioCtrl.text = anterior.precioUnitario.toStringAsFixed(2);
+                          precioCtrl.text = _enMonedaFactura(anterior.precioUnitario).toStringAsFixed(2);
                         }),
                         child: const Text("Usar", style: TextStyle(fontSize: 12)),
                       ),
@@ -519,8 +574,8 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(color: Colors.amber[50], borderRadius: BorderRadius.circular(8)),
                   child: Text(
-                    "Costo del producto: ${formatearColones(costo)}\n"
-                    "Precio mínimo permitido (costo + 10%): ${formatearColones(precioMinimo)}",
+                    "Costo del producto: ${_fmt(costo)}\n"
+                    "Precio mínimo permitido (costo + 10%): ${_fmt(precioMinimo)}",
                     style: TextStyle(fontSize: 12, color: Colors.amber[900], fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -529,10 +584,10 @@ class _FormularioFacturaState extends State<FormularioFactura> {
               TextField(
                 controller: descuentoCtrl,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(
-                  labelText: "Descuento (₡, opcional)",
-                  border: OutlineInputBorder(),
-                  prefixText: "₡ ",
+                decoration: InputDecoration(
+                  labelText: "Descuento ($_simbolo, opcional)",
+                  border: const OutlineInputBorder(),
+                  prefixText: "$_simbolo ",
                   helperText: "Monto fijo, no porcentaje -- se resta del total de la línea.",
                 ),
                 onChanged: (_) => setDialogState(() {}),
@@ -619,8 +674,11 @@ class _FormularioFacturaState extends State<FormularioFactura> {
           ElevatedButton(
             onPressed: () {
               final nuevaCantidad = int.tryParse(cantidadCtrl.text);
-              final nuevoPrecio = double.tryParse(precioCtrl.text.replaceAll(',', '.'));
-              final nuevoDescuento = double.tryParse(descuentoCtrl.text.replaceAll(',', '.')) ?? 0;
+              // Se escriben en la moneda de la factura; las validaciones de
+              // abajo (costo, mínimo) trabajan en colones.
+              final precioEscrito = double.tryParse(precioCtrl.text.replaceAll(',', '.'));
+              final nuevoPrecio = precioEscrito == null ? null : _aColones(precioEscrito);
+              final nuevoDescuento = _aColones(double.tryParse(descuentoCtrl.text.replaceAll(',', '.')) ?? 0);
               if (nuevaCantidad == null || nuevaCantidad <= 0 || nuevoPrecio == null || nuevoPrecio < 0) {
                 ScaffoldMessenger.of(ctx).showSnackBar(
                   const SnackBar(content: Text("Ingrese una cantidad y un precio válidos")),
@@ -647,8 +705,8 @@ class _FormularioFacturaState extends State<FormularioFactura> {
               if (costo > 0 && precioNetoUnitario < precioMinimo) {
                 ScaffoldMessenger.of(ctx).showSnackBar(
                   SnackBar(content: Text(
-                    "Con ese descuento, el precio neto (${formatearColones(precioNetoUnitario)}) queda por debajo "
-                    "del mínimo permitido (${formatearColones(precioMinimo)})",
+                    "Con ese descuento, el precio neto (${_fmt(precioNetoUnitario)}) queda por debajo "
+                    "del mínimo permitido (${_fmt(precioMinimo)})",
                   )),
                 );
                 return;
@@ -671,7 +729,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
               }
               setState(() {
                 item.cantidad = nuevaCantidad;
-                item.precioUnitario = nuevoPrecio;
+                item.fijarPrecio(precioEscrito!, _moneda);
                 item.montoDescuento = nuevoDescuento;
                 item.naturalezaDescuento = nuevoDescuento > 0 ? naturalezaCtrl.text.trim() : '';
                 item.porcentajeExoneracion = exonerado ? nuevoPorcentajeExoneracion : 0;
@@ -1009,7 +1067,8 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textStrong),
                 ),
                 const SizedBox(height: 6),
-                Text(formatearColones(p.precioUnitario), style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 14)),
+                Text(p.monedaPrecio == 'USD' ? formatearDolares(p.precioUnitario) : formatearColones(p.precioUnitario),
+                    style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 14)),
                 const SizedBox(height: 2),
                 Text(
                   "Stock: ${p.stock}",
@@ -1207,6 +1266,11 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                         if (val == 'USD' && _tipoCambioController.text.trim() == '1.00') {
                           _tipoCambioController.text = (await _obtenerTipoCambioDelDia()).toStringAsFixed(2);
                         }
+                        // Si ya hay productos en dólares en el carrito, la factura en
+                        // colones los convierte con el tipo de cambio del día.
+                        if (val == 'CRC' && _tipoCambioDia == null && _carrito.any((l) => l.monedaPrecio == 'USD')) {
+                          _tipoCambioDia = await _obtenerTipoCambioDelDia();
+                        }
                         setState(() => _moneda = val!);
                       },
                     ),
@@ -1236,8 +1300,8 @@ class _FormularioFacturaState extends State<FormularioFactura> {
               if (_moneda == 'USD') ...[
                 const SizedBox(height: 6),
                 Text(
-                  "El catálogo y el carrito siguen en colones -- la factura se emite en dólares "
-                  "usando este tipo de cambio (según BCCR, ajustable).",
+                  "Los montos se muestran y se editan en dólares. Los productos con precio en "
+                  "colones se convierten con este tipo de cambio (según BCCR, ajustable).",
                   style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                 ),
               ],
@@ -1259,7 +1323,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                     final totalDescuento = _carrito.fold<double>(0, (s, i) => s + i.montoDescuento);
                     return totalDescuento > 0
                         ? Text(
-                            "Descuento general: -${formatearColones(totalDescuento)}",
+                            "Descuento general: -${_fmt(totalDescuento)}",
                             style: const TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.w600),
                           )
                         : const SizedBox.shrink();
@@ -1272,29 +1336,25 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                   ),
                 ],
               ),
-              _filaResumen("Subtotal", formatearColones(_totalSubtotal)),
-              _filaResumen("IVA", formatearColones(_totalIva)),
+              _filaResumen("Subtotal", _fmt(_totalSubtotal)),
+              _filaResumen("IVA", _fmt(_totalIva)),
               const Divider(),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text("TOTAL", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  Text(formatearColones(_totalFactura), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: AppColors.primary)),
+                  Text(_fmt(_totalFactura), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: AppColors.primary)),
                 ],
               ),
               if (_moneda == 'USD') ...[
                 const SizedBox(height: 4),
-                Builder(builder: (context) {
-                  final tipoCambio = double.tryParse(_tipoCambioController.text.trim().replaceAll(',', '.')) ?? 1.0;
-                  final totalUsd = tipoCambio > 0 ? _totalFactura / tipoCambio : 0.0;
-                  return Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      "≈ US\$${totalUsd.toStringAsFixed(2)}",
-                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-                    ),
-                  );
-                }),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    "≈ ${formatearColones(_totalFactura)} (tipo de cambio ${formatearNumero(_tipoCambioFactura)})",
+                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                  ),
+                ),
               ],
               const SizedBox(height: 16),
               SizedBox(
@@ -1334,19 +1394,19 @@ class _FormularioFacturaState extends State<FormularioFactura> {
               const SizedBox(height: 2),
               Text(
                 _esInterno
-                    ? "${formatearColones(item.precioUnitario)} c/u · Sin impuesto (interno)"
-                    : "${formatearColones(item.precioUnitario)} c/u · ${item.impuesto?.nombre ?? 'Sin impuesto'} (${formatearNumero(item.porcentajeIva)}%)",
+                    ? "${_fmt(item.precioUnitario)} c/u · Sin impuesto (interno)"
+                    : "${_fmt(item.precioUnitario)} c/u · ${item.impuesto?.nombre ?? 'Sin impuesto'} (${formatearNumero(item.porcentajeIva)}%)",
                 style: TextStyle(fontSize: 11, color: Colors.grey[500]),
               ),
               if (item.montoDescuento > 0)
                 Text(
-                  "Descuento: -${formatearColones(item.montoDescuento)}"
+                  "Descuento: -${_fmt(item.montoDescuento)}"
                   "${item.naturalezaDescuento.isNotEmpty ? ' (${item.naturalezaDescuento})' : ''}",
                   style: const TextStyle(fontSize: 11, color: Colors.green, fontWeight: FontWeight.w600),
                 ),
               if (item.porcentajeExoneracion > 0)
                 Text(
-                  "Exonerado ${item.porcentajeExoneracion.toStringAsFixed(0)}% del IVA: -${formatearColones(item.montoExoneracion)}"
+                  "Exonerado ${item.porcentajeExoneracion.toStringAsFixed(0)}% del IVA: -${_fmt(item.montoExoneracion)}"
                   "${item.nombreInstitucionExoneracion.isNotEmpty ? ' (${item.nombreInstitucionExoneracion})' : ''}",
                   style: const TextStyle(fontSize: 11, color: Colors.green, fontWeight: FontWeight.w600),
                 ),
@@ -1360,7 +1420,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                   child: Padding(
                     padding: const EdgeInsets.only(top: 2),
                     child: Text(
-                      "A este cliente: ${formatearColones(anterior.precioUnitario)} antes · tocar para usar",
+                      "A este cliente: ${_fmt(anterior.precioUnitario)} antes · tocar para usar",
                       style: TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w600),
                     ),
                   ),
@@ -1392,7 +1452,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text(formatearColones(_esInterno ? item.subtotal : item.total), style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text(_fmt(_esInterno ? item.subtotal : item.total), style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             InkWell(
               onTap: () => _quitar(i),

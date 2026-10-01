@@ -64,6 +64,9 @@ class Producto {
   // "mercancia" (bien físico) o "servicio" -- Hacienda exige reportarlos por
   // separado en el resumen de cada factura (ver Producto.tipo en el backend).
   final String tipo;
+  // Moneda del precio de venta: 'CRC' o 'USD' (ej. un alquiler que se cobra
+  // en dólares) -- ver Producto.moneda_precio en el backend.
+  final String monedaPrecio;
 
   Producto({
     required this.id,
@@ -80,6 +83,7 @@ class Producto {
     this.imagenUrl,
     this.presentaciones = const [],
     this.tipo = 'mercancia',
+    this.monedaPrecio = 'CRC',
   });
 
   factory Producto.fromJson(Map<String, dynamic> json) {
@@ -103,6 +107,7 @@ class Producto {
           .map((p) => PresentacionProducto.fromJson(p))
           .toList(),
       tipo: json['tipo'] ?? 'mercancia',
+      monedaPrecio: json['moneda_precio'] ?? 'CRC',
     );
   }
 
@@ -119,6 +124,7 @@ class Producto {
       'categoria': categoriaId,
       'stock': stock,
       'tipo': tipo,
+      'moneda_precio': monedaPrecio,
       if (impuesto != null) 'impuesto': impuesto!.id, // Si Impuesto tiene un campo 'id'
     };
   }
