@@ -1658,7 +1658,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
               "Hacé una factura de 2 productos para Juan Pérez",
               "¿Quién me debe plata?",
               "Agregá un producto: martillo a ₡6.500",
-              "¿Cómo subo mi llave criptográfica?",
+              "Te mando la foto de una factura de compra para registrarla",
             ],
             sugerencias: const [
               (Icons.receipt_long_outlined, "Hacer una factura"),
