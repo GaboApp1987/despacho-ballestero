@@ -172,15 +172,24 @@ class _PropuestaProducto {
 /// backend) a partir de productos/cliente reales del catálogo -- nunca se
 /// crea sola, el usuario la confirma con un botón (ver _confirmarFactura).
 class _PropuestaFactura {
-  final int clienteId;
+  // null = Tiquete Electrónico a consumidor final (sin cliente).
+  final int? clienteId;
   final String clienteNombre;
   final String clienteCedula;
   final List<Map<String, dynamic>> items;
+  final String tipoDocumento; // '01' factura | '04' tiquete
+  final String condicionVenta; // '01' contado | '02' crédito
+  final int plazoCredito;
+  final String medioPago; // '01' efectivo | '02' tarjeta | '03' cheque | '04' transferencia
   _PropuestaFactura({
     required this.clienteId,
     required this.clienteNombre,
     required this.clienteCedula,
     required this.items,
+    this.tipoDocumento = '01',
+    this.condicionVenta = '01',
+    this.plazoCredito = 0,
+    this.medioPago = '01',
   });
 
   factory _PropuestaFactura.fromJson(Map<String, dynamic> json) {
@@ -189,8 +198,16 @@ class _PropuestaFactura {
       clienteNombre: json['cliente_nombre'] ?? '',
       clienteCedula: json['cliente_cedula'] ?? '',
       items: (json['items'] as List).cast<Map<String, dynamic>>(),
+      tipoDocumento: json['tipo_documento'] ?? '01',
+      condicionVenta: json['condicion_venta'] ?? '01',
+      plazoCredito: (json['plazo_credito'] as num? ?? 0).toInt(),
+      medioPago: json['medio_pago'] ?? '01',
     );
   }
+
+  bool get esTiquete => tipoDocumento == '04';
+  bool get esCredito => condicionVenta == '02';
+  String get medioPagoNombre => const {'01': 'efectivo', '02': 'tarjeta', '03': 'cheque', '04': 'transferencia'}[medioPago] ?? 'efectivo';
 
   double get subtotal => items.fold(0.0, (s, it) => s + (it['precio_unitario'] as num) * (it['cantidad'] as num));
   double get montoIva => items.fold(
@@ -436,12 +453,14 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
         'negocio': widget.negocioId,
         'cliente': propuesta.clienteId,
         'consecutivo': '',
+        'tipo_documento': propuesta.tipoDocumento,
         'receptor_nombre': propuesta.clienteNombre,
         'receptor_cedula': propuesta.clienteCedula,
         'total_iva': redondear2(propuesta.montoIva),
         'total_factura': redondear2(propuesta.total),
-        'condicion_venta': '01',
-        'plazo_credito': 0,
+        'condicion_venta': propuesta.condicionVenta,
+        'plazo_credito': propuesta.plazoCredito,
+        'medio_pago': propuesta.medioPago,
         'detalles': propuesta.items.map((it) {
           final subtotalItem = (it['precio_unitario'] as num) * (it['cantidad'] as num);
           final ivaItem = subtotalItem * ((it['impuesto_porcentaje'] as num? ?? 0) / 100);
@@ -457,7 +476,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
       final response = await ApiService.post('/facturas/', body);
       if (response.statusCode == 201 || response.statusCode == 200) {
         setState(() => mensaje.estadoPropuesta = 'creada');
-        _mensajes.add(_ChatMensaje('assistant', '¡Listo! Factura creada y enviada a Hacienda.'));
+        _mensajes.add(_ChatMensaje('assistant', propuesta.esTiquete ? '¡Listo! Tiquete emitido y enviado a Hacienda.' : '¡Listo! Factura creada y enviada a Hacienda.'));
         setState(() {});
       } else {
         throw Exception(utf8.decode(response.bodyBytes));
@@ -606,11 +625,11 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
             children: [
               Icon(Icons.receipt_long, size: 16, color: AppColors.primary),
               const SizedBox(width: 6),
-              const Text('Borrador de factura', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              Text(propuesta.esTiquete ? 'Borrador de tiquete' : 'Borrador de factura', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
             ],
           ),
           const SizedBox(height: 8),
-          Text('Cliente: ${propuesta.clienteNombre}', style: const TextStyle(fontSize: 13)),
+          Text(propuesta.esTiquete ? 'Consumidor final (sin cliente)' : 'Cliente: ${propuesta.clienteNombre}', style: const TextStyle(fontSize: 13)),
           const SizedBox(height: 6),
           ...propuesta.items.map((it) => Padding(
                 padding: const EdgeInsets.only(bottom: 2),
@@ -623,7 +642,10 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Total (contado)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              Text(
+                propuesta.esCredito ? 'Total (crédito ${propuesta.plazoCredito} días)' : 'Total (contado, ${propuesta.medioPagoNombre})',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
               Text(formatearColones(propuesta.total), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary)),
             ],
           ),
@@ -633,7 +655,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
               children: const [
                 Icon(Icons.check_circle, color: Colors.green, size: 18),
                 SizedBox(width: 6),
-                Text('Factura creada', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 13)),
+                Text('Emitida', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 13)),
               ],
             )
           else
@@ -644,7 +666,8 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
                 style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.black),
                 child: mensaje.estadoPropuesta == 'creando'
                     ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Confirmar y crear factura', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    : Text(propuesta.esTiquete ? 'Confirmar y emitir tiquete' : 'Confirmar y crear factura',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
               ),
             ),
         ],
