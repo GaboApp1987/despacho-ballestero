@@ -741,21 +741,39 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
     );
   }
 
-  // Solo estos endpoints puede tocar una propuesta del chat (los mismos de
-  // los formularios normales, con sus permisos y validaciones).
-  static const _endpointsAccion = {'/clientes/', '/gastos-operativos/', '/abonos/'};
+  // Solo estas rutas puede tocar una propuesta del chat (las mismas de los
+  // formularios normales, con sus permisos y validaciones) -- ver
+  // asistente_acciones.py en el backend.
+  static final _rutasPost = RegExp(
+      r'^/(clientes|gastos-operativos|abonos|abonos-proveedor|cotizaciones|notas-credito|ingresos-operativos|proveedores)/$'
+      r'|^/facturas/\d+/(reenviar-hacienda|consultar-hacienda)/$');
+  static final _rutasPatch = RegExp(r'^/productos/\d+/$');
+  static const _estadosHacienda = {
+    '1': 'Sin enviar', '2': 'Enviando', '3': 'Aceptada', '4': 'Rechazada', '5': 'Error técnico', '6': 'No aplica (interno)',
+  };
 
   Future<void> _confirmarAccion(_ChatMensaje mensaje) async {
     final accion = mensaje.propuestaAccion!;
     final endpoint = accion['endpoint'] as String? ?? '';
-    if (!_endpointsAccion.contains(endpoint)) return;
+    final esPatch = (accion['metodo'] as String?)?.toUpperCase() == 'PATCH';
+    if (!(esPatch ? _rutasPatch : _rutasPost).hasMatch(endpoint)) return;
     setState(() => mensaje.estadoAccion = 'creando');
     try {
-      final response = await ApiService.post(endpoint, Map<String, dynamic>.from(accion['datos'] as Map));
+      final datos = Map<String, dynamic>.from(accion['datos'] as Map? ?? {});
+      final response = esPatch ? await ApiService.patch(endpoint, datos) : await ApiService.post(endpoint, datos);
       if (response.statusCode == 201 || response.statusCode == 200) {
+        var exito = (accion['exito'] as String?) ?? '¡Listo!';
+        // Reenviar/consultar en Hacienda: decir cómo quedó.
+        if (accion['mostrar_estado_hacienda'] == true) {
+          try {
+            final cuerpo = json.decode(utf8.decode(response.bodyBytes));
+            final estado = cuerpo is Map ? (cuerpo['estado_hacienda'] ?? cuerpo['estado'])?.toString() : null;
+            if (estado != null) exito = 'Listo. Estado en Hacienda: ${_estadosHacienda[estado] ?? estado}.';
+          } catch (_) {}
+        }
         setState(() {
           mensaje.estadoAccion = 'creada';
-          _mensajes.add(_ChatMensaje('assistant', (accion['exito'] as String?) ?? '¡Listo!'));
+          _mensajes.add(_ChatMensaje('assistant', exito));
         });
       } else {
         throw Exception(utf8.decode(response.bodyBytes));
@@ -776,6 +794,12 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
     'cliente': Icons.person_add_alt_1_outlined,
     'gasto': Icons.receipt_long_outlined,
     'abono': Icons.payments_outlined,
+    'hacienda': Icons.account_balance_outlined,
+    'cotizacion': Icons.request_quote_outlined,
+    'anular': Icons.block_outlined,
+    'ingreso': Icons.trending_up,
+    'proveedor': Icons.local_shipping_outlined,
+    'producto': Icons.inventory_2_outlined,
   };
 
   Widget _buildTarjetaAccion(_ChatMensaje mensaje) {
