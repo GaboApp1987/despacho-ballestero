@@ -40,6 +40,7 @@ import 'widgets/soporte_chat.dart';
 import 'widgets/primeros_pasos_card.dart';
 import 'widgets/asistente_ia_bar.dart';
 import 'perfil_sesion.dart';
+import 'widgets/asistente_flotante.dart';
 
 /// Envuelve a un hijo y le avisa a [builder] si el cursor está encima
 /// (hover) -- solo tiene efecto real con mouse (escritorio/web), en touch no
@@ -319,9 +320,31 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
   final TextEditingController _busquedaClientesCtrl = TextEditingController();
   String _busquedaClientes = '';
 
+  // Botón flotante del asistente en todas las pantallas de este negocio
+  // (también cuando entra el contador a un cliente).
+  late final ConfigAsistente _asistenteFlotante = ConfigAsistente(_abrirAsistenteNegocio);
+
+  void _abrirAsistenteNegocio() {
+    abrirAsistentePantalla(
+      context,
+      negocioId: widget.negocio.id,
+      saludo: "Hola, ${widget.negocio.nombreComercial}",
+      secciones: {for (final e in _seccionesAsistente.entries) e.key: e.value.$2},
+      onNavegar: _irDesdeAsistente,
+      sugerencias: const [
+        (Icons.receipt_long_outlined, "Hacer una factura"),
+        (Icons.trending_up, "¿Cuánto vendí este mes?"),
+        (Icons.monetization_on_outlined, "¿Quién me debe?"),
+        (Icons.insert_chart_outlined, "Mandame el reporte del mes"),
+        (Icons.percent, "¿Cuánto IVA voy a pagar?"),
+      ],
+    );
+  }
+
   @override
   void initState() {
     super.initState();
+    AsistenteFlotante.registrar(_asistenteFlotante);
     DateTime ahora = DateTime.now();
     _fechaInicio = DateTime(ahora.year, ahora.month, 1);
     _fechaFin = DateTime(ahora.year, ahora.month + 1, 0);
@@ -351,6 +374,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
 
   @override
   void dispose() {
+    AsistenteFlotante.quitar(_asistenteFlotante);
     _busquedaClientesCtrl.dispose();
     _pillTabsScrollController.dispose();
     _overlayCategoria?.remove();

@@ -20,6 +20,7 @@ import 'widgets/soporte_chat.dart';
 import 'widgets/asistente_ia_bar.dart';
 import 'widgets/campo_cedula_hacienda.dart';
 import 'perfil_sesion.dart';
+import 'widgets/asistente_flotante.dart';
 
 /// Paleta "Blanco & Cobalto" -- solo para cuando esta pantalla la ve un
 /// CONTADOR viendo su propia cartera (widget.puedeCrear), a propósito
@@ -252,12 +253,16 @@ class _NegociosScreenState extends State<NegociosScreen> {
   bool get _puedeReasignar => !widget.puedeCrear && widget.puedeGestionarPlanes;
   List<Map<String, dynamic>> _sociosDisponibles = [];
 
+  // Botón flotante del asistente en todas las pantallas del contador.
+  late final ConfigAsistente _asistenteFlotante = ConfigAsistente(_abrirAsistenteContador);
+
   @override
   void initState() {
     super.initState();
     _cargarNegocios();
     _cargarPlanes();
     if (widget.puedeCrear) {
+      AsistenteFlotante.registrar(_asistenteFlotante);
       _cargarMiSocio();
       _dashboardFuture = _cargarDashboard();
       _cargarPendientesCertificaciones();
@@ -397,6 +402,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
 
   @override
   void dispose() {
+    AsistenteFlotante.quitar(_asistenteFlotante);
     _busquedaCtrl.dispose();
     _scrollContador.dispose();
     super.dispose();

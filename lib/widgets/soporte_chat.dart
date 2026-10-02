@@ -8,6 +8,7 @@ import '../formato.dart';
 import '../export_service.dart';
 import '../factura.dart';
 import 'adjuntos_ia.dart';
+import 'asistente_flotante.dart';
 
 /// Abre el chat de soporte con IA en una hoja modal -- se puede llamar desde
 /// cualquier pantalla (login, o ya adentro de la app). `contexto` cambia el
@@ -65,6 +66,7 @@ Future<void> abrirAsistentePantalla(
   List<AdjuntoIA> adjuntosIniciales = const [],
   bool empezarGrabando = false,
 }) {
+  AsistenteFlotante.abierto.value = true;
   return Navigator.of(context).push(PageRouteBuilder(
     transitionDuration: const Duration(milliseconds: 380),
     reverseTransitionDuration: const Duration(milliseconds: 260),
@@ -87,7 +89,7 @@ Future<void> abrirAsistentePantalla(
         child: ScaleTransition(scale: Tween(begin: 0.97, end: 1.0).animate(curva), child: child),
       );
     },
-  ));
+  )).whenComplete(() => AsistenteFlotante.abierto.value = false);
 }
 
 class _ChatMensaje {
@@ -295,6 +297,10 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
   final TextEditingController _inputCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
   bool _enviando = false;
+  // Respuesta que va llegando en vivo (ver ApiService.postEnVivo) y lo que
+  // el asistente está consultando ("Buscando tus facturas…").
+  String _parcial = '';
+  String? _estadoVivo;
 
   // Notas de voz (ver adjuntos_ia.dart) y archivos pendientes de mandar.
   // `_pulseCtrl` anima el aro del micrófono mientras la IA habla.
@@ -423,21 +429,45 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
     _scrollAlFinal();
 
     try {
-      final response = await ApiService.post('/soporte/chat/', {
+      // La respuesta va apareciendo mientras la IA la escribe (como en
+      // Claude/Gemini) en vez de esperar a que esté completa.
+      Map<String, dynamic>? datosFin;
+      await for (final evento in ApiService.postEnVivo('/soporte/chat/', {
         'mensajes': _mensajes.map((m) => m.toJson()).toList(),
         'contexto': widget.contexto,
         if (widget.negocioId != null) 'negocio': widget.negocioId,
         if (widget.secciones != null) 'secciones': widget.secciones,
         if (adj.isNotEmpty) 'adjuntos': adj.map((a) => a.toJson()).toList(),
-      });
-      final data = json.decode(utf8.decode(response.bodyBytes));
-      if (response.statusCode != 200) {
-        throw Exception(data['detail'] ?? 'Error desconocido');
+        'stream': true,
+      })) {
+        if (!mounted) return;
+        switch (evento['tipo']) {
+          case 'texto':
+            setState(() {
+              _parcial += '${evento['dato'] ?? ''}';
+              _estadoVivo = null;
+            });
+            _scrollAlFinal();
+          case 'estado':
+            // Lo que alcanzó a decir antes de consultar ("Déjame ver…") se
+            // reemplaza por lo que está haciendo.
+            setState(() {
+              _parcial = '';
+              _estadoVivo = '${evento['dato'] ?? ''}';
+            });
+          case 'fin':
+            datosFin = Map<String, dynamic>.from(evento['dato'] as Map);
+          case 'error':
+            throw Exception(evento['dato'] ?? 'Error desconocido');
+        }
       }
+      final data = datosFin ?? (throw Exception('La respuesta se cortó. Probá de nuevo.'));
       final propuestaJson = data['propuesta_factura'];
       final propuestaProductoJson = data['propuesta_producto'];
       final respuesta = data['respuesta'] ?? '';
       mensajeUsuario.notaOculta = data['nota_adjuntos'] as String?;
+      _parcial = '';
+      _estadoVivo = null;
       setState(() => _mensajes.add(_ChatMensaje(
             'assistant',
             respuesta,
@@ -458,9 +488,22 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
       setState(() => _mensajes.add(_ChatMensaje('assistant', '$mensajeError ($e)')));
       if (porVoz) _hablar(mensajeError);
     } finally {
-      if (mounted) setState(() => _enviando = false);
+      if (mounted) {
+        setState(() {
+          _enviando = false;
+          _parcial = '';
+          _estadoVivo = null;
+        });
+      }
       _scrollAlFinal();
     }
+  }
+
+  /// Lo que va llegando, sin las marcas internas ([[ABRIR:...]] y demás)
+  /// que el servidor quita de la respuesta final.
+  String get _parcialVisible {
+    final i = _parcial.indexOf('[[');
+    return (i == -1 ? _parcial : _parcial.substring(0, i)).trimRight();
   }
 
   /// Crea de verdad la factura que el chat propuso, solo cuando el usuario
@@ -1135,9 +1178,46 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
     return ListView.builder(
       controller: _scrollCtrl,
       padding: estiloPantalla ? const EdgeInsets.fromLTRB(16, 8, 16, 16) : const EdgeInsets.all(16),
-      itemCount: _mensajes.length + (estiloPantalla && _enviando ? 1 : 0),
+      itemCount: _mensajes.length + (_enviando && (estiloPantalla || _parcialVisible.isNotEmpty || _estadoVivo != null) ? 1 : 0),
       itemBuilder: (context, index) {
-        if (index == _mensajes.length) return const _Pensando();
+        if (index == _mensajes.length) {
+          if (_parcialVisible.isEmpty) {
+            return estiloPantalla
+                ? _Pensando(texto: _estadoVivo)
+                : Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(_estadoVivo ?? '', style: TextStyle(color: AppColors.textMuted, fontSize: 13, fontStyle: FontStyle.italic)),
+                  );
+          }
+          if (estiloPantalla) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 18),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _AvatarIA(tamano: 30),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text('$_parcialVisible ▍', style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 15, height: 1.55)),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+          return Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              constraints: BoxConstraints(maxWidth: anchoBurbuja),
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(color: AppColors.surfaceSubtle, borderRadius: BorderRadius.circular(14)),
+              child: Text('$_parcialVisible ▍', style: TextStyle(color: AppColors.textStrong, fontSize: 14, height: 1.4)),
+            ),
+          );
+        }
         final m = _mensajes[index];
         final esUsuario = m.role == 'user';
         final colorTexto = estiloPantalla
@@ -1575,7 +1655,9 @@ class _AvatarIA extends StatelessWidget {
 
 /// "Pensando..." mientras la IA responde (pantalla completa).
 class _Pensando extends StatefulWidget {
-  const _Pensando();
+  /// Qué está haciendo (ej. "Buscando tus facturas…"); null = "Pensando...".
+  final String? texto;
+  const _Pensando({this.texto});
 
   @override
   State<_Pensando> createState() => _PensandoState();
@@ -1598,7 +1680,12 @@ class _PensandoState extends State<_Pensando> with SingleTickerProviderStateMixi
         children: [
           RotationTransition(turns: _ctrl, child: const _AvatarIA(tamano: 30)),
           const SizedBox(width: 12),
-          Text('Pensando...', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 14.5, fontStyle: FontStyle.italic)),
+          Flexible(
+            child: Text(
+              widget.texto ?? 'Pensando...',
+              style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 14.5, fontStyle: FontStyle.italic),
+            ),
+          ),
         ],
       ),
     );

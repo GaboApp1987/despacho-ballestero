@@ -5,6 +5,7 @@ import 'theme/app_theme.dart';
 import 'theme/theme_controller.dart';
 import 'registro_publico_screen.dart';
 import 'solicitud_publica_screen.dart';
+import 'widgets/asistente_flotante.dart';
 
 // AUDITORIA.md hallazgo C4 -- antes, una excepción sin capturar en
 // cualquier pantalla no tenía ningún manejador global: en release, Flutter
@@ -22,6 +23,8 @@ void _registrarError(Object error, StackTrace stack, {String origen = ''}) {
   debugPrint('❌ Error no capturado${origen.isNotEmpty ? ' ($origen)' : ''}: $error');
   debugPrint('$stack');
 }
+
+final GlobalKey<NavigatorState> navegadorPrincipal = GlobalKey<NavigatorState>();
 
 void main() {
   FlutterError.onError = (FlutterErrorDetails details) {
@@ -80,6 +83,10 @@ class MyApp extends StatelessWidget {
       valueListenable: themeController,
       builder: (context, esOscuro, _) {
         return MaterialApp(
+          navigatorKey: navegadorPrincipal,
+          // Botón flotante del asistente en todas las pantallas (ver
+          // AsistenteFlotante; solo aparece con la sesión iniciada).
+          builder: (context, child) => AsistenteFlotante(navigatorKey: navegadorPrincipal, child: child ?? const SizedBox.shrink()),
           debugShowCheckedModeBanner: false,
           title: 'Equilibra',
           theme: esOscuro ? AppTheme.dark : AppTheme.light,

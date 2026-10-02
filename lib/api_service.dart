@@ -3,6 +3,8 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'perfil_sesion.dart';
+import 'cliente_en_vivo.dart';
+import 'widgets/asistente_flotante.dart';
 
 class ApiService {
   // AUDITORIA.md hallazgo B3 -- el token/refresh_token vivían en
@@ -43,6 +45,7 @@ class ApiService {
   /// Elimina los tokens guardados (cierre de sesión)
   static Future<void> logout() async {
     PerfilSesion.limpiar();
+    AsistenteFlotante.limpiar();
     await _almacenSeguro.delete(key: 'token');
     await _almacenSeguro.delete(key: 'refresh_token');
   }
@@ -112,6 +115,53 @@ class ApiService {
   static Future<http.Response> post(String endpoint, Map<String, dynamic> body) async {
     final url = Uri.parse('$baseUrl$endpoint');
     return _conRenovacion((headers) => http.post(url, headers: headers, body: json.encode(body)));
+  }
+
+  /// POST cuya respuesta llega en vivo (Server-Sent Events, ver
+  /// SoporteChatView._responder_en_vivo): entrega cada evento `data: {...}`
+  /// decodificado apenas llega. Si el servidor contesta un JSON normal (ej.
+  /// un aviso sin pasar por la IA) lo entrega como un solo evento "fin".
+  static Stream<Map<String, dynamic>> postEnVivo(String endpoint, Map<String, dynamic> body) async* {
+    final url = Uri.parse('$baseUrl$endpoint');
+    var headers = await _getHeaders();
+    for (var intento = 0; intento < 2; intento++) {
+      final cliente = crearClienteEnVivo();
+      try {
+        final pedido = http.Request('POST', url)
+          ..headers.addAll(headers)
+          ..headers['Accept'] = 'text/event-stream'
+          ..body = json.encode(body);
+        final respuesta = await cliente.send(pedido);
+        if (respuesta.statusCode == 401 && intento == 0 && await _renovarToken()) {
+          headers = await _getHeaders();
+          continue;
+        }
+        final tipo = respuesta.headers['content-type'] ?? '';
+        if (respuesta.statusCode != 200 || !tipo.contains('text/event-stream')) {
+          final texto = await respuesta.stream.bytesToString();
+          dynamic datos;
+          try {
+            datos = json.decode(texto);
+          } catch (_) {
+            datos = null;
+          }
+          if (respuesta.statusCode == 200 && datos is Map) {
+            yield {'tipo': 'fin', 'dato': datos};
+          } else {
+            yield {'tipo': 'error', 'dato': (datos is Map ? datos['detail'] : null) ?? 'Error ${respuesta.statusCode}'};
+          }
+          return;
+        }
+        await for (final linea in respuesta.stream.transform(utf8.decoder).transform(const LineSplitter())) {
+          if (linea.startsWith('data:')) {
+            yield Map<String, dynamic>.from(json.decode(linea.substring(5).trim()) as Map);
+          }
+        }
+        return;
+      } finally {
+        cliente.close();
+      }
+    }
   }
 
   /// Método PUT genérico
