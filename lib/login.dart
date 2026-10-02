@@ -17,6 +17,7 @@ import 'recuperar_password_screen.dart';
 import 'registro_publico_screen.dart';
 import 'suscripcion_suspendida_screen.dart';
 import 'widgets/asistente_ia_bar.dart';
+import 'perfil_sesion.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -180,6 +181,7 @@ class _LoginScreenState extends State<LoginScreen> {
       debugPrint("Nota: no se pudo determinar el rol del usuario: $e");
     }
 
+    PerfilSesion.fijar(rol, empleado: rolEmpleado);
     Widget pantallaDestino;
     switch (rol) {
       case 'negocio':

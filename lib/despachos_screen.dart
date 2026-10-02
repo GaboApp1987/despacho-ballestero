@@ -13,6 +13,7 @@ import 'widgets/soporte_chat.dart';
 import 'widgets/asistente_ia_bar.dart';
 import 'whatsapp_bandeja_screen.dart';
 import 'estadisticas_screen.dart';
+import 'perfil_sesion.dart';
 
 /// Pantalla de nivel plataforma: solo la ve un superusuario (el dueño del programa).
 /// Desde acá se dan de alta los despachos contables (cada uno con su propio dueño/login),
@@ -437,10 +438,8 @@ class _DespachosScreenState extends State<DespachosScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              "PANEL DE ADMINISTRADOR",
-              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 1.4, color: AppColors.primary),
-            ),
+            ChipPerfil(color: AppColors.primary),
+            const SizedBox(height: 3),
             const Text("Despachos"),
           ],
         ),

@@ -19,6 +19,7 @@ import 'widgets/bloqueo_salida_raiz.dart';
 import 'widgets/soporte_chat.dart';
 import 'widgets/asistente_ia_bar.dart';
 import 'widgets/campo_cedula_hacienda.dart';
+import 'perfil_sesion.dart';
 
 /// Paleta "Blanco & Cobalto" -- solo para cuando esta pantalla la ve un
 /// CONTADOR viendo su propia cartera (widget.puedeCrear), a propósito
@@ -1123,21 +1124,22 @@ class _NegociosScreenState extends State<NegociosScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
-                    "PANEL DEL CONTADOR",
-                    style: TextStyle(
-                      fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 1.4, color: _PaletaContador.acento,
-                    ),
-                  ),
+                  const ChipPerfil(color: _PaletaContador.acento),
+                  const SizedBox(height: 3),
                   const Text(
                     "Mis Clientes",
                     style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20, color: _PaletaContador.textoFuerte),
                   ),
                 ],
               )
-            : const Text(
-                "Mis Negocios",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+            : const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ChipPerfil(color: Colors.white),
+                  SizedBox(height: 3),
+                  Text("Mis Negocios", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+                ],
               ),
         actions: esContador
             ? [

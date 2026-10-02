@@ -39,6 +39,7 @@ import 'widgets/bloqueo_salida_raiz.dart';
 import 'widgets/soporte_chat.dart';
 import 'widgets/primeros_pasos_card.dart';
 import 'widgets/asistente_ia_bar.dart';
+import 'perfil_sesion.dart';
 
 /// Envuelve a un hijo y le avisa a [builder] si el cursor está encima
 /// (hover) -- solo tiene efecto real con mouse (escritorio/web), en touch no
@@ -954,11 +955,22 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    widget.negocio.nombreComercial,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textStrong),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          widget.negocio.nombreComercial,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textStrong),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Con qué perfil se entró: el dueño, un colaborador, o
+                      // el contador / despacho trabajando en este negocio.
+                      ChipPerfil(color: AppColors.primary),
+                    ],
                   ),
                   // El saludo vive acá (antes era una tarjeta aparte en Inicio
                   // que repetía logo y nombre y ocupaba espacio).

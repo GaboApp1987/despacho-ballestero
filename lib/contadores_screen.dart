@@ -16,6 +16,7 @@ import 'login.dart';
 import 'widgets/bloqueo_salida_raiz.dart';
 import 'widgets/soporte_chat.dart';
 import 'widgets/asistente_ia_bar.dart';
+import 'perfil_sesion.dart';
 
 class ContadoresScreen extends StatefulWidget {
   const ContadoresScreen({super.key});
@@ -314,10 +315,8 @@ class _ContadoresScreenState extends State<ContadoresScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: const [
-            Text(
-              "PANEL DEL DESPACHO",
-              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 1.4, color: Colors.white70),
-            ),
+            ChipPerfil(color: Colors.white),
+            SizedBox(height: 3),
             Text(
               "Mis Contadores",
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),

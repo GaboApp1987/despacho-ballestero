@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'perfil_sesion.dart';
 
 class ApiService {
   // AUDITORIA.md hallazgo B3 -- el token/refresh_token vivían en
@@ -41,6 +42,7 @@ class ApiService {
 
   /// Elimina los tokens guardados (cierre de sesión)
   static Future<void> logout() async {
+    PerfilSesion.limpiar();
     await _almacenSeguro.delete(key: 'token');
     await _almacenSeguro.delete(key: 'refresh_token');
   }
