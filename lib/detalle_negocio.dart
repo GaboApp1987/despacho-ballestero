@@ -43,6 +43,7 @@ import 'perfil_sesion.dart';
 import 'widgets/asistente_flotante.dart';
 import 'widgets/selector_periodo.dart';
 import 'nota_credito.dart';
+import 'widgets/pagos_en_linea.dart';
 
 /// Envuelve a un hijo y le avisa a [builder] si el cursor está encima
 /// (hover) -- solo tiene efecto real con mouse (escritorio/web), en touch no
@@ -1738,6 +1739,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
             ],
           ),
           const SizedBox(height: 12),
+          // Clientes que pagaron desde el enlace de su factura (ver pagos_en_linea.dart).
+          AvisoPagosPorConfirmar(negocioId: widget.negocio.id),
           // Guía para cuentas nuevas -- se oculta sola al completarla (y
           // nunca la ve el contador ni un colaborador, ver backend).
           PrimerosPasosCard(

@@ -6,6 +6,7 @@ import '../api_service.dart';
 import '../factura.dart';
 import '../formato.dart';
 import '../theme/app_theme.dart';
+import 'pagos_en_linea.dart';
 
 /// Tarjeta "Automático" del detalle de una factura (ver
 /// gestion/automatizaciones.py en el backend):
@@ -569,6 +570,14 @@ class _AutomatizacionFacturaState extends State<AutomatizacionFactura> {
         const SizedBox(height: 10),
         _seccionRecurrencia(),
         if (cobro != null) ...[const SizedBox(height: 10), cobro],
+        if (_datos?['pago_en_linea'] is Map) ...[
+          const SizedBox(height: 10),
+          PagoEnLineaFactura(
+            negocioId: _f.negocio,
+            datos: Map<String, dynamic>.from(_datos!['pago_en_linea'] as Map),
+            onCambio: _cargar,
+          ),
+        ],
       ],
     );
   }
