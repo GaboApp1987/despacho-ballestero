@@ -7,6 +7,7 @@ import 'negocio.dart';
 import 'factura.dart';
 import 'export_service.dart'; // 👈 Importamos el servicio de exportación
 import 'formato.dart';
+import 'widgets/pagos_en_linea.dart';
 
 /// Abre WhatsApp (wa.me) con el mensaje ya escrito para ese número --
 /// compartido entre el recordatorio individual (por cliente) y el masivo
@@ -167,6 +168,13 @@ class _CuentasPorCobrarScreenState extends State<CuentasPorCobrarScreen> {
                 )
               ],
             ),
+          ),
+
+          // Acceso fijo a los pagos que reportan los clientes desde el
+          // enlace de su factura (ver widgets/pagos_en_linea.dart).
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+            child: AvisoPagosPorConfirmar(negocioId: widget.negocio.id, siempre: true),
           ),
 
           if (!_isLoading && _saldosClientes.isNotEmpty)

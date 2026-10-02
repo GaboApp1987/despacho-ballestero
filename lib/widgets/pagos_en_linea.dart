@@ -259,17 +259,23 @@ class _PagoReportadoTileState extends State<PagoReportadoTile> {
   }
 }
 
-/// Lista de pagos reportados del negocio (por confirmar primero).
-class PagosReportadosScreen extends StatefulWidget {
+/// Sección "Pagos en línea" del negocio: los pagos que reportaron los
+/// clientes (filtrables por estado) y los datos de pago. Va como sección del
+/// menú del negocio y dentro de PagosReportadosScreen.
+class PagosEnLineaVista extends StatefulWidget {
   final int negocioId;
-  const PagosReportadosScreen({super.key, required this.negocioId});
+  const PagosEnLineaVista({super.key, required this.negocioId});
 
   @override
-  State<PagosReportadosScreen> createState() => _PagosReportadosScreenState();
+  State<PagosEnLineaVista> createState() => _PagosEnLineaVistaState();
 }
 
-class _PagosReportadosScreenState extends State<PagosReportadosScreen> {
+class _PagosEnLineaVistaState extends State<PagosEnLineaVista> {
   List<Map<String, dynamic>>? _pagos;
+  Map<String, dynamic>? _datos;
+  String _filtro = 'pendiente';
+
+  static const _filtros = {'pendiente': 'Por confirmar', 'confirmado': 'Confirmados', 'rechazado': 'Rechazados', '': 'Todos'};
 
   @override
   void initState() {
@@ -279,60 +285,145 @@ class _PagosReportadosScreenState extends State<PagosReportadosScreen> {
 
   Future<void> _cargar() async {
     try {
-      final r = await ApiService.get('/pagos-reportados/?negocio=${widget.negocioId}');
-      if (r.statusCode == 200) {
-        final d = json.decode(utf8.decode(r.bodyBytes));
+      final rs = await Future.wait([
+        ApiService.get('/pagos-reportados/?negocio=${widget.negocioId}'),
+        ApiService.get('/datos-pago/?negocio=${widget.negocioId}'),
+      ]);
+      if (rs[0].statusCode == 200) {
+        final d = json.decode(utf8.decode(rs[0].bodyBytes));
         final lista = (d is Map ? d['results'] : d) as List;
-        final pagos = lista.map((e) => Map<String, dynamic>.from(e as Map)).toList()
-          ..sort((a, b) => (a['estado'] == 'pendiente' ? 0 : 1).compareTo(b['estado'] == 'pendiente' ? 0 : 1));
-        if (mounted) setState(() => _pagos = pagos);
+        _pagos = lista.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      } else {
+        _pagos = [];
       }
+      if (rs[1].statusCode == 200) _datos = Map<String, dynamic>.from(json.decode(utf8.decode(rs[1].bodyBytes)) as Map);
     } catch (_) {
-      if (mounted) setState(() => _pagos = []);
+      _pagos ??= [];
     }
+    if (mounted) setState(() {});
+  }
+
+  int _cuantos(String estado) => (_pagos ?? []).where((p) => estado.isEmpty || p['estado'] == estado).length;
+
+  Widget _tarjetaDatos() {
+    final d = _datos ?? {};
+    final configurado = (d['sinpe_numero'] ?? '').toString().isNotEmpty || (d['iban'] ?? '').toString().isNotEmpty;
+    final lineas = <String>[
+      if ((d['sinpe_numero'] ?? '').toString().isNotEmpty) "SINPE Móvil ${d['sinpe_numero']}${(d['sinpe_titular'] ?? '').toString().isNotEmpty ? ' · ${d['sinpe_titular']}' : ''}",
+      if ((d['iban'] ?? '').toString().isNotEmpty) "IBAN ${d['iban']}${(d['banco'] ?? '').toString().isNotEmpty ? ' · ${d['banco']}' : ''}",
+      if (configurado) d['autoconfirmar'] == true ? "Se confirman solos si el comprobante coincide" : "Los confirmás vos",
+      if (configurado && d['enlace_en_correos'] != false) "Botón \"Pagar\" en los correos de facturas a crédito",
+    ];
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.account_balance_wallet_outlined, color: AppColors.primary),
+              const SizedBox(width: 10),
+              Expanded(child: Text("Tus datos de pago", style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.textStrong))),
+              FilledButton.tonalIcon(
+                onPressed: () async {
+                  if (await configurarDatosPago(context, negocioId: widget.negocioId) != null) _cargar();
+                },
+                icon: Icon(configurado ? Icons.edit_outlined : Icons.add_rounded, size: 18),
+                label: Text(configurado ? "Editar" : "Configurar"),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (!configurado)
+            Text(
+              "Cargá tu SINPE Móvil o cuenta IBAN. Así cada factura a crédito tiene una página donde tu cliente paga y sube el comprobante; la IA lo lee y te avisa acá.",
+              style: TextStyle(fontSize: 12.5, color: AppColors.textMuted, height: 1.35),
+            )
+          else
+            for (final l in lineas)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text("• $l", style: TextStyle(fontSize: 12.5, color: AppColors.textMuted)),
+              ),
+          const SizedBox(height: 6),
+          Text(
+            "El enlace de pago de cada factura se copia o comparte desde la factura (sección Automático). Pago con tarjeta: próximamente.",
+            style: TextStyle(fontSize: 11.5, color: AppColors.textMuted, fontStyle: FontStyle.italic),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Pagos reportados"),
-        actions: [
-          IconButton(
-            tooltip: "Datos de pago",
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: () => configurarDatosPago(context, negocioId: widget.negocioId),
+    if (_pagos == null) return const Center(child: CircularProgressIndicator());
+    final visibles = _pagos!.where((p) => _filtro.isEmpty || p['estado'] == _filtro).toList();
+    return RefreshIndicator(
+      onRefresh: _cargar,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _tarjetaDatos(),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final f in _filtros.entries)
+                ChoiceChip(
+                  label: Text("${f.value} (${_cuantos(f.key)})"),
+                  selected: _filtro == f.key,
+                  onSelected: (_) => setState(() => _filtro = f.key),
+                  showCheckmark: false,
+                ),
+            ],
           ),
+          const SizedBox(height: 12),
+          if (visibles.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 30),
+              child: Text(
+                _filtro == 'pendiente'
+                    ? "No hay pagos por confirmar. Cuando un cliente pague desde el enlace de su factura y suba el comprobante, aparece acá."
+                    : "No hay pagos en esta lista.",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.textMuted),
+              ),
+            )
+          else
+            for (final p in visibles) PagoReportadoTile(pago: p, onCambio: _cargar),
         ],
       ),
-      body: _pagos == null
-          ? const Center(child: CircularProgressIndicator())
-          : _pagos!.isEmpty
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      "Todavía no hay pagos reportados. Cuando un cliente pague desde el enlace de su factura y suba el comprobante, aparece acá.",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: AppColors.textMuted),
-                    ),
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _cargar,
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [for (final p in _pagos!) PagoReportadoTile(pago: p, onCambio: _cargar)],
-                  ),
-                ),
     );
   }
+}
+
+/// Pantalla propia con la misma vista (desde el aviso del dashboard o desde
+/// Cuentas por Cobrar).
+class PagosReportadosScreen extends StatelessWidget {
+  final int negocioId;
+  const PagosReportadosScreen({super.key, required this.negocioId});
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(title: const Text("Pagos en línea")),
+        body: PagosEnLineaVista(negocioId: negocioId),
+      );
 }
 
 /// Aviso del dashboard: "N pagos por confirmar" (no se muestra si no hay).
 class AvisoPagosPorConfirmar extends StatefulWidget {
   final int negocioId;
-  const AvisoPagosPorConfirmar({super.key, required this.negocioId});
+  // true: se muestra aunque no haya pagos pendientes (como acceso fijo).
+  final bool siempre;
+  const AvisoPagosPorConfirmar({super.key, required this.negocioId, this.siempre = false});
 
   @override
   State<AvisoPagosPorConfirmar> createState() => _AvisoPagosPorConfirmarState();
@@ -360,11 +451,13 @@ class _AvisoPagosPorConfirmarState extends State<AvisoPagosPorConfirmar> {
 
   @override
   Widget build(BuildContext context) {
-    if (_cantidad == 0) return const SizedBox.shrink();
+    if (_cantidad == 0 && !widget.siempre) return const SizedBox.shrink();
+    final hay = _cantidad > 0;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Material(
-        color: Colors.green.withValues(alpha: 0.12),
+        color: hay ? Colors.green.withValues(alpha: 0.12) : AppColors.surface,
+        shape: hay ? null : RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: AppColors.border)),
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
@@ -376,15 +469,19 @@ class _AvisoPagosPorConfirmarState extends State<AvisoPagosPorConfirmar> {
             padding: const EdgeInsets.all(14),
             child: Row(
               children: [
-                const Icon(Icons.payments_rounded, color: Colors.green),
+                Icon(Icons.payments_rounded, color: hay ? Colors.green : AppColors.primary),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    _cantidad == 1 ? "1 cliente reportó un pago: confirmalo" : "$_cantidad clientes reportaron pagos: confirmalos",
+                    !hay
+                        ? "Pagos en línea: pagos reportados y tus datos de SINPE/IBAN"
+                        : _cantidad == 1
+                            ? "1 cliente reportó un pago: confirmalo"
+                            : "$_cantidad clientes reportaron pagos: confirmalos",
                     style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textStrong),
                   ),
                 ),
-                const Icon(Icons.chevron_right_rounded, color: Colors.green),
+                Icon(Icons.chevron_right_rounded, color: hay ? Colors.green : AppColors.textMuted),
               ],
             ),
           ),
