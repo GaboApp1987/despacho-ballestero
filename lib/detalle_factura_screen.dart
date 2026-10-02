@@ -10,6 +10,7 @@ import 'api_service.dart';
 import 'nota_credito.dart';
 import 'negocio.dart';
 import 'formulario_factura.dart';
+import 'widgets/automatizacion_factura.dart';
 
 class DetalleFacturaScreen extends StatefulWidget {
   final Factura factura;
@@ -561,6 +562,8 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
                             ),
                           ],
                         ],
+                        // Repetir sola y cobro automático (ver AutomatizacionFactura).
+                        if (!factura.esInterno) AutomatizacionFactura(factura: factura),
                       ],
                     ),
                   ),
