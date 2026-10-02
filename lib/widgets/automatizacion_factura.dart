@@ -29,14 +29,28 @@ const _frecuencias = {
   'anual': 'Cada año',
 };
 
-const _meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'set', 'oct', 'nov', 'dic'];
+const _meses = [
+  'ene',
+  'feb',
+  'mar',
+  'abr',
+  'may',
+  'jun',
+  'jul',
+  'ago',
+  'set',
+  'oct',
+  'nov',
+  'dic',
+];
 
 String _fecha(String? iso) {
   final f = DateTime.tryParse(iso ?? '');
   return f == null ? '' : "${f.day} ${_meses[f.month - 1]} ${f.year}";
 }
 
-String _iso(DateTime f) => "${f.year}-${f.month.toString().padLeft(2, '0')}-${f.day.toString().padLeft(2, '0')}";
+String _iso(DateTime f) =>
+    "${f.year}-${f.month.toString().padLeft(2, '0')}-${f.day.toString().padLeft(2, '0')}";
 
 class _AutomatizacionFacturaState extends State<AutomatizacionFactura> {
   Map<String, dynamic>? _datos;
@@ -55,7 +69,11 @@ class _AutomatizacionFacturaState extends State<AutomatizacionFactura> {
     try {
       final r = await ApiService.get('/facturas/${_f.id}/automatizaciones/');
       if (r.statusCode == 200 && mounted) {
-        setState(() => _datos = Map<String, dynamic>.from(json.decode(utf8.decode(r.bodyBytes)) as Map));
+        setState(
+          () => _datos = Map<String, dynamic>.from(
+            json.decode(utf8.decode(r.bodyBytes)) as Map,
+          ),
+        );
       }
     } catch (_) {
       // Sin datos, la tarjeta no se muestra.
@@ -63,21 +81,33 @@ class _AutomatizacionFacturaState extends State<AutomatizacionFactura> {
     if (mounted) setState(() => _cargando = false);
   }
 
-  Future<void> _ejecutar(Future<dynamic> Function() accion, String exito) async {
+  Future<void> _ejecutar(
+    Future<dynamic> Function() accion,
+    String exito,
+  ) async {
     setState(() => _guardando = true);
     try {
       final r = await accion();
       if (r.statusCode >= 300) {
         final cuerpo = utf8.decode(r.bodyBytes);
-        throw Exception(cuerpo.length > 300 ? cuerpo.substring(0, 300) : cuerpo);
+        throw Exception(
+          cuerpo.length > 300 ? cuerpo.substring(0, 300) : cuerpo,
+        );
       }
       await _cargar();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(exito), backgroundColor: Colors.green));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(exito), backgroundColor: Colors.green),
+        );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo guardar: $e"), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("No se pudo guardar: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _guardando = false);
@@ -89,7 +119,13 @@ class _AutomatizacionFacturaState extends State<AutomatizacionFactura> {
   Future<void> _dialogoRecurrencia({Map<String, dynamic>? actual}) async {
     final hoy = DateUtils.dateOnly(DateTime.now());
     String frecuencia = actual?['frecuencia'] ?? 'mensual';
-    DateTime proxima = DateTime.tryParse(actual?['proxima_fecha'] ?? '') ?? DateTime(hoy.year, hoy.month + 1, DateTime.tryParse(_f.fechaEmision)?.day ?? hoy.day);
+    DateTime proxima =
+        DateTime.tryParse(actual?['proxima_fecha'] ?? '') ??
+        DateTime(
+          hoy.year,
+          hoy.month + 1,
+          DateTime.tryParse(_f.fechaEmision)?.day ?? hoy.day,
+        );
     if (proxima.isBefore(hoy)) proxima = hoy;
     DateTime? fin = DateTime.tryParse(actual?['fecha_fin'] ?? '');
 
@@ -97,7 +133,9 @@ class _AutomatizacionFacturaState extends State<AutomatizacionFactura> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, set) => AlertDialog(
-          title: Text(actual == null ? "Repetir esta factura" : "Cambiar la repetición"),
+          title: Text(
+            actual == null ? "Repetir esta factura" : "Cambiar la repetición",
+          ),
           content: SizedBox(
             width: 420,
             child: Column(
@@ -110,35 +148,75 @@ class _AutomatizacionFacturaState extends State<AutomatizacionFactura> {
                   style: TextStyle(fontSize: 12.5, color: AppColors.textMuted),
                 ),
                 const SizedBox(height: 14),
-                const Text("¿Cada cuánto?", style: TextStyle(fontWeight: FontWeight.w700)),
+                const Text(
+                  "¿Cada cuánto?",
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
                 const SizedBox(height: 6),
                 Wrap(
                   spacing: 6,
                   runSpacing: 6,
                   children: [
                     for (final e in _frecuencias.entries)
-                      ChoiceChip(label: Text(e.value), selected: frecuencia == e.key, onSelected: (_) => set(() => frecuencia = e.key), showCheckmark: false),
+                      ChoiceChip(
+                        label: Text(e.value),
+                        selected: frecuencia == e.key,
+                        onSelected: (_) => set(() => frecuencia = e.key),
+                        showCheckmark: false,
+                      ),
                   ],
                 ),
                 const SizedBox(height: 14),
-                _filaFecha(ctx, "Primera emisión", proxima, (d) => set(() => proxima = d), hoy),
+                _filaFecha(
+                  ctx,
+                  "Primera emisión",
+                  proxima,
+                  (d) => set(() => proxima = d),
+                  hoy,
+                ),
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    Expanded(child: Text("Hasta una fecha", style: TextStyle(color: AppColors.textStrong))),
+                    Expanded(
+                      child: Text(
+                        "Hasta una fecha",
+                        style: TextStyle(color: AppColors.textStrong),
+                      ),
+                    ),
                     Switch(
                       value: fin != null,
-                      onChanged: (v) => set(() => fin = v ? DateTime(proxima.year + 1, proxima.month, proxima.day) : null),
+                      onChanged: (v) => set(
+                        () => fin = v
+                            ? DateTime(
+                                proxima.year + 1,
+                                proxima.month,
+                                proxima.day,
+                              )
+                            : null,
+                      ),
                     ),
                   ],
                 ),
-                if (fin != null) _filaFecha(ctx, "Última emisión", fin!, (d) => set(() => fin = d), proxima),
+                if (fin != null)
+                  _filaFecha(
+                    ctx,
+                    "Última emisión",
+                    fin!,
+                    (d) => set(() => fin = d),
+                    proxima,
+                  ),
               ],
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Guardar")),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("Cancelar"),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text("Guardar"),
+            ),
           ],
         ),
       ),
@@ -153,31 +231,47 @@ class _AutomatizacionFacturaState extends State<AutomatizacionFactura> {
       'activa': true,
     };
     await _ejecutar(
-      () => actual == null ? ApiService.post('/facturas-recurrentes/', datos) : ApiService.patch('/facturas-recurrentes/${actual['id']}/', datos),
+      () => actual == null
+          ? ApiService.post('/facturas-recurrentes/', datos)
+          : ApiService.patch('/facturas-recurrentes/${actual['id']}/', datos),
       "Listo: esta factura se va a emitir sola, ${_frecuencias[frecuencia]!.toLowerCase()}.",
     );
   }
 
-  Widget _filaFecha(BuildContext ctx, String titulo, DateTime valor, ValueChanged<DateTime> cambiar, DateTime desde) => InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: () async {
-          final d = await showDatePicker(context: ctx, initialDate: valor, firstDate: desde, lastDate: DateTime(desde.year + 5));
-          if (d != null) cambiar(d);
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            children: [
-              Icon(Icons.event_rounded, size: 18, color: AppColors.primary),
-              const SizedBox(width: 8),
-              Expanded(child: Text(titulo)),
-              Text(_fecha(_iso(valor)), style: const TextStyle(fontWeight: FontWeight.w700)),
-              const SizedBox(width: 4),
-              Icon(Icons.edit_rounded, size: 15, color: AppColors.textMuted),
-            ],
-          ),
-        ),
+  Widget _filaFecha(
+    BuildContext ctx,
+    String titulo,
+    DateTime valor,
+    ValueChanged<DateTime> cambiar,
+    DateTime desde,
+  ) => InkWell(
+    borderRadius: BorderRadius.circular(10),
+    onTap: () async {
+      final d = await showDatePicker(
+        context: ctx,
+        initialDate: valor,
+        firstDate: desde,
+        lastDate: DateTime(desde.year + 5),
       );
+      if (d != null) cambiar(d);
+    },
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Icon(Icons.event_rounded, size: 18, color: AppColors.primary),
+          const SizedBox(width: 8),
+          Expanded(child: Text(titulo)),
+          Text(
+            _fecha(_iso(valor)),
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(width: 4),
+          Icon(Icons.edit_rounded, size: 15, color: AppColors.textMuted),
+        ],
+      ),
+    ),
+  );
 
   Widget _seccionRecurrencia() {
     final rec = _datos?['recurrencia'] as Map?;
@@ -185,21 +279,30 @@ class _AutomatizacionFacturaState extends State<AutomatizacionFactura> {
       return _bloque(
         icono: Icons.event_repeat_rounded,
         titulo: "Repetir automáticamente",
-        detalle: "Para cobros fijos (alquiler, mensualidad): se emite sola cada mes con la fecha del día.",
-        acciones: [FilledButton.tonalIcon(onPressed: _guardando ? null : () => _dialogoRecurrencia(), icon: const Icon(Icons.add_rounded, size: 18), label: const Text("Programar"))],
+        detalle:
+            "Para cobros fijos (alquiler, mensualidad): se emite sola cada mes con la fecha del día.",
+        acciones: [
+          FilledButton.tonalIcon(
+            onPressed: _guardando ? null : () => _dialogoRecurrencia(),
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text("Programar"),
+          ),
+        ],
       );
     }
     final activa = rec['activa'] == true;
     final error = (rec['ultimo_error'] as String?) ?? '';
     return _bloque(
       icono: Icons.event_repeat_rounded,
-      titulo: "Se repite ${(rec['frecuencia_texto'] ?? '').toString().toLowerCase()}",
+      titulo:
+          "Se repite ${(rec['frecuencia_texto'] ?? '').toString().toLowerCase()}",
       chip: activa ? ("Activa", Colors.green) : ("Pausada", Colors.orange),
       detalle: [
         if (activa) "Próxima: ${_fecha(rec['proxima_fecha'])}",
         if (rec['fecha_fin'] != null) "hasta ${_fecha(rec['fecha_fin'])}",
         "${rec['emitidas']} emitida${rec['emitidas'] == 1 ? '' : 's'}",
-        if (rec['ultima_factura_consecutivo'] != null) "última: ${rec['ultima_factura_consecutivo']}",
+        if (rec['ultima_factura_consecutivo'] != null)
+          "última: ${rec['ultima_factura_consecutivo']}",
       ].join(" · "),
       error: error.isEmpty ? null : "No se pudo emitir la última vez: $error",
       acciones: [
@@ -207,16 +310,29 @@ class _AutomatizacionFacturaState extends State<AutomatizacionFactura> {
           onPressed: _guardando
               ? null
               : () => _ejecutar(
-                    () => ApiService.patch('/facturas-recurrentes/${rec['id']}/', {'activa': !activa}),
-                    activa ? "Repetición pausada." : "Repetición reanudada.",
+                  () => ApiService.patch(
+                    '/facturas-recurrentes/${rec['id']}/',
+                    {'activa': !activa},
                   ),
+                  activa ? "Repetición pausada." : "Repetición reanudada.",
+                ),
           child: Text(activa ? "Pausar" : "Reanudar"),
         ),
-        OutlinedButton(onPressed: _guardando ? null : () => _dialogoRecurrencia(actual: Map<String, dynamic>.from(rec)), child: const Text("Cambiar")),
+        OutlinedButton(
+          onPressed: _guardando
+              ? null
+              : () =>
+                    _dialogoRecurrencia(actual: Map<String, dynamic>.from(rec)),
+          child: const Text("Cambiar"),
+        ),
         TextButton(
           onPressed: _guardando
               ? null
-              : () => _ejecutar(() => ApiService.delete('/facturas-recurrentes/${rec['id']}/'), "Ya no se repite."),
+              : () => _ejecutar(
+                  () =>
+                      ApiService.delete('/facturas-recurrentes/${rec['id']}/'),
+                  "Ya no se repite.",
+                ),
           child: const Text("Quitar", style: TextStyle(color: Colors.red)),
         ),
       ],
@@ -226,82 +342,12 @@ class _AutomatizacionFacturaState extends State<AutomatizacionFactura> {
   // ------------------------------------------------------------ cobro
 
   Future<void> _dialogoCobro(Map<String, dynamic> config) async {
-    var c = Map<String, dynamic>.from(config);
-    c['activo'] = true;
-    Widget opciones(String titulo, String clave, List<int> valores, String Function(int) texto, StateSetter set) => Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(titulo, style: const TextStyle(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final v in valores)
-                  ChoiceChip(label: Text(texto(v)), selected: c[clave] == v, onSelected: (_) => set(() => c[clave] = v), showCheckmark: false),
-              ],
-            ),
-            const SizedBox(height: 12),
-          ],
-        );
-    final guardar = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, set) => AlertDialog(
-          title: const Text("Cobro automático"),
-          content: SizedBox(
-            width: 440,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "A los clientes con facturas a crédito sin pagar les llega un correo con la factura en PDF. "
-                    "Vale para todas las facturas a crédito del negocio (cada una se puede apagar aparte).",
-                    style: TextStyle(fontSize: 12.5, color: AppColors.textMuted),
-                  ),
-                  const SizedBox(height: 14),
-                  opciones("Antes de vencer", 'dias_antes', [0, 1, 3, 5, 7], (v) => v == 0 ? "No avisar" : "$v día${v == 1 ? '' : 's'} antes", set),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text("Avisar el día que vence"),
-                    value: c['al_vencer'] == true,
-                    onChanged: (v) => set(() => c['al_vencer'] = v),
-                  ),
-                  opciones("Si ya venció, insistir", 'cada_dias_despues', [0, 3, 7, 15], (v) => v == 0 ? "No" : "Cada $v días", set),
-                  opciones("Máximo por factura", 'max_recordatorios', [2, 4, 6, 10], (v) => "$v correos", set),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text("Mandarme copia"),
-                    subtitle: const Text("Al correo del negocio"),
-                    value: c['copia_al_negocio'] == true,
-                    onChanged: (v) => set(() => c['copia_al_negocio'] = v),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            if (config['activo'] == true)
-              TextButton(
-                onPressed: () {
-                  c['activo'] = false;
-                  Navigator.pop(ctx, true);
-                },
-                child: const Text("Apagar", style: TextStyle(color: Colors.red)),
-              ),
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Guardar y encender")),
-          ],
-        ),
-      ),
+    final nueva = await configurarCobroAutomatico(
+      context,
+      negocioId: _f.negocio,
+      config: config,
     );
-    if (guardar != true) return;
-    await _ejecutar(
-      () => ApiService.patch('/cobro-automatico/?negocio=${_f.negocio}', c),
-      c['activo'] == true ? "Cobro automático encendido." : "Cobro automático apagado.",
-    );
+    if (nueva != null) await _cargar();
   }
 
   Widget? _seccionCobro() {
@@ -309,14 +355,23 @@ class _AutomatizacionFacturaState extends State<AutomatizacionFactura> {
     if (cobro == null || cobro['aplica'] != true) return null;
     final config = Map<String, dynamic>.from(cobro['config'] as Map);
     final saldo = double.tryParse('${cobro['saldo']}') ?? 0;
-    final saldoTexto = _f.esEnDolares ? formatearDolares(saldo / _f.tipoCambio) : formatearColones(saldo);
+    final saldoTexto = _f.esEnDolares
+        ? formatearDolares(saldo / _f.tipoCambio)
+        : formatearColones(saldo);
     if (config['activo'] != true) {
       return _bloque(
         icono: Icons.notifications_active_outlined,
         titulo: "Cobro automático",
         chip: ("Apagado", Colors.grey),
-        detalle: "Recordatorios por correo al cliente antes y después de que venza esta factura (vence el ${_fecha(cobro['vencimiento'])}).",
-        acciones: [FilledButton.tonalIcon(onPressed: _guardando ? null : () => _dialogoCobro(config), icon: const Icon(Icons.power_settings_new_rounded, size: 18), label: const Text("Encender"))],
+        detalle:
+            "Recordatorios por correo al cliente antes y después de que venza esta factura (vence el ${_fecha(cobro['vencimiento'])}).",
+        acciones: [
+          FilledButton.tonalIcon(
+            onPressed: _guardando ? null : () => _dialogoCobro(config),
+            icon: const Icon(Icons.power_settings_new_rounded, size: 18),
+            label: const Text("Encender"),
+          ),
+        ],
       );
     }
     final enFactura = cobro['activo_en_factura'] == true;
@@ -324,17 +379,20 @@ class _AutomatizacionFacturaState extends State<AutomatizacionFactura> {
     final estado = cobro['pagada'] == true
         ? "Pagada: no se mandan recordatorios."
         : cobro['aceptada'] != true
-            ? "Se empieza a cobrar cuando Hacienda la acepte."
-            : !enFactura
-                ? "Apagado solo para esta factura."
-                : cobro['proximo'] != null
-                    ? "Próximo recordatorio: ${_fecha(cobro['proximo'])}"
-                    : "No quedan recordatorios por mandar.";
+        ? "Se empieza a cobrar cuando Hacienda la acepte."
+        : !enFactura
+        ? "Apagado solo para esta factura."
+        : cobro['proximo'] != null
+        ? "Próximo recordatorio: ${_fecha(cobro['proximo'])}"
+        : "No quedan recordatorios por mandar.";
     return _bloque(
       icono: Icons.notifications_active_outlined,
       titulo: "Cobro automático",
-      chip: enFactura ? ("Activo", Colors.green) : ("Apagado aquí", Colors.orange),
-      detalle: "Vence el ${_fecha(cobro['vencimiento'])} · saldo $saldoTexto\n$estado",
+      chip: enFactura
+          ? ("Activo", Colors.green)
+          : ("Apagado aquí", Colors.orange),
+      detalle:
+          "Vence el ${_fecha(cobro['vencimiento'])} · saldo $saldoTexto\n$estado",
       extra: recordatorios.isEmpty
           ? null
           : Column(
@@ -346,12 +404,23 @@ class _AutomatizacionFacturaState extends State<AutomatizacionFactura> {
                     padding: const EdgeInsets.only(top: 3),
                     child: Row(
                       children: [
-                        Icon(r['enviado'] == true ? Icons.mark_email_read_outlined : Icons.error_outline, size: 15, color: r['enviado'] == true ? Colors.green : Colors.orange),
+                        Icon(
+                          r['enviado'] == true
+                              ? Icons.mark_email_read_outlined
+                              : Icons.error_outline,
+                          size: 15,
+                          color: r['enviado'] == true
+                              ? Colors.green
+                              : Colors.orange,
+                        ),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             "${_fecha(r['fecha'])} · ${r['tipo_texto']}${r['enviado'] == true ? ' · ${r['correo']}' : ' · ${r['detalle']}'}",
-                            style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textMuted,
+                            ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -366,12 +435,22 @@ class _AutomatizacionFacturaState extends State<AutomatizacionFactura> {
             onPressed: _guardando
                 ? null
                 : () => _ejecutar(
-                      () => ApiService.post('/facturas/${_f.id}/cobro-automatico/', {'activo': !enFactura}),
-                      enFactura ? "No se le van a mandar recordatorios por esta factura." : "Recordatorios encendidos para esta factura.",
+                    () => ApiService.post(
+                      '/facturas/${_f.id}/cobro-automatico/',
+                      {'activo': !enFactura},
                     ),
-            child: Text(enFactura ? "Apagar en esta factura" : "Encender en esta factura"),
+                    enFactura
+                        ? "No se le van a mandar recordatorios por esta factura."
+                        : "Recordatorios encendidos para esta factura.",
+                  ),
+            child: Text(
+              enFactura ? "Apagar en esta factura" : "Encender en esta factura",
+            ),
           ),
-        TextButton(onPressed: _guardando ? null : () => _dialogoCobro(config), child: const Text("Ajustar")),
+        TextButton(
+          onPressed: _guardando ? null : () => _dialogoCobro(config),
+          child: const Text("Ajustar"),
+        ),
       ],
     );
   }
@@ -402,20 +481,51 @@ class _AutomatizacionFacturaState extends State<AutomatizacionFactura> {
             children: [
               Icon(icono, size: 19, color: AppColors.primary),
               const SizedBox(width: 8),
-              Expanded(child: Text(titulo, style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.textStrong))),
+              Expanded(
+                child: Text(
+                  titulo,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textStrong,
+                  ),
+                ),
+              ),
               if (chip != null)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(color: chip.$2.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(20)),
-                  child: Text(chip.$1, style: TextStyle(color: chip.$2, fontSize: 11, fontWeight: FontWeight.w700)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: chip.$2.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    chip.$1,
+                    style: TextStyle(
+                      color: chip.$2,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
             ],
           ),
           const SizedBox(height: 6),
-          Text(detalle, style: TextStyle(fontSize: 12.5, color: AppColors.textMuted, height: 1.35)),
+          Text(
+            detalle,
+            style: TextStyle(
+              fontSize: 12.5,
+              color: AppColors.textMuted,
+              height: 1.35,
+            ),
+          ),
           if (error != null) ...[
             const SizedBox(height: 6),
-            Text(error, style: const TextStyle(fontSize: 12, color: Colors.orange)),
+            Text(
+              error,
+              style: const TextStyle(fontSize: 12, color: Colors.orange),
+            ),
           ],
           if (extra != null) extra,
           if (acciones.isNotEmpty) ...[
@@ -438,10 +548,21 @@ class _AutomatizacionFacturaState extends State<AutomatizacionFactura> {
         const Divider(),
         Row(
           children: [
-            Text("AUTOMÁTICO", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary)),
+            Text(
+              "AUTOMÁTICO",
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: AppColors.primary,
+              ),
+            ),
             if (_guardando) ...[
               const SizedBox(width: 8),
-              const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
+              const SizedBox(
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
             ],
           ],
         ),
@@ -449,6 +570,295 @@ class _AutomatizacionFacturaState extends State<AutomatizacionFactura> {
         _seccionRecurrencia(),
         if (cobro != null) ...[const SizedBox(height: 10), cobro],
       ],
+    );
+  }
+}
+
+/// Ventana de configuración del cobro automático del negocio (la misma
+/// desde el detalle de una factura y desde el formulario de factura nueva).
+/// Guarda y devuelve la configuración nueva, o null si se canceló o falló.
+Future<Map<String, dynamic>?> configurarCobroAutomatico(
+  BuildContext context, {
+  required int negocioId,
+  required Map<String, dynamic> config,
+}) async {
+  var c = Map<String, dynamic>.from(config);
+  c['activo'] = true;
+  Widget opciones(
+    String titulo,
+    String clave,
+    List<int> valores,
+    String Function(int) texto,
+    StateSetter set,
+  ) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(titulo, style: const TextStyle(fontWeight: FontWeight.w700)),
+      const SizedBox(height: 6),
+      Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: [
+          for (final v in valores)
+            ChoiceChip(
+              label: Text(texto(v)),
+              selected: c[clave] == v,
+              onSelected: (_) => set(() => c[clave] = v),
+              showCheckmark: false,
+            ),
+        ],
+      ),
+      const SizedBox(height: 12),
+    ],
+  );
+  final guardar = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, set) => AlertDialog(
+        title: const Text("Cobro automático"),
+        content: SizedBox(
+          width: 440,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "A los clientes con facturas a crédito sin pagar les llega un correo con la factura en PDF. "
+                  "Vale para todas las facturas a crédito del negocio (cada una se puede apagar aparte).",
+                  style: TextStyle(fontSize: 12.5, color: AppColors.textMuted),
+                ),
+                const SizedBox(height: 14),
+                opciones(
+                  "Antes de vencer",
+                  'dias_antes',
+                  [0, 1, 3, 5, 7],
+                  (v) =>
+                      v == 0 ? "No avisar" : "$v día${v == 1 ? '' : 's'} antes",
+                  set,
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text("Avisar el día que vence"),
+                  value: c['al_vencer'] == true,
+                  onChanged: (v) => set(() => c['al_vencer'] = v),
+                ),
+                opciones(
+                  "Si ya venció, insistir",
+                  'cada_dias_despues',
+                  [0, 3, 7, 15],
+                  (v) => v == 0 ? "No" : "Cada $v días",
+                  set,
+                ),
+                opciones(
+                  "Máximo por factura",
+                  'max_recordatorios',
+                  [2, 4, 6, 10],
+                  (v) => "$v correos",
+                  set,
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text("Mandarme copia"),
+                  subtitle: const Text("Al correo del negocio"),
+                  value: c['copia_al_negocio'] == true,
+                  onChanged: (v) => set(() => c['copia_al_negocio'] = v),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          if (config['activo'] == true)
+            TextButton(
+              onPressed: () {
+                c['activo'] = false;
+                Navigator.pop(ctx, true);
+              },
+              child: const Text("Apagar", style: TextStyle(color: Colors.red)),
+            ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancelar"),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Guardar y encender"),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (guardar != true) return null;
+  try {
+    final r = await ApiService.patch(
+      '/cobro-automatico/?negocio=$negocioId',
+      c,
+    );
+    if (r.statusCode >= 300) throw Exception(utf8.decode(r.bodyBytes));
+    final nueva = Map<String, dynamic>.from(
+      json.decode(utf8.decode(r.bodyBytes)) as Map,
+    );
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            nueva['activo'] == true
+                ? "Cobro automático encendido."
+                : "Cobro automático apagado.",
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+    return nueva;
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("No se pudo guardar: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+    return null;
+  }
+}
+
+/// "3 días antes · el día que vence · cada 7 días" (resumen corto).
+String resumenCobroAutomatico(Map config) {
+  final partes = <String>[
+    if ((config['dias_antes'] ?? 0) > 0)
+      "${config['dias_antes']} día${config['dias_antes'] == 1 ? '' : 's'} antes",
+    if (config['al_vencer'] == true) "el día que vence",
+    if ((config['cada_dias_despues'] ?? 0) > 0)
+      "cada ${config['cada_dias_despues']} días si se atrasa",
+  ];
+  return partes.isEmpty ? "sin recordatorios" : partes.join(" · ");
+}
+
+/// Tarjeta "Cobro automático" del formulario de factura, cuando la venta es
+/// a crédito: muestra cómo está configurado en el negocio, permite
+/// encenderlo/ajustarlo ahí mismo y decidir si ESTA factura lleva
+/// recordatorios (`activo` -> campo cobro_automatico de la factura).
+class CobroAutomaticoEnFormulario extends StatefulWidget {
+  final int negocioId;
+  final bool activo;
+  final ValueChanged<bool> onCambio;
+  const CobroAutomaticoEnFormulario({
+    super.key,
+    required this.negocioId,
+    required this.activo,
+    required this.onCambio,
+  });
+
+  @override
+  State<CobroAutomaticoEnFormulario> createState() =>
+      _CobroAutomaticoEnFormularioState();
+}
+
+class _CobroAutomaticoEnFormularioState
+    extends State<CobroAutomaticoEnFormulario> {
+  Map<String, dynamic>? _config;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargar();
+  }
+
+  Future<void> _cargar() async {
+    try {
+      final r = await ApiService.get(
+        '/cobro-automatico/?negocio=${widget.negocioId}',
+      );
+      if (r.statusCode == 200 && mounted) {
+        setState(
+          () => _config = Map<String, dynamic>.from(
+            json.decode(utf8.decode(r.bodyBytes)) as Map,
+          ),
+        );
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _configurar() async {
+    final config = _config;
+    if (config == null) return;
+    final nueva = await configurarCobroAutomatico(
+      context,
+      negocioId: widget.negocioId,
+      config: config,
+    );
+    if (nueva != null && mounted) {
+      setState(() => _config = nueva);
+      if (nueva['activo'] == true) widget.onCambio(true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final config = _config;
+    if (config == null) return const SizedBox.shrink();
+    final encendido = config['activo'] == true;
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.notifications_active_outlined,
+            color: AppColors.primary,
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Cobro automático",
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textStrong,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  !encendido
+                      ? "Recordatorios por correo al cliente antes y después de que venza. Está apagado."
+                      : widget.activo
+                      ? "Se le recuerda al cliente: ${resumenCobroAutomatico(config)}."
+                      : "Esta factura no va a llevar recordatorios.",
+                  style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                ),
+                if (encendido)
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(0, 30),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: _configurar,
+                    child: const Text("Ajustar"),
+                  ),
+              ],
+            ),
+          ),
+          if (encendido)
+            Switch(value: widget.activo, onChanged: widget.onCambio)
+          else
+            FilledButton.tonal(
+              onPressed: _configurar,
+              child: const Text("Encender"),
+            ),
+        ],
+      ),
     );
   }
 }

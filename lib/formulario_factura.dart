@@ -12,6 +12,7 @@ import 'formato.dart';
 import 'historial_precio_cliente.dart';
 import 'actividad_economica.dart';
 import 'factura.dart';
+import 'widgets/automatizacion_factura.dart';
 
 // Modelo temporal para los items del carrito
 class LineaFactura {
@@ -142,6 +143,9 @@ class _FormularioFacturaState extends State<FormularioFactura> {
 
   // Manejo de Crédito
   String _condicionVenta = "01"; // "01" = Contado, "02" = Crédito
+  // Recordatorios de cobro para esta factura (solo a crédito; ver
+  // CobroAutomaticoEnFormulario).
+  bool _cobroAutomatico = true;
 
   // El carrito/catálogo siempre trabaja en colones (precios del catálogo,
   // reportes, IVA/Renta, todo internamente en colones) -- si el cliente
@@ -879,6 +883,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
         'total_iva': redondear2(_totalIva),
         'total_factura': redondear2(_totalFactura),
         'condicion_venta': _condicionVenta,
+        'cobro_automatico': _condicionVenta == "02" ? _cobroAutomatico : true,
         'plazo_credito': plazoCredito,
         'moneda': _moneda,
         'tipo_cambio': tipoCambio ?? 1.0,
@@ -1312,6 +1317,12 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                   ],
                 ],
               ),
+              if (_condicionVenta == "02" && !_esInterno)
+                CobroAutomaticoEnFormulario(
+                  negocioId: widget.negocio.id,
+                  activo: _cobroAutomatico,
+                  onCambio: (v) => setState(() => _cobroAutomatico = v),
+                ),
               if (_actividades.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 DropdownButtonFormField<ActividadEconomica?>(
