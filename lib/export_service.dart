@@ -20,6 +20,10 @@ import 'ingreso_operativo.dart';
 import 'formato.dart';
 import 'negocio.dart';
 
+/// Montos de un documento (en colones) con la moneda y el tipo de cambio
+/// con que se emitió -- ver ExportService._celdasUsd.
+typedef _DocUsd = ({String moneda, double tc, double subtotal, double iva, double total});
+
 class ExportService {
   static pw.ThemeData? _temaCache;
 
@@ -123,6 +127,122 @@ class ExportService {
   /// (o [anchos] si se pasan). Se puede llamar varias veces sobre la misma
   /// hoja para poner varias tablas una debajo de otra ([seccion] les pone
   /// un subtítulo).
+  // ---- Documentos en dólares --------------------------------------------
+  // Facturas, notas, compras e ingresos guardan los montos en colones y,
+  // aparte, la moneda y el tipo de cambio con que se emitieron. Si un
+  // reporte trae alguno en dólares se agregan columnas con los montos en
+  // US$ y el tipo de cambio usado (Excel) o una sección aparte (PDF).
+  static const List<String> _encabezadosUsd = ['Moneda', 'Tipo de cambio', 'Subtotal USD', 'IVA USD', 'Total USD'];
+
+  static double _r2(double v) => (v * 100).roundToDouble() / 100;
+
+  static bool _esUsd(_DocUsd d) => d.moneda == 'USD' && d.tc > 0;
+
+  static _DocUsd _usdFactura(Factura f) => (moneda: f.moneda, tc: f.tipoCambio, subtotal: f.totalFactura - f.totalIva, iva: f.totalIva, total: f.totalFactura);
+  static _DocUsd _usdNota(NotaCredito n) => (moneda: n.facturaMoneda, tc: n.facturaTipoCambio, subtotal: n.subtotal, iva: n.montoIva, total: n.total);
+  static _DocUsd _usdCompra(Compra c) {
+    final iva = _ivaEstimadoCompra(c);
+    return (moneda: c.moneda, tc: c.tipoCambio, subtotal: c.totalCompra, iva: iva, total: c.totalCompra + iva);
+  }
+
+  static _DocUsd _usdIngreso(IngresoOperativo i) => (moneda: i.moneda, tc: i.tipoCambio, subtotal: i.monto, iva: i.montoIva, total: i.total);
+
+  static List<CellValue> _celdasUsd(_DocUsd d) {
+    if (!_esUsd(d)) return [TextCellValue('CRC'), TextCellValue(''), TextCellValue(''), TextCellValue(''), TextCellValue('')];
+    return [
+      TextCellValue('USD'),
+      DoubleCellValue(d.tc),
+      DoubleCellValue(_r2(d.subtotal / d.tc)),
+      DoubleCellValue(_r2(d.iva / d.tc)),
+      DoubleCellValue(_r2(d.total / d.tc)),
+    ];
+  }
+
+  static List<CellValue> _totalesUsd(Iterable<_DocUsd> docs) {
+    final usd = docs.where(_esUsd);
+    return [
+      TextCellValue(''),
+      TextCellValue(''),
+      DoubleCellValue(_r2(usd.fold(0.0, (s, d) => s + d.subtotal / d.tc))),
+      DoubleCellValue(_r2(usd.fold(0.0, (s, d) => s + d.iva / d.tc))),
+      DoubleCellValue(_r2(usd.fold(0.0, (s, d) => s + d.total / d.tc))),
+    ];
+  }
+
+  static final NumFormat _formatoDolares = NumFormat.custom(formatCode: '"US\$"#,##0.00');
+
+  static CellStyle _estiloDolares({bool total = false}) => total
+      ? CellStyle(
+          bold: true,
+          numberFormat: _formatoDolares,
+          horizontalAlign: HorizontalAlign.Right,
+          topBorder: Border(borderStyle: BorderStyle.Thin),
+        )
+      : CellStyle(numberFormat: _formatoDolares, horizontalAlign: HorizontalAlign.Right);
+
+  /// Formato de las 5 columnas en dólares de la última fila, desde [desde].
+  static void _estilarUsdUltimaFila(Sheet hoja, int desde, {bool total = false}) {
+    _estilarCeldaUltimaFila(hoja, desde + 1, total ? _estiloTotalMoneda() : _estiloMoneda());
+    for (var c = desde + 2; c < desde + 5; c++) {
+      _estilarCeldaUltimaFila(hoja, c, _estiloDolares(total: total));
+    }
+  }
+
+  /// Sección "en dólares" para los PDF: solo si hay algún documento en US$.
+  static List<pw.Widget> _seccionDolaresPdf(
+    String titulo,
+    String etiquetaTercero,
+    List<(String, String, String, _DocUsd)> filas, {
+    PdfColor color = PdfColors.indigo,
+  }) {
+    final usd = filas.where((f) => _esUsd(f.$4)).toList();
+    if (usd.isEmpty) return [];
+    String d(double v) => formatearDolares(_r2(v));
+    return [
+      pw.SizedBox(height: 22),
+      pw.Text('$titulo en dólares', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold, color: color)),
+      pw.SizedBox(height: 4),
+      pw.Text(
+        'Montos originales en dólares y el tipo de cambio usado; en las tablas de arriba van convertidos a colones.',
+        style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey600),
+      ),
+      pw.SizedBox(height: 8),
+      pw.TableHelper.fromTextArray(
+        headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9.5),
+        headerDecoration: pw.BoxDecoration(color: color),
+        cellStyle: const pw.TextStyle(fontSize: 9),
+        cellPadding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+        headerPadding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+        headers: ['Documento', 'Fecha', etiquetaTercero, 'Tipo de cambio', 'Subtotal USD', 'IVA USD', 'Total USD'],
+        columnWidths: const {
+          0: pw.FlexColumnWidth(1.3),
+          1: pw.FlexColumnWidth(1.1),
+          2: pw.FlexColumnWidth(2.2),
+          3: pw.FlexColumnWidth(1.1),
+          4: pw.FlexColumnWidth(1.2),
+          5: pw.FlexColumnWidth(1.1),
+          6: pw.FlexColumnWidth(1.2),
+        },
+        cellAlignments: const {
+          3: pw.Alignment.centerRight,
+          4: pw.Alignment.centerRight,
+          5: pw.Alignment.centerRight,
+          6: pw.Alignment.centerRight,
+        },
+        data: [
+          for (final f in usd)
+            [f.$1, f.$2, f.$3, formatearNumero(f.$4.tc), d(f.$4.subtotal / f.$4.tc), d(f.$4.iva / f.$4.tc), d(f.$4.total / f.$4.tc)],
+          [
+            'TOTAL', '', '', '',
+            d(usd.fold(0.0, (s, f) => s + f.$4.subtotal / f.$4.tc)),
+            d(usd.fold(0.0, (s, f) => s + f.$4.iva / f.$4.tc)),
+            d(usd.fold(0.0, (s, f) => s + f.$4.total / f.$4.tc)),
+          ],
+        ],
+      ),
+    ];
+  }
+
   static void _escribirTabla(
     Sheet hoja, {
     String? titulo,
@@ -133,6 +253,7 @@ class ExportService {
     Set<int> moneda = const {},
     Set<int> sumar = const {},
     Set<int> porcentaje = const {},
+    Set<int> dolares = const {},
     String etiquetaTotal = 'TOTAL',
     List<double>? anchos,
     String vacio = 'Sin datos en este periodo.',
@@ -165,12 +286,13 @@ class ExportService {
       for (var c = 0; c < encabezados.length; c++) {
         final esMonto = moneda.contains(c);
         final esPct = porcentaje.contains(c);
+        final esUsd = dolares.contains(c);
         _estilarCeldaUltimaFila(
           hoja,
           c,
           CellStyle(
-            numberFormat: esMonto ? NumFormat.standard_4 : (esPct ? NumFormat.standard_10 : NumFormat.standard_0),
-            horizontalAlign: (esMonto || esPct) ? HorizontalAlign.Right : HorizontalAlign.Left,
+            numberFormat: esUsd ? _formatoDolares : (esMonto ? NumFormat.standard_4 : (esPct ? NumFormat.standard_10 : NumFormat.standard_0)),
+            horizontalAlign: (esMonto || esPct || esUsd) ? HorizontalAlign.Right : HorizontalAlign.Left,
             backgroundColorHex: alterna ? _fondoFilaAlterna : ExcelColor.none,
           ),
         );
@@ -187,7 +309,11 @@ class ExportService {
           c == 0 ? TextCellValue(etiquetaTotal) : (sumar.contains(c) ? DoubleCellValue(totales[c]!) : TextCellValue('')),
       ]);
       for (var c = 0; c < encabezados.length; c++) {
-        _estilarCeldaUltimaFila(hoja, c, sumar.contains(c) ? _estiloTotalMoneda() : _estiloTotalTexto());
+        _estilarCeldaUltimaFila(
+          hoja,
+          c,
+          sumar.contains(c) ? (dolares.contains(c) ? _estiloDolares(total: true) : _estiloTotalMoneda()) : _estiloTotalTexto(),
+        );
       }
     }
 
@@ -608,6 +734,7 @@ class ExportService {
             }).toList(),
           );
         }),
+        ..._seccionDolaresPdf('Facturas', 'Cliente', [for (final f in facturas) ('F-${f.consecutivo}', f.fechaEmision.split('T')[0], f.receptorNombre, _usdFactura(f))]),
       ],
     ));
     await Printing.layoutPdf(onLayout: (format) async => pdf.save(), name: 'Facturacion.pdf');
@@ -621,6 +748,7 @@ class ExportService {
     var excel = Excel.createExcel();
     excel['Dashboard']; // primera pestaña (ver _escribirDashboard)
     Sheet sheetObject = excel['Facturas'];
+    final hayUsd = facturas.any((f) => _esUsd(_usdFactura(f)));
 
     final sumaSubtotal = facturas.fold<double>(0.0, (s, f) => s + (f.totalFactura - f.totalIva));
     final sumaIva = facturas.fold<double>(0.0, (s, f) => s + f.totalIva);
@@ -647,8 +775,9 @@ class ExportService {
       TextCellValue('Tarifa'),
       TextCellValue('IVA'),
       TextCellValue('Total'),
+      if (hayUsd) ..._encabezadosUsd.map((e) => TextCellValue(e)),
     ]);
-    _estilarUltimaFila(sheetObject, 9, _estiloEncabezadoTabla());
+    _estilarUltimaFila(sheetObject, hayUsd ? 14 : 9, _estiloEncabezadoTabla());
 
     for (var f in facturas) { // fila 5 en adelante: una por factura
       sheetObject.appendRow([
@@ -661,25 +790,30 @@ class ExportService {
         TextCellValue(_tarifaFactura(f)),
         DoubleCellValue(f.totalIva),
         DoubleCellValue(f.totalFactura),
+        if (hayUsd) ..._celdasUsd(_usdFactura(f)),
       ]);
       for (final col in [5, 7, 8]) {
         _estilarCeldaUltimaFila(sheetObject, col, _estiloMoneda());
       }
+      if (hayUsd) _estilarUsdUltimaFila(sheetObject, 9);
     }
     sheetObject.appendRow([]);
     sheetObject.appendRow([
       TextCellValue('TOTAL'), TextCellValue(''), TextCellValue(''), TextCellValue(''), TextCellValue(''),
       DoubleCellValue(sumaSubtotal), TextCellValue(''), DoubleCellValue(sumaIva), DoubleCellValue(sumaTotal),
+      if (hayUsd) ..._totalesUsd(facturas.map(_usdFactura)),
     ]);
     _estilarCeldaUltimaFila(sheetObject, 0, _estiloTotalTexto());
     for (final col in [5, 7, 8]) {
       _estilarCeldaUltimaFila(sheetObject, col, _estiloTotalMoneda());
     }
+    if (hayUsd) _estilarUsdUltimaFila(sheetObject, 9, total: true);
 
     // Detalle por Tarifa: a la par de la tabla principal (no en otra hoja),
     // arrancando en la columna K (deja J de separación) y alineado con
     // las primeras filas del resumen.
-    const colTarifas = 10; // K (0-indexed: A=0 ... H=8, I=9, J=9 gap, K=10)
+    // K, o P si están las columnas en dólares (deja una de separación).
+    final colTarifas = hayUsd ? 15 : 10;
     void celda(int col, int fila, CellValue valor) {
       sheetObject.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: fila)).value = valor;
     }
@@ -722,7 +856,7 @@ class ExportService {
     estilarCelda(colTarifas + 2, filaTarifa, _estiloTotalMoneda());
     celda(colTarifas + 3, filaTarifa, DoubleCellValue(baseTotal + ivaTotal));
     estilarCelda(colTarifas + 3, filaTarifa, _estiloTotalMoneda());
-    _anchoColumnas(sheetObject, [14, 14, 26, 14, 12, 14, 10, 14, 14, 3, 14, 14, 14, 14]);
+    _anchoColumnas(sheetObject, [14, 14, 26, 14, 12, 14, 10, 14, 14, if (hayUsd) ...[9, 13, 14, 12, 14], 3, 14, 14, 14, 14]);
 
 
     {
@@ -2529,6 +2663,9 @@ class ExportService {
             'El crédito fiscal de compras se estima con la tarifa de impuesto asignada a cada producto (no se registra un IVA propio por línea de compra). Verifique los montos antes de presentar la declaración ante Hacienda.',
             style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500, fontStyle: pw.FontStyle.italic),
           ),
+          ..._seccionDolaresPdf('Facturas', 'Cliente', [for (final f in facturas) ('F-${f.consecutivo}', f.fechaEmision.split('T')[0], f.receptorNombre, _usdFactura(f))], color: PdfColors.teal800),
+          ..._seccionDolaresPdf('Notas de crédito', 'Cliente', [for (final n in notasCredito) (n.consecutivo, n.fechaEmision.split('T')[0], n.receptorNombre, _usdNota(n))], color: PdfColors.teal800),
+          ..._seccionDolaresPdf('Compras', 'Proveedor', [for (final c in compras) (c.numeroFacturaProveedor.isNotEmpty ? c.numeroFacturaProveedor : 'Compra', c.fechaCompra.split('T')[0], c.nombreProveedor ?? 'Sin especificar', _usdCompra(c))], color: PdfColors.teal800),
         ],
       ),
     );
@@ -2600,12 +2737,14 @@ class ExportService {
     tablaPorTarifa('Crédito fiscal por tarifa', (declaracion['credito_por_tarifa'] as List?) ?? []);
 
     final hojaFacturas = excel['Facturas'];
-    _anchoColumnas(hojaFacturas, [14, 12, 28, 14, 12, 15, 13, 15, 16]);
+    final facturasUsd = facturas.any((f) => _esUsd(_usdFactura(f)));
+    _anchoColumnas(hojaFacturas, [14, 12, 28, 14, 12, 15, 13, 15, 16, if (facturasUsd) ...[9, 13, 14, 12, 14]]);
     hojaFacturas.appendRow([
       TextCellValue('Consecutivo'), TextCellValue('Fecha'), TextCellValue('Cliente'), TextCellValue('Cédula'),
       TextCellValue('Condición'), TextCellValue('Subtotal'), TextCellValue('IVA'), TextCellValue('Total'), TextCellValue('Estado'),
+      if (facturasUsd) ..._encabezadosUsd.map((e) => TextCellValue(e)),
     ]);
-    _estilarUltimaFila(hojaFacturas, 9, _estiloEncabezadoTabla());
+    _estilarUltimaFila(hojaFacturas, facturasUsd ? 14 : 9, _estiloEncabezadoTabla());
     for (final f in facturas) {
       hojaFacturas.appendRow([
         TextCellValue('F-${f.consecutivo}'),
@@ -2617,10 +2756,12 @@ class ExportService {
         DoubleCellValue(f.totalIva),
         DoubleCellValue(f.totalFactura),
         TextCellValue(_estadoHaciendaLabel[f.estadoHacienda] ?? f.estadoHacienda),
+        if (facturasUsd) ..._celdasUsd(_usdFactura(f)),
       ]);
       for (final col in [5, 6, 7]) {
         _estilarCeldaUltimaFila(hojaFacturas, col, _estiloMoneda());
       }
+      if (facturasUsd) _estilarUsdUltimaFila(hojaFacturas, 9);
     }
     hojaFacturas.appendRow([]);
     hojaFacturas.appendRow([
@@ -2629,19 +2770,23 @@ class ExportService {
       DoubleCellValue(facturas.fold(0.0, (s, f) => s + f.totalIva)),
       DoubleCellValue(facturas.fold(0.0, (s, f) => s + f.totalFactura)),
       TextCellValue(''),
+      if (facturasUsd) ..._totalesUsd(facturas.map(_usdFactura)),
     ]);
     _estilarCeldaUltimaFila(hojaFacturas, 0, _estiloTotalTexto());
     for (final col in [5, 6, 7]) {
       _estilarCeldaUltimaFila(hojaFacturas, col, _estiloTotalMoneda());
     }
+    if (facturasUsd) _estilarUsdUltimaFila(hojaFacturas, 9, total: true);
 
     final hojaNotas = excel['Notas de Credito'];
-    _anchoColumnas(hojaNotas, [14, 12, 16, 28, 15, 13, 15]);
+    final notasUsd = notasCredito.any((n) => _esUsd(_usdNota(n)));
+    _anchoColumnas(hojaNotas, [14, 12, 16, 28, 15, 13, 15, if (notasUsd) ...[9, 13, 14, 12, 14]]);
     hojaNotas.appendRow([
       TextCellValue('Consecutivo'), TextCellValue('Fecha'), TextCellValue('Anula Factura'),
       TextCellValue('Cliente'), TextCellValue('Subtotal'), TextCellValue('IVA'), TextCellValue('Total'),
+      if (notasUsd) ..._encabezadosUsd.map((e) => TextCellValue(e)),
     ]);
-    _estilarUltimaFila(hojaNotas, 7, _estiloEncabezadoTabla());
+    _estilarUltimaFila(hojaNotas, notasUsd ? 12 : 7, _estiloEncabezadoTabla());
     for (final n in notasCredito) {
       hojaNotas.appendRow([
         TextCellValue(n.consecutivo),
@@ -2651,29 +2796,41 @@ class ExportService {
         DoubleCellValue(n.subtotal),
         DoubleCellValue(n.montoIva),
         DoubleCellValue(n.total),
+        if (notasUsd) ..._celdasUsd(_usdNota(n)),
       ]);
       for (final col in [4, 5, 6]) {
         _estilarCeldaUltimaFila(hojaNotas, col, _estiloMoneda());
       }
+      if (notasUsd) _estilarUsdUltimaFila(hojaNotas, 7);
     }
 
     final hojaCompras = excel['Compras'];
-    _anchoColumnas(hojaCompras, [28, 12, 22, 15]);
-    hojaCompras.appendRow([TextCellValue('Proveedor'), TextCellValue('Fecha'), TextCellValue('N° Factura Proveedor'), TextCellValue('Total')]);
-    _estilarUltimaFila(hojaCompras, 4, _estiloEncabezadoTabla());
+    final comprasUsd = compras.any((c) => _esUsd(_usdCompra(c)));
+    _anchoColumnas(hojaCompras, [28, 12, 22, 15, if (comprasUsd) ...[9, 13, 14, 12, 14]]);
+    hojaCompras.appendRow([
+      TextCellValue('Proveedor'), TextCellValue('Fecha'), TextCellValue('N° Factura Proveedor'), TextCellValue('Total'),
+      if (comprasUsd) ..._encabezadosUsd.map((e) => TextCellValue(e)),
+    ]);
+    _estilarUltimaFila(hojaCompras, comprasUsd ? 9 : 4, _estiloEncabezadoTabla());
     for (final c in compras) {
       hojaCompras.appendRow([
         TextCellValue(c.nombreProveedor ?? 'Sin especificar'),
         TextCellValue(c.fechaCompra.split('T').first),
         TextCellValue(c.numeroFacturaProveedor),
         DoubleCellValue(c.totalCompra),
+        if (comprasUsd) ..._celdasUsd(_usdCompra(c)),
       ]);
       _estilarCeldaUltimaFila(hojaCompras, 3, _estiloMoneda());
+      if (comprasUsd) _estilarUsdUltimaFila(hojaCompras, 4);
     }
     hojaCompras.appendRow([]);
-    hojaCompras.appendRow([TextCellValue('TOTAL'), TextCellValue(''), TextCellValue(''), DoubleCellValue(compras.fold(0.0, (s, c) => s + c.totalCompra))]);
+    hojaCompras.appendRow([
+      TextCellValue('TOTAL'), TextCellValue(''), TextCellValue(''), DoubleCellValue(compras.fold(0.0, (s, c) => s + c.totalCompra)),
+      if (comprasUsd) ..._totalesUsd(compras.map(_usdCompra)),
+    ]);
     _estilarCeldaUltimaFila(hojaCompras, 0, _estiloTotalTexto());
     _estilarCeldaUltimaFila(hojaCompras, 3, _estiloTotalMoneda());
+    if (comprasUsd) _estilarUsdUltimaFila(hojaCompras, 4, total: true);
 
     excel.delete('Sheet1');
 
@@ -2856,6 +3013,8 @@ class ExportService {
             'El costo de ventas se aproxima con las compras del periodo (no se costea inventario por unidad vendida) y no incluye depreciación fiscal detallada, pérdidas de periodos anteriores ni créditos personales (cónyuge/hijos). Verifique los montos antes de presentar el D-101 ante Hacienda.',
             style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500, fontStyle: pw.FontStyle.italic),
           ),
+          ..._seccionDolaresPdf('Facturas', 'Cliente', [for (final f in facturas) ('F-${f.consecutivo}', f.fechaEmision.split('T')[0], f.receptorNombre, _usdFactura(f))], color: PdfColors.deepPurple800),
+          ..._seccionDolaresPdf('Compras', 'Proveedor', [for (final c in compras) (c.numeroFacturaProveedor.isNotEmpty ? c.numeroFacturaProveedor : 'Compra', c.fechaCompra.split('T')[0], c.nombreProveedor ?? 'Sin especificar', _usdCompra(c))], color: PdfColors.deepPurple800),
         ],
       ),
     );
@@ -2876,6 +3035,8 @@ class ExportService {
     final periodoFiscal = declaracion['periodo_fiscal']?.toString() ?? '';
     var excel = Excel.createExcel();
     excel['Dashboard']; // primera pestaña (ver _escribirDashboard)
+    final facturasUsd = facturas.any((f) => _esUsd(_usdFactura(f)));
+    final comprasUsd = compras.any((c) => _esUsd(_usdCompra(c)));
 
     final resumen = excel['Resumen'];
     _escribirTabla(
@@ -2921,7 +3082,7 @@ class ExportService {
       excel['Facturas'],
       titulo: 'Facturas del periodo fiscal $periodoFiscal',
       subtitulo: negocioNombre,
-      encabezados: const ['Consecutivo', 'Fecha', 'Cliente', 'Subtotal', 'IVA', 'Total'],
+      encabezados: ['Consecutivo', 'Fecha', 'Cliente', 'Subtotal', 'IVA', 'Total', if (facturasUsd) ..._encabezadosUsd],
       filas: [
         for (final f in facturas)
           [
@@ -2931,17 +3092,19 @@ class ExportService {
             DoubleCellValue(f.totalFactura - f.totalIva),
             DoubleCellValue(f.totalIva),
             DoubleCellValue(f.totalFactura),
+            if (facturasUsd) ..._celdasUsd(_usdFactura(f)),
           ],
       ],
-      moneda: const {3, 4, 5},
-      sumar: const {3, 4, 5},
+      moneda: {3, 4, 5, if (facturasUsd) 7},
+      dolares: {if (facturasUsd) ...{8, 9, 10}},
+      sumar: {3, 4, 5, if (facturasUsd) ...{8, 9, 10}},
     );
 
     _escribirTabla(
       excel['Compras'],
       titulo: 'Compras del periodo fiscal $periodoFiscal',
       subtitulo: negocioNombre,
-      encabezados: const ['Proveedor', 'Fecha', 'N.° factura proveedor', 'Total'],
+      encabezados: ['Proveedor', 'Fecha', 'N.° factura proveedor', 'Total', if (comprasUsd) ..._encabezadosUsd],
       filas: [
         for (final c in compras)
           [
@@ -2949,10 +3112,12 @@ class ExportService {
             TextCellValue(c.fechaCompra.split('T').first),
             TextCellValue(c.numeroFacturaProveedor),
             DoubleCellValue(c.totalCompra),
+            if (comprasUsd) ..._celdasUsd(_usdCompra(c)),
           ],
       ],
-      moneda: const {3},
-      sumar: const {3},
+      moneda: {3, if (comprasUsd) 5},
+      dolares: {if (comprasUsd) ...{6, 7, 8}},
+      sumar: {3, if (comprasUsd) ...{6, 7, 8}},
     );
 
     final hojaGastos = excel['Gastos'];
@@ -3818,6 +3983,7 @@ class ExportService {
             }).toList(),
           );
         }),
+        ..._seccionDolaresPdf('Compras', 'Proveedor', [for (final c in compras) (c.numeroFacturaProveedor.isNotEmpty ? c.numeroFacturaProveedor : 'Compra', c.fechaCompra.split('T')[0], c.nombreProveedor ?? 'Sin especificar', _usdCompra(c))], color: PdfColors.orange800),
       ],
     ));
     await Printing.layoutPdf(onLayout: (format) async => pdf.save(), name: 'Reporte_Compras.pdf');
@@ -3830,6 +3996,7 @@ class ExportService {
     var excel = Excel.createExcel();
     excel['Dashboard']; // primera pestaña (ver _escribirDashboard)
     Sheet sheet = excel['Compras'];
+    final hayUsd = compras.any((c) => _esUsd(_usdCompra(c)));
 
     final sumaSubtotal = compras.fold<double>(0.0, (s, c) => s + c.totalCompra);
     final sumaIva = compras.fold<double>(0.0, (s, c) => s + _ivaEstimadoCompra(c));
@@ -3854,8 +4021,9 @@ class ExportService {
       TextCellValue('Tarifa'),
       TextCellValue('IVA'),
       TextCellValue('Total'),
+      if (hayUsd) ..._encabezadosUsd.map((e) => TextCellValue(e)),
     ]);
-    _estilarUltimaFila(sheet, 7, _estiloEncabezadoTabla());
+    _estilarUltimaFila(sheet, hayUsd ? 12 : 7, _estiloEncabezadoTabla());
     for (var c in compras) { // fila 5 en adelante
       final iva = _ivaEstimadoCompra(c);
       sheet.appendRow([
@@ -3866,22 +4034,27 @@ class ExportService {
         TextCellValue(_tarifaCompra(c)),
         DoubleCellValue(iva),
         DoubleCellValue(c.totalCompra + iva),
+        if (hayUsd) ..._celdasUsd(_usdCompra(c)),
       ]);
       for (final col in [3, 5, 6]) {
         _estilarCeldaUltimaFila(sheet, col, _estiloMoneda());
       }
+      if (hayUsd) _estilarUsdUltimaFila(sheet, 7);
     }
     sheet.appendRow([]);
     sheet.appendRow([
       TextCellValue('TOTAL'), TextCellValue(''), TextCellValue(''),
       DoubleCellValue(sumaSubtotal), TextCellValue(''), DoubleCellValue(sumaIva), DoubleCellValue(sumaTotal),
+      if (hayUsd) ..._totalesUsd(compras.map(_usdCompra)),
     ]);
     _estilarCeldaUltimaFila(sheet, 0, _estiloTotalTexto());
     for (final col in [3, 5, 6]) {
       _estilarCeldaUltimaFila(sheet, col, _estiloTotalMoneda());
     }
+    if (hayUsd) _estilarUsdUltimaFila(sheet, 7, total: true);
 
-    const colTarifas = 9; // J -- deja una columna de separación (I) con la tabla principal
+    // J, u O si están las columnas en dólares (deja una de separación).
+    final colTarifas = hayUsd ? 14 : 9;
     void celda(int col, int fila, CellValue valor) {
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: fila)).value = valor;
     }
@@ -3924,7 +4097,7 @@ class ExportService {
     estilarCelda(colTarifas + 2, filaTarifa, _estiloTotalMoneda());
     celda(colTarifas + 3, filaTarifa, DoubleCellValue(baseTotal + ivaTotal));
     estilarCelda(colTarifas + 3, filaTarifa, _estiloTotalMoneda());
-    _anchoColumnas(sheet, [14, 28, 18, 14, 10, 14, 14, 3, 3, 12, 14, 14, 14]);
+    _anchoColumnas(sheet, [14, 28, 18, 14, 10, 14, 14, if (hayUsd) ...[9, 13, 14, 12, 14], 3, 3, 12, 14, 14, 14]);
 
 
     {
@@ -4043,6 +4216,7 @@ class ExportService {
             }).toList(),
           );
         }),
+        ..._seccionDolaresPdf('Ingresos', 'Cliente', [for (final i in ingresos) (i.referencia.isNotEmpty ? i.referencia : 'Ingreso', i.fecha, i.clienteNombre.isNotEmpty ? i.clienteNombre : 'Sin especificar', _usdIngreso(i))]),
       ],
     ));
     await Printing.layoutPdf(onLayout: (format) async => pdf.save(), name: 'Reporte_Ingresos.pdf');
@@ -4055,6 +4229,7 @@ class ExportService {
     var excel = Excel.createExcel();
     excel['Dashboard']; // primera pestaña (ver _escribirDashboard)
     Sheet sheet = excel['Ingresos'];
+    final hayUsd = ingresos.any((i) => _esUsd(_usdIngreso(i)));
 
     final sumaSubtotal = ingresos.fold<double>(0.0, (s, i) => s + i.monto);
     final sumaIva = ingresos.fold<double>(0.0, (s, i) => s + i.montoIva);
@@ -4079,8 +4254,9 @@ class ExportService {
       TextCellValue('Tarifa'),
       TextCellValue('IVA'),
       TextCellValue('Total'),
+      if (hayUsd) ..._encabezadosUsd.map((e) => TextCellValue(e)),
     ]);
-    _estilarUltimaFila(sheet, 7, _estiloEncabezadoTabla());
+    _estilarUltimaFila(sheet, hayUsd ? 12 : 7, _estiloEncabezadoTabla());
     for (var i in ingresos) { // fila 5 en adelante
       sheet.appendRow([
         TextCellValue(i.fecha),
@@ -4090,22 +4266,27 @@ class ExportService {
         TextCellValue(_tarifaIngreso(i)),
         DoubleCellValue(i.montoIva),
         DoubleCellValue(i.total),
+        if (hayUsd) ..._celdasUsd(_usdIngreso(i)),
       ]);
       for (final col in [3, 5, 6]) {
         _estilarCeldaUltimaFila(sheet, col, _estiloMoneda());
       }
+      if (hayUsd) _estilarUsdUltimaFila(sheet, 7);
     }
     sheet.appendRow([]);
     sheet.appendRow([
       TextCellValue('TOTAL'), TextCellValue(''), TextCellValue(''),
       DoubleCellValue(sumaSubtotal), TextCellValue(''), DoubleCellValue(sumaIva), DoubleCellValue(sumaTotal),
+      if (hayUsd) ..._totalesUsd(ingresos.map(_usdIngreso)),
     ]);
     _estilarCeldaUltimaFila(sheet, 0, _estiloTotalTexto());
     for (final col in [3, 5, 6]) {
       _estilarCeldaUltimaFila(sheet, col, _estiloTotalMoneda());
     }
+    if (hayUsd) _estilarUsdUltimaFila(sheet, 7, total: true);
 
-    const colTarifas = 9; // J -- deja una columna de separación (I) con la tabla principal
+    // J, u O si están las columnas en dólares (deja una de separación).
+    final colTarifas = hayUsd ? 14 : 9;
     void celda(int col, int fila, CellValue valor) {
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: fila)).value = valor;
     }
@@ -4148,7 +4329,7 @@ class ExportService {
     estilarCelda(colTarifas + 2, filaTarifa, _estiloTotalMoneda());
     celda(colTarifas + 3, filaTarifa, DoubleCellValue(baseTotal + ivaTotal));
     estilarCelda(colTarifas + 3, filaTarifa, _estiloTotalMoneda());
-    _anchoColumnas(sheet, [12, 28, 18, 14, 10, 14, 14, 3, 3, 12, 14, 14, 14]);
+    _anchoColumnas(sheet, [12, 28, 18, 14, 10, 14, 14, if (hayUsd) ...[9, 13, 14, 12, 14], 3, 3, 12, 14, 14, 14]);
 
 
     {
@@ -4323,6 +4504,7 @@ class ExportService {
             style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16),
           ),
         ),
+        ..._seccionDolaresPdf('Notas de crédito', 'Cliente', [for (final n in notas) (n.consecutivo, n.fechaEmision.split('T')[0], n.receptorNombre, _usdNota(n))]),
       ],
     ));
     await Printing.layoutPdf(onLayout: (format) async => pdf.save(), name: 'Reporte_NotasCredito.pdf');
@@ -4332,11 +4514,12 @@ class ExportService {
   static Future<void> exportNotasCreditoToExcel(List<NotaCredito> notas) async {
     var excel = Excel.createExcel();
     excel['Dashboard']; // primera pestaña (ver _escribirDashboard)
+    final notasUsd = notas.any((n) => _esUsd(_usdNota(n)));
     _escribirTabla(
       excel['NotasCredito'],
       titulo: 'Reporte de notas de crédito',
       subtitulo: '${notas.length} nota(s)',
-      encabezados: const ['Fecha', 'Consecutivo', 'Anula factura', 'Cliente', 'Motivo', 'Subtotal', 'IVA', 'Total'],
+      encabezados: ['Fecha', 'Consecutivo', 'Anula factura', 'Cliente', 'Motivo', 'Subtotal', 'IVA', 'Total', if (notasUsd) ..._encabezadosUsd],
       filas: [
         for (final n in notas)
           [
@@ -4348,6 +4531,7 @@ class ExportService {
             DoubleCellValue(n.subtotal),
             DoubleCellValue(n.montoIva),
             DoubleCellValue(n.total),
+            if (notasUsd) ..._celdasUsd(_usdNota(n)),
           ],
       ],
       moneda: const {5, 6, 7},
