@@ -1,4 +1,5 @@
 import 'package:despacho_app/widgets/asistente_flotante.dart';
+import 'package:despacho_app/widgets/mascota_asistente.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -19,7 +20,7 @@ void main() {
       builder: (context, child) => AsistenteFlotante(navigatorKey: clave, child: child!),
       home: const Scaffold(body: Text('pantalla')),
     ));
-    final estrellas = find.byIcon(Icons.auto_awesome);
+    final estrellas = find.byType(MascotaAsistente);
     expect(estrellas, findsNothing);
 
     AsistenteFlotante.registrar(config);

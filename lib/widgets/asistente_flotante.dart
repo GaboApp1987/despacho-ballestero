@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'mascota_asistente.dart';
 import 'soporte_chat.dart';
 
 /// Qué asistente abre el botón flotante: lo registra el panel que está
@@ -203,62 +204,15 @@ class _VentanaChat extends StatelessWidget {
   }
 }
 
-class _BotonAsistente extends StatefulWidget {
+class _BotonAsistente extends StatelessWidget {
   final VoidCallback onTap;
   const _BotonAsistente({required this.onTap});
 
+  // Sin Tooltip: este botón vive arriba del Navigator (no hay Overlay).
   @override
-  State<_BotonAsistente> createState() => _BotonAsistenteState();
-}
-
-class _BotonAsistenteState extends State<_BotonAsistente> {
-  bool _encima = false;
-
-  @override
-  Widget build(BuildContext context) {
-    // Sin Tooltip: este botón vive arriba del Navigator (no hay Overlay).
-    return Semantics(
-      button: true,
-      label: 'Asistente Equilibra',
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _encima = true),
-        onExit: (_) => setState(() => _encima = false),
-        child: GestureDetector(
-          onTap: widget.onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                colors: [Color(0xFF6366F1), Color(0xFF22D3EE)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(
-                    0xFF6366F1,
-                  ).withValues(alpha: _encima ? 0.55 : 0.35),
-                  blurRadius: _encima ? 18 : 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: AnimatedScale(
-              scale: _encima ? 1.08 : 1,
-              duration: const Duration(milliseconds: 160),
-              child: const Icon(
-                Icons.auto_awesome,
-                color: Colors.white,
-                size: 23,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Semantics(
+        button: true,
+        label: 'Asistente Equilibra',
+        child: MascotaAsistente(onTap: onTap),
+      );
 }
