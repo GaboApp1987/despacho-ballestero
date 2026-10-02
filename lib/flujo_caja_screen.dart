@@ -8,6 +8,7 @@ import 'firmante_contador.dart';
 import 'firmante_selector.dart';
 import 'negocio.dart';
 import 'socio.dart';
+import 'widgets/flujo_caja_modalidades.dart';
 
 class MesFlujoCaja {
   final String mes;
@@ -46,6 +47,11 @@ class FlujoCajaProyectado {
   List<MesFlujoCaja> datosMensuales;
   double saldoInicial;
   String lugarEmision;
+  /// 'simple' (ingresos/egresos digitados a mano), 'nueva' (empresa nueva /
+  /// proyecto) o 'existente' (empresa en marcha) -- ver gestion/flujo_caja.py.
+  String tipo;
+  Map<String, dynamic> parametros;
+  Map<String, dynamic> resultado;
 
   FlujoCajaProyectado({
     this.id,
@@ -64,8 +70,17 @@ class FlujoCajaProyectado {
     List<MesFlujoCaja>? datosMensuales,
     this.saldoInicial = 0,
     this.lugarEmision = 'San José',
+    this.tipo = 'nueva',
+    Map<String, dynamic>? parametros,
+    Map<String, dynamic>? resultado,
   })  : supuestos = supuestos ?? [],
-        datosMensuales = datosMensuales ?? [];
+        datosMensuales = datosMensuales ?? [],
+        parametros = parametros ?? {},
+        resultado = resultado ?? {};
+
+  bool get esDetallado => tipo == 'nueva' || tipo == 'existente';
+
+  String get nombreTipo => switch (tipo) { 'nueva' => 'Empresa nueva', 'existente' => 'Empresa en marcha', _ => 'Manual' };
 
   factory FlujoCajaProyectado.fromJson(Map<String, dynamic> json) => FlujoCajaProyectado(
         id: json['id'],
@@ -84,6 +99,9 @@ class FlujoCajaProyectado {
         datosMensuales: ((json['datos_mensuales'] as List?) ?? []).map((m) => MesFlujoCaja.fromJson(m)).toList(),
         saldoInicial: double.tryParse(json['saldo_inicial']?.toString() ?? '0') ?? 0,
         lugarEmision: json['lugar_emision'] ?? 'San José',
+        tipo: json['tipo'] ?? 'simple',
+        parametros: Map<String, dynamic>.from(json['parametros'] ?? {}),
+        resultado: Map<String, dynamic>.from(json['resultado'] ?? {}),
       );
 
   Map<String, dynamic> toJson() => {
@@ -95,9 +113,11 @@ class FlujoCajaProyectado {
         'proposito': proposito,
         'supuestos': supuestos,
         if (fechaInicio != null) 'fecha_inicio': fechaInicio!.toIso8601String().split('T').first,
-        if (fechaFin != null) 'fecha_fin': fechaFin!.toIso8601String().split('T').first,
+        if (fechaFin != null && !esDetallado) 'fecha_fin': fechaFin!.toIso8601String().split('T').first,
         'moneda': moneda,
-        'datos_mensuales': datosMensuales.map((m) => m.toJson()).toList(),
+        if (!esDetallado) 'datos_mensuales': datosMensuales.map((m) => m.toJson()).toList(),
+        'tipo': tipo,
+        if (esDetallado) 'parametros': parametros,
         'saldo_inicial': saldoInicial,
         'lugar_emision': lugarEmision,
       };
@@ -186,7 +206,7 @@ class _FlujoCajaScreenState extends State<FlujoCajaScreen> {
                           leading: const CircleAvatar(backgroundColor: Color(0x1A1D4ED8), child: Icon(Icons.trending_up, color: TemaContador.acento)),
                           title: Text(f.nombreSolicitante, style: const TextStyle(fontWeight: FontWeight.w700, color: TemaContador.textoFuerte)),
                           subtitle: Text(
-                            "${f.proposito} · ${f.dirigidoA}\n${f.negocioNombre ?? 'Cliente sin cartera de facturación'}",
+                            "${f.nombreTipo} · ${f.proposito} · ${f.dirigidoA}\n${f.negocioNombre ?? 'Cliente sin cartera de facturación'}",
                             style: const TextStyle(color: TemaContador.textoTenue, fontSize: 12.5),
                           ),
                           isThreeLine: true,
@@ -243,6 +263,11 @@ class _FlujoCajaFormScreenState extends State<FlujoCajaFormScreen> {
   final _saldoInicialCtrl = TextEditingController();
   final List<TextEditingController> _supuestoCtrls = [];
 
+  final CalculadoraFlujo _calculadora = CalculadoraFlujo();
+  Map<String, dynamic>? _vistaPrevia;
+  String? _errorCalculo;
+  bool _calculando = false;
+
   final Map<String, TextEditingController> _ingresoCtrls = {};
   final Map<String, TextEditingController> _egresoCtrls = {};
 
@@ -282,8 +307,38 @@ class _FlujoCajaFormScreenState extends State<FlujoCajaFormScreen> {
       _ingresoCtrls[clave] = TextEditingController(text: m.ingresos == 0 ? '' : m.ingresos.toStringAsFixed(2));
       _egresoCtrls[clave] = TextEditingController(text: m.egresos == 0 ? '' : m.egresos.toStringAsFixed(2));
     }
+    if (_flujo.resultado.isNotEmpty) _vistaPrevia = _flujo.resultado;
     _cargarNegocios();
     _cargarMiSocio();
+  }
+
+  void _recalcular() {
+    if (!_flujo.esDetallado) return;
+    setState(() => _calculando = true);
+    _calculadora.calcular(
+      tipo: _flujo.tipo,
+      parametros: _flujo.parametros,
+      fechaInicio: _flujo.fechaInicio,
+      saldoInicial: double.tryParse(_saldoInicialCtrl.text.replaceAll(',', '')) ?? 0,
+      alTerminar: (resultado, error) {
+        if (!mounted) return;
+        setState(() {
+          _calculando = false;
+          if (resultado != null) _vistaPrevia = resultado;
+          _errorCalculo = error;
+        });
+      },
+    );
+  }
+
+  void _cambiarTipo(String tipo) {
+    if (tipo == _flujo.tipo) return;
+    setState(() {
+      _flujo.tipo = tipo;
+      _flujo.parametros = {};
+      _vistaPrevia = null;
+      _errorCalculo = null;
+    });
   }
 
   Future<void> _cargarMiSocio() async {
@@ -304,6 +359,7 @@ class _FlujoCajaFormScreenState extends State<FlujoCajaFormScreen> {
 
   @override
   void dispose() {
+    _calculadora.cancelar();
     _nombreCtrl.dispose();
     _cedulaCtrl.dispose();
     _dirigidoACtrl.dispose();
@@ -418,9 +474,11 @@ class _FlujoCajaFormScreenState extends State<FlujoCajaFormScreen> {
     final actual = (esInicio ? _flujo.fechaInicio : _flujo.fechaFin) ?? DateTime.now();
     final elegida = await showDatePicker(context: context, initialDate: actual, firstDate: DateTime(2015), lastDate: DateTime(DateTime.now().year + 3));
     if (elegida == null) return;
+    _calculadora.cancelar();
+    Future.microtask(_recalcular);
     setState(() {
       if (esInicio) {
-        _flujo.fechaInicio = elegida;
+        _flujo.fechaInicio = _flujo.esDetallado ? DateTime(elegida.year, elegida.month, 1) : elegida;
       } else {
         _flujo.fechaFin = elegida;
       }
@@ -454,6 +512,90 @@ class _FlujoCajaFormScreenState extends State<FlujoCajaFormScreen> {
 
   String _simboloMoneda() => _flujo.moneda == 'USD' ? r'$' : '₡';
 
+  Widget _selectorTipo() {
+    Widget opcion(String tipo, IconData icono, String titulo, String descripcion) {
+      final activo = _flujo.tipo == tipo;
+      return InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _cambiarTipo(tipo),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: activo ? TemaContador.acento.withOpacity(0.06) : TemaContador.superficie,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: activo ? TemaContador.acento : TemaContador.borde, width: activo ? 1.6 : 1),
+          ),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(icono, color: activo ? TemaContador.acento : TemaContador.textoTenue),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(titulo, style: TextStyle(fontWeight: FontWeight.w800, color: activo ? TemaContador.acento : TemaContador.textoFuerte)),
+                const SizedBox(height: 2),
+                Text(descripcion, style: const TextStyle(color: TemaContador.textoTenue, fontSize: 12, height: 1.3)),
+              ]),
+            ),
+            if (activo) const Icon(Icons.check_circle, color: TemaContador.acento, size: 18),
+          ]),
+        ),
+      );
+    }
+
+    final opciones = [
+      opcion('nueva', Icons.rocket_launch_outlined, "Empresa nueva",
+          "Proyecto o negocio que va a empezar: inversión inicial, financiamiento, arranque de ventas. Incluye VAN, TIR y recuperación."),
+      opcion('existente', Icons.storefront_outlined, "Empresa en marcha",
+          "Negocio con historia: parte de sus ventas reales (se importan de Equilibra), cuentas por cobrar/pagar y deudas vigentes."),
+      opcion('simple', Icons.edit_note, "Manual", "Digitar ingresos y egresos de cada mes (formato anterior)."),
+    ];
+    return LayoutBuilder(builder: (context, c) {
+      if (c.maxWidth < 640) {
+        return Column(children: [for (final o in opciones) Padding(padding: const EdgeInsets.only(bottom: 8), child: o)]);
+      }
+      return IntrinsicHeight(
+        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Expanded(flex: 5, child: opciones[0]),
+          const SizedBox(width: 8),
+          Expanded(flex: 5, child: opciones[1]),
+          const SizedBox(width: 8),
+          Expanded(flex: 3, child: opciones[2]),
+        ]),
+      );
+    });
+  }
+
+  Widget _vistaPreviaWidget() {
+    if (_vistaPrevia == null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Row(children: [
+          if (_calculando) const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+          if (_calculando) const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _errorCalculo ?? (_calculando ? "Calculando…" : "Completá los datos y el estado aparece acá."),
+              style: TextStyle(color: _errorCalculo != null ? Colors.red : TemaContador.textoTenue),
+            ),
+          ),
+        ]),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AnimatedOpacity(
+          opacity: _calculando ? 1 : 0,
+          duration: const Duration(milliseconds: 200),
+          child: const Padding(padding: EdgeInsets.only(bottom: 8), child: LinearProgressIndicator(minHeight: 2)),
+        ),
+        if (_errorCalculo != null)
+          Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(_errorCalculo!, style: const TextStyle(color: Colors.red))),
+        VistaPreviaFlujo(resultado: _vistaPrevia!, simbolo: _simboloMoneda()),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final campo = const TextStyle(color: TemaContador.textoFuerte);
@@ -473,6 +615,10 @@ class _FlujoCajaFormScreenState extends State<FlujoCajaFormScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _tarjeta(
+              titulo: "¿Qué tipo de flujo de caja?",
+              child: _selectorTipo(),
+            ),
             _tarjeta(
               titulo: "¿Para quién es el flujo de caja?",
               child: Column(
@@ -504,6 +650,11 @@ class _FlujoCajaFormScreenState extends State<FlujoCajaFormScreen> {
                               if (n != null) {
                                 _nombreCtrl.text = n.nombreComercial;
                                 _cedulaCtrl.text = n.cedula;
+                                if (_flujo.id == null && _flujo.tipo == 'nueva') {
+                                  _flujo.tipo = 'existente';
+                                  _flujo.parametros = {};
+                                  _vistaPrevia = null;
+                                }
                               }
                             }),
                           ),
@@ -546,11 +697,22 @@ class _FlujoCajaFormScreenState extends State<FlujoCajaFormScreen> {
                           DropdownMenuItem(value: 'CRC', child: Text("Colones (CRC)", style: TextStyle(color: TemaContador.textoFuerte))),
                           DropdownMenuItem(value: 'USD', child: Text("Dólares (USD)", style: TextStyle(color: TemaContador.textoFuerte))),
                         ],
-                        onChanged: (v) => setState(() => _flujo.moneda = v ?? 'CRC'),
+                        onChanged: (v) {
+                          setState(() => _flujo.moneda = v ?? 'CRC');
+                          _recalcular();
+                        },
                       ),
                     ),
                     const SizedBox(width: 10),
-                    Expanded(child: TextField(controller: _saldoInicialCtrl, style: campo, keyboardType: TextInputType.number, decoration: _decoracion("Saldo inicial de caja"))),
+                    Expanded(
+                      child: TextField(
+                        controller: _saldoInicialCtrl,
+                        style: campo,
+                        keyboardType: TextInputType.number,
+                        decoration: _decoracion(_flujo.tipo == 'nueva' ? "Caja antes de la inversión" : "Saldo inicial de caja"),
+                        onChanged: (_) => _recalcular(),
+                      ),
+                    ),
                   ]),
                   const SizedBox(height: 10),
                   Row(children: [
@@ -558,11 +720,19 @@ class _FlujoCajaFormScreenState extends State<FlujoCajaFormScreen> {
                       child: InkWell(
                         onTap: () => _elegirFecha(esInicio: true),
                         child: InputDecorator(
-                          decoration: _decoracion("Desde"),
-                          child: Text(_flujo.fechaInicio == null ? "Elegir" : "${_flujo.fechaInicio!.day}/${_flujo.fechaInicio!.month}/${_flujo.fechaInicio!.year}", style: campo),
+                          decoration: _decoracion(_flujo.esDetallado ? "Mes de inicio" : "Desde"),
+                          child: Text(
+                            _flujo.fechaInicio == null
+                                ? "Elegir"
+                                : _flujo.esDetallado
+                                    ? "${_mesesNombres[_flujo.fechaInicio!.month - 1]} ${_flujo.fechaInicio!.year}"
+                                    : "${_flujo.fechaInicio!.day}/${_flujo.fechaInicio!.month}/${_flujo.fechaInicio!.year}",
+                            style: campo,
+                          ),
                         ),
                       ),
                     ),
+                    if (!_flujo.esDetallado) ...[
                     const SizedBox(width: 10),
                     Expanded(
                       child: InkWell(
@@ -573,15 +743,44 @@ class _FlujoCajaFormScreenState extends State<FlujoCajaFormScreen> {
                         ),
                       ),
                     ),
+                    ],
                   ]),
                 ],
               ),
             ),
+            if (_flujo.esDetallado) ...[
+              _tarjeta(
+                titulo: _flujo.tipo == 'nueva' ? "Datos del proyecto" : "Datos del negocio",
+                child: EditorParametrosFlujo(
+                  key: ValueKey('editor-${_flujo.tipo}-${_negocioSeleccionado?.id}'),
+                  tipo: _flujo.tipo,
+                  parametros: _flujo.parametros,
+                  negocioId: _clienteExistente ? _negocioSeleccionado?.id : null,
+                  simbolo: _simboloMoneda(),
+                  onChanged: (p) {
+                    _flujo.parametros = p;
+                    _recalcular();
+                  },
+                ),
+              ),
+              _tarjeta(
+                titulo: "Vista previa del estado",
+                child: _vistaPreviaWidget(),
+              ),
+            ],
             _tarjeta(
-              titulo: "Supuestos de la proyección",
+              titulo: _flujo.esDetallado ? "Supuestos adicionales" : "Supuestos de la proyección",
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (_flujo.esDetallado)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 10),
+                      child: Text(
+                        "Los supuestos del cálculo (ventas, cobros, IVA, planilla, préstamos…) se redactan solos en el informe. Agregá acá solo lo que no se ve en los números, por ejemplo: \"El local ya cuenta con permiso de funcionamiento\".",
+                        style: TextStyle(color: TemaContador.textoTenue, fontSize: 12.5, height: 1.35),
+                      ),
+                    ),
                   ..._supuestoCtrls.asMap().entries.map((entry) {
                     final i = entry.key;
                     return Padding(
@@ -608,6 +807,7 @@ class _FlujoCajaFormScreenState extends State<FlujoCajaFormScreen> {
                 ],
               ),
             ),
+            if (!_flujo.esDetallado) ...[
             _tarjeta(
               titulo: "Proyección mensual",
               child: SingleChildScrollView(
@@ -671,6 +871,7 @@ class _FlujoCajaFormScreenState extends State<FlujoCajaFormScreen> {
                 ],
               ),
             ),
+            ],
           ],
         ),
       ),
