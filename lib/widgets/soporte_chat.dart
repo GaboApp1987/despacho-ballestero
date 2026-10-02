@@ -250,6 +250,36 @@ class _PropuestaFactura {
   double get total => subtotal + montoIva;
 }
 
+/// Chat del asistente en una ventanita (ver AsistenteFlotante): misma
+/// conversación y herramientas que el asistente grande, con botones para
+/// minimizarla (vuelve a las estrellitas, sin perder la conversación) o
+/// abrir el asistente en pantalla completa.
+class MiniChatAsistente extends StatelessWidget {
+  final int? negocioId;
+  final Map<String, String> secciones;
+  final void Function(String clave) onNavegar;
+  final VoidCallback onMinimizar;
+  final VoidCallback onMaximizar;
+  const MiniChatAsistente({
+    super.key,
+    this.negocioId,
+    required this.secciones,
+    required this.onNavegar,
+    required this.onMinimizar,
+    required this.onMaximizar,
+  });
+
+  @override
+  Widget build(BuildContext context) => _SoporteChatSheet(
+        contexto: 'usuario',
+        negocioId: negocioId,
+        secciones: secciones,
+        onNavegar: onNavegar,
+        onMinimizar: onMinimizar,
+        onMaximizar: onMaximizar,
+      );
+}
+
 class _SoporteChatSheet extends StatefulWidget {
   final String contexto;
   final int? negocioId;
@@ -262,7 +292,12 @@ class _SoporteChatSheet extends StatefulWidget {
   final String? saludo;
   final List<(IconData, String)> sugerencias;
   final bool empezarGrabando;
+  // Modo ventanita (MiniChatAsistente): en vez de cerrar, se minimiza.
+  final VoidCallback? onMinimizar;
+  final VoidCallback? onMaximizar;
   const _SoporteChatSheet({
+    this.onMinimizar,
+    this.onMaximizar,
     required this.contexto,
     this.negocioId,
     this.mensajeInicial,
@@ -276,6 +311,7 @@ class _SoporteChatSheet extends StatefulWidget {
   });
 
   bool get modoAsistente => secciones != null;
+  bool get esMini => onMinimizar != null;
 
   @override
   State<_SoporteChatSheet> createState() => _SoporteChatSheetState();
@@ -1119,7 +1155,11 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
         onPressed: widget.onNavegar == null
             ? null
             : () {
-                Navigator.pop(context);
+                if (widget.esMini) {
+                  widget.onMinimizar!();
+                } else {
+                  Navigator.pop(context);
+                }
                 widget.onNavegar!(clave);
               },
         icon: const Icon(Icons.arrow_forward_rounded, size: 18),
@@ -1548,21 +1588,24 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
   }
 
   Widget _buildHoja(BuildContext context) {
+    final mini = widget.esMini;
     final alto = MediaQuery.of(context).size.height * 0.82;
     return Padding(
-      padding: MediaQuery.of(context).viewInsets,
+      padding: mini ? EdgeInsets.zero : MediaQuery.of(context).viewInsets,
       child: Container(
-        height: alto,
+        height: mini ? null : alto,
         decoration: BoxDecoration(
           color: AppColors.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          borderRadius: mini ? BorderRadius.circular(18) : const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: Column(
           children: [
-            const SizedBox(height: 10),
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
+            if (!mini) ...[
+              const SizedBox(height: 10),
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
+            ],
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 12, 8),
+              padding: EdgeInsets.fromLTRB(mini ? 14 : 20, mini ? 8 : 12, mini ? 4 : 12, mini ? 4 : 8),
               child: Row(
                 children: [
                   Icon(widget.modoAsistente ? Icons.auto_awesome : Icons.support_agent, color: AppColors.primary),
@@ -1573,7 +1616,19 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                   ),
-                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                  if (mini) ...[
+                    IconButton(
+                      tooltip: 'Abrir en pantalla completa',
+                      icon: const Icon(Icons.open_in_full_rounded, size: 19),
+                      onPressed: widget.onMaximizar,
+                    ),
+                    IconButton(
+                      tooltip: 'Minimizar',
+                      icon: const Icon(Icons.remove_rounded),
+                      onPressed: widget.onMinimizar,
+                    ),
+                  ] else
+                    IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
                 ],
               ),
             ),

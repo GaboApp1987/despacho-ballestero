@@ -254,7 +254,11 @@ class _NegociosScreenState extends State<NegociosScreen> {
   List<Map<String, dynamic>> _sociosDisponibles = [];
 
   // Botón flotante del asistente en todas las pantallas del contador.
-  late final ConfigAsistente _asistenteFlotante = ConfigAsistente(_abrirAsistenteContador);
+  late final ConfigAsistente _asistenteFlotante = ConfigAsistente(
+    secciones: _seccionesAsistenteContador,
+    onNavegar: _irDesdeAsistenteContador,
+    abrirPantallaCompleta: _abrirAsistenteContador,
+  );
 
   @override
   void initState() {

@@ -324,7 +324,12 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
 
   // Botón flotante del asistente en todas las pantallas de este negocio
   // (también cuando entra el contador a un cliente).
-  late final ConfigAsistente _asistenteFlotante = ConfigAsistente(_abrirAsistenteNegocio);
+  late final ConfigAsistente _asistenteFlotante = ConfigAsistente(
+    negocioId: widget.negocio.id,
+    secciones: {for (final e in _seccionesAsistente.entries) e.key: e.value.$2},
+    onNavegar: _irDesdeAsistente,
+    abrirPantallaCompleta: _abrirAsistenteNegocio,
+  );
 
   void _abrirAsistenteNegocio() {
     abrirAsistentePantalla(

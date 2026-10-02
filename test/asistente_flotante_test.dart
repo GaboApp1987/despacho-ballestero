@@ -3,32 +3,54 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('El botón flotante aparece solo con un panel registrado y abre su asistente', (tester) async {
+  testWidgets('Las estrellitas abren el mini chat, que se minimiza sin perder la conversación', (tester) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     final clave = GlobalKey<NavigatorState>();
-    var abiertas = 0;
-    final config = ConfigAsistente(() => abiertas++);
+    var pantallaCompleta = 0;
+    final config = ConfigAsistente(
+      secciones: const {'inicio': 'Inicio'},
+      onNavegar: (_) {},
+      abrirPantallaCompleta: () => pantallaCompleta++,
+    );
     await tester.pumpWidget(MaterialApp(
       navigatorKey: clave,
       builder: (context, child) => AsistenteFlotante(navigatorKey: clave, child: child!),
       home: const Scaffold(body: Text('pantalla')),
     ));
-    final boton = find.byIcon(Icons.auto_awesome);
-    expect(boton, findsNothing);
+    final estrellas = find.byIcon(Icons.auto_awesome);
+    expect(estrellas, findsNothing);
 
     AsistenteFlotante.registrar(config);
-    await tester.pumpAndSettle();
-    expect(boton, findsOneWidget);
-    await tester.tap(boton);
-    expect(abiertas, 1);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Asistente Equilibra'), findsNothing); // minimizado (Offstage)
 
-    // Mientras el asistente está abierto no se muestra.
-    AsistenteFlotante.abierto.value = true;
-    await tester.pumpAndSettle();
-    expect(tester.widget<AnimatedScale>(find.ancestor(of: boton, matching: find.byType(AnimatedScale)).last).scale, 0);
-    AsistenteFlotante.abierto.value = false;
+    await tester.tap(estrellas.first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Asistente Equilibra'), findsOneWidget);
+
+    // Lo que se escribió queda al minimizar y volver a abrir.
+    await tester.enterText(find.byType(TextField).first, 'hola');
+    await tester.tap(find.byTooltip('Minimizar'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Asistente Equilibra'), findsNothing);
+    await tester.tap(estrellas.first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(tester.widget<EditableText>(find.byType(EditableText)).controller.text, 'hola');
+
+    await tester.tap(find.byTooltip('Abrir en pantalla completa'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(pantallaCompleta, 1);
 
     AsistenteFlotante.quitar(config);
-    await tester.pumpAndSettle();
-    expect(boton, findsNothing);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(estrellas, findsNothing);
   });
 }
