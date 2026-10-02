@@ -243,6 +243,13 @@ class ExportService {
     ];
   }
 
+  // ---- Ventas reales ------------------------------------------------------
+  // Un comprobante rechazado por Hacienda (4) o con error técnico (5) no es
+  // una venta: no entra en los reportes de ventas ni en sus totales. Las
+  // notas de crédito válidas se RESTAN (ventas netas).
+  static bool _ventaValida(Factura f) => f.estadoHacienda != '4' && f.estadoHacienda != '5';
+  static bool _notaValida(NotaCredito n) => n.estadoHacienda != '4' && n.estadoHacienda != '5';
+
   static void _escribirTabla(
     Sheet hoja, {
     String? titulo,
@@ -626,7 +633,19 @@ class ExportService {
   }
 
   /// Exporta el listado de facturas a PDF
-  static Future<void> exportFacturasToPdf(List<Factura> facturas, String negocioNombre, String periodo) async {
+  static Future<void> exportFacturasToPdf(
+    List<Factura> todas,
+    String negocioNombre,
+    String periodo, {
+    List<NotaCredito> notasCredito = const [],
+  }) async {
+    final facturas = todas.where(_ventaValida).toList();
+    final excluidas = todas.length - facturas.length;
+    final notas = notasCredito.where(_notaValida).toList();
+    final ventasSub = facturas.fold<double>(0.0, (s, f) => s + (f.totalFactura - f.totalIva));
+    final ventasIva = facturas.fold<double>(0.0, (s, f) => s + f.totalIva);
+    final notasSub = notas.fold<double>(0.0, (s, n) => s + n.subtotal);
+    final notasIva = notas.fold<double>(0.0, (s, n) => s + n.montoIva);
     final pdf = pw.Document(theme: await _cargarTema());
     pdf.addPage(pw.MultiPage(
       pageTheme: _temaPagina(),
@@ -651,21 +670,40 @@ class ExportService {
         pw.Container(
           padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: pw.BoxDecoration(color: PdfColors.indigo50, borderRadius: pw.BorderRadius.circular(6)),
-          child: pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          child: pw.Column(
             children: [
-              pw.Text(
-                'Subtotal: ${formatearColones(facturas.fold<double>(0.0, (sum, f) => sum + (f.totalFactura - f.totalIva)))}',
-                style: const pw.TextStyle(fontSize: 12),
-              ),
-              pw.Text(
-                'IVA: ${formatearColones(facturas.fold<double>(0.0, (sum, f) => sum + f.totalIva))}',
-                style: const pw.TextStyle(fontSize: 12),
-              ),
-              pw.Text(
-                'Total: ${formatearColones(facturas.fold<double>(0.0, (sum, f) => sum + f.totalFactura))}',
-                style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 13, color: PdfColors.indigo),
-              ),
+              for (final (etiqueta, sub, iva, fuerte) in [
+                ('Ventas (${facturas.length} comprobante${facturas.length == 1 ? '' : 's'})', ventasSub, ventasIva, false),
+                if (notas.isNotEmpty) ('(-) Notas de crédito (${notas.length})', -notasSub, -notasIva, false),
+                ('Ventas netas', ventasSub - notasSub, ventasIva - notasIva, true),
+              ])
+                pw.Padding(
+                  padding: const pw.EdgeInsets.symmetric(vertical: 2),
+                  child: pw.Row(
+                    children: [
+                      pw.Expanded(
+                        flex: 3,
+                        child: pw.Text(etiqueta, style: pw.TextStyle(fontSize: fuerte ? 12.5 : 11, fontWeight: fuerte ? pw.FontWeight.bold : null)),
+                      ),
+                      pw.Expanded(
+                        flex: 2,
+                        child: pw.Text('Subtotal ${formatearColones(sub)}', textAlign: pw.TextAlign.right, style: const pw.TextStyle(fontSize: 10.5)),
+                      ),
+                      pw.Expanded(
+                        flex: 2,
+                        child: pw.Text('IVA ${formatearColones(iva)}', textAlign: pw.TextAlign.right, style: const pw.TextStyle(fontSize: 10.5)),
+                      ),
+                      pw.Expanded(
+                        flex: 2,
+                        child: pw.Text(
+                          formatearColones(sub + iva),
+                          textAlign: pw.TextAlign.right,
+                          style: pw.TextStyle(fontSize: fuerte ? 13 : 11, fontWeight: pw.FontWeight.bold, color: fuerte ? PdfColors.indigo : PdfColors.grey800),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
         ),
@@ -708,8 +746,41 @@ class ExportService {
             formatearColones(f.totalFactura),
           ]).toList(),
         ),
+        if (notas.isNotEmpty) ...[
+          pw.SizedBox(height: 22),
+          pw.Text('Notas de crédito (se restan de las ventas)', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold, color: PdfColors.red800)),
+          pw.SizedBox(height: 8),
+          pw.TableHelper.fromTextArray(
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.red800),
+            cellStyle: const pw.TextStyle(fontSize: 9.5),
+            cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+            headerPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+            headers: const ['Fecha', 'Nota #', 'Anula', 'Cliente', 'Subtotal', 'IVA', 'Total'],
+            cellAlignments: const {4: pw.Alignment.centerRight, 5: pw.Alignment.centerRight, 6: pw.Alignment.centerRight},
+            data: [
+              for (final n in notas)
+                [
+                  n.fechaEmision.split('T')[0],
+                  n.consecutivo,
+                  'F-${n.facturaConsecutivo ?? ''}',
+                  n.receptorNombre,
+                  '-${formatearColones(n.subtotal)}',
+                  '-${formatearColones(n.montoIva)}',
+                  '-${formatearColones(n.total)}',
+                ],
+            ],
+          ),
+        ],
+        if (excluidas > 0) ...[
+          pw.SizedBox(height: 10),
+          pw.Text(
+            'No se incluyen $excluidas comprobante${excluidas == 1 ? '' : 's'} rechazado${excluidas == 1 ? '' : 's'} o con error ante Hacienda (no son ventas).',
+            style: pw.TextStyle(fontSize: 9, color: PdfColors.grey600, fontStyle: pw.FontStyle.italic),
+          ),
+        ],
         pw.SizedBox(height: 24),
-        pw.Text('Detalle por tarifa de IVA', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold, color: PdfColors.indigo)),
+        pw.Text('Detalle por tarifa de IVA (facturas)', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold, color: PdfColors.indigo)),
         pw.SizedBox(height: 8),
         pw.Builder(builder: (context) {
           final porTarifa = _agruparPorTarifa(facturas);
@@ -744,7 +815,13 @@ class ExportService {
   /// (Subtotal/IVA/Total de todo el periodo), fila 4 el encabezado de la
   /// tabla y desde la fila 5 el detalle línea por línea -- y una hoja
   /// aparte con el desglose agrupado por tarifa de IVA.
-  static Future<void> exportFacturasToExcel(List<Factura> facturas) async {
+  static Future<void> exportFacturasToExcel(List<Factura> todas, {List<NotaCredito> notasCredito = const []}) async {
+    final facturas = todas.where(_ventaValida).toList();
+    final excluidas = todas.length - facturas.length;
+    final notas = notasCredito.where(_notaValida).toList();
+    final notasSub = notas.fold<double>(0.0, (s, n) => s + n.subtotal);
+    final notasIva = notas.fold<double>(0.0, (s, n) => s + n.montoIva);
+    final notasTotal = notas.fold<double>(0.0, (s, n) => s + n.total);
     var excel = Excel.createExcel();
     excel['Dashboard']; // primera pestaña (ver _escribirDashboard)
     Sheet sheetObject = excel['Facturas'];
@@ -756,10 +833,10 @@ class ExportService {
 
     sheetObject.appendRow([TextCellValue('Reporte de Facturación')]); // fila 1
     _estilarCeldaUltimaFila(sheetObject, 0, _estiloTitulo());
-    sheetObject.appendRow([                                          // fila 2: sumas del periodo
-      TextCellValue('Subtotal:'), DoubleCellValue(sumaSubtotal),
-      TextCellValue('IVA:'), DoubleCellValue(sumaIva),
-      TextCellValue('Total:'), DoubleCellValue(sumaTotal),
+    sheetObject.appendRow([                                          // fila 2: ventas netas del periodo
+      TextCellValue('Subtotal neto:'), DoubleCellValue(sumaSubtotal - notasSub),
+      TextCellValue('IVA neto:'), DoubleCellValue(sumaIva - notasIva),
+      TextCellValue('Ventas netas:'), DoubleCellValue(sumaTotal - notasTotal),
     ]);
     _estilarCeldaUltimaFila(sheetObject, 1, _estiloMoneda());
     _estilarCeldaUltimaFila(sheetObject, 3, _estiloMoneda());
@@ -808,6 +885,47 @@ class ExportService {
       _estilarCeldaUltimaFila(sheetObject, col, _estiloTotalMoneda());
     }
     if (hayUsd) _estilarUsdUltimaFila(sheetObject, 9, total: true);
+    if (notas.isNotEmpty) {
+      // Las notas de crédito restan; abajo, las ventas netas.
+      for (final (etiqueta, sub, iva, tot) in [
+        ('(-) Notas de crédito (${notas.length})', -notasSub, -notasIva, -notasTotal),
+        ('VENTAS NETAS', sumaSubtotal - notasSub, sumaIva - notasIva, sumaTotal - notasTotal),
+      ]) {
+        sheetObject.appendRow([
+          TextCellValue(etiqueta), TextCellValue(''), TextCellValue(''), TextCellValue(''), TextCellValue(''),
+          DoubleCellValue(sub), TextCellValue(''), DoubleCellValue(iva), DoubleCellValue(tot),
+        ]);
+        _estilarCeldaUltimaFila(sheetObject, 0, _estiloTotalTexto());
+        for (final col in [5, 7, 8]) {
+          _estilarCeldaUltimaFila(sheetObject, col, _estiloTotalMoneda());
+        }
+      }
+    }
+    if (excluidas > 0) {
+      sheetObject.appendRow([TextCellValue('No se incluyen $excluidas comprobante(s) rechazado(s) o con error ante Hacienda (no son ventas).')]);
+      _estilarCeldaUltimaFila(sheetObject, 0, CellStyle(italic: true, fontColorHex: ExcelColor.fromHexString('FF6B7280')));
+    }
+    if (notas.isNotEmpty) {
+      _escribirTabla(
+        excel['Notas de crédito'],
+        titulo: 'Notas de crédito del periodo (se restan de las ventas)',
+        encabezados: const ['Fecha', 'Consecutivo', 'Anula factura', 'Cliente', 'Subtotal', 'IVA', 'Total'],
+        filas: [
+          for (final n in notas)
+            [
+              TextCellValue(n.fechaEmision.split('T')[0]),
+              TextCellValue(n.consecutivo),
+              TextCellValue('F-${n.facturaConsecutivo ?? ''}'),
+              TextCellValue(n.receptorNombre),
+              DoubleCellValue(-n.subtotal),
+              DoubleCellValue(-n.montoIva),
+              DoubleCellValue(-n.total),
+            ],
+        ],
+        moneda: const {4, 5, 6},
+        sumar: const {4, 5, 6},
+      );
+    }
 
     // Detalle por Tarifa: a la par de la tabla principal (no en otra hoja),
     // arrancando en la columna K (deja J de separación) y alineado con
@@ -860,9 +978,12 @@ class ExportService {
 
 
     {
-      final validas = facturas.where((f) => !f.anulada && f.estadoHacienda != '4' && f.estadoHacienda != '5').toList();
-      final total = validas.fold(0.0, (a, f) => a + f.totalFactura);
-      final iva = validas.fold(0.0, (a, f) => a + f.totalIva);
+      // Mismo criterio que el resto del reporte: sin rechazadas y menos
+      // las notas de crédito (una factura anulada ya está compensada por
+      // su nota).
+      final validas = facturas;
+      final total = validas.fold(0.0, (a, f) => a + f.totalFactura) - notasTotal;
+      final iva = validas.fold(0.0, (a, f) => a + f.totalIva) - notasIva;
       final credito = validas.where((f) => f.condicionVenta == '02');
       final porCobrar = credito.where((f) => !f.pagada).fold(0.0, (a, f) => a + f.totalFactura);
       final aceptadas = facturas.where((f) => f.estadoHacienda == '3').length;
@@ -870,14 +991,14 @@ class ExportService {
       _escribirDashboard(
         excel,
         titulo: 'Dashboard de facturación',
-        subtitulo: '${facturas.length} comprobante(s)',
+        subtitulo: '${facturas.length} comprobante(s)${notas.isEmpty ? '' : ' y ${notas.length} nota(s) de crédito'}',
         indicadores: [
-          ('Total facturado', total, 'moneda', 'Sin anuladas ni rechazadas'),
+          ('Ventas netas', total, 'moneda', notas.isEmpty ? 'Sin rechazadas' : 'Sin rechazadas, menos notas de crédito'),
           ('Subtotal (sin IVA)', total - iva, 'moneda', null),
           ('IVA facturado', iva, 'moneda', null),
           ('Ticket promedio', _div(total, validas.length.toDouble()), 'moneda', 'Por comprobante'),
           ('Comprobantes', validas.length.toDouble(), 'numero', null),
-          ('Aceptadas por Hacienda', _div(aceptadas.toDouble(), facturas.length.toDouble()), 'porcentaje', '$aceptadas de ${facturas.length}'),
+          ('Aceptadas por Hacienda', _div(aceptadas.toDouble(), todas.length.toDouble()), 'porcentaje', '$aceptadas de ${todas.length}'),
           ('Ventas a crédito', _div(credito.fold(0.0, (a, f) => a + f.totalFactura), total), 'porcentaje', 'Del total facturado'),
           ('Pendiente de cobro', porCobrar, 'moneda', 'Facturas a crédito sin pagar'),
         ],
@@ -885,7 +1006,7 @@ class ExportService {
           ('Ventas por cliente', _agrupar<Factura>(validas, (f) => f.receptorNombre, (f) => f.totalFactura), 'moneda'),
           ('Ventas por mes', _agrupar<Factura>(validas, (f) => _mesCorto(f.fechaEmision), (f) => f.totalFactura), 'moneda'),
           ('Contado vs. crédito', _agrupar<Factura>(validas, (f) => f.condicionVenta == '02' ? 'Crédito' : 'Contado', (f) => f.totalFactura), 'moneda'),
-          ('Comprobantes por estado ante Hacienda', _agrupar<Factura>(facturas, (f) => estados[f.estadoHacienda] ?? f.estadoHacienda, (_) => 1), 'numero'),
+          ('Comprobantes por estado ante Hacienda', _agrupar<Factura>(todas, (f) => estados[f.estadoHacienda] ?? f.estadoHacienda, (_) => 1), 'numero'),
         ],
       );
     }

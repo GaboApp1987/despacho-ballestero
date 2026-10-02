@@ -89,6 +89,15 @@ class _ReportesScreenState extends State<ReportesScreen> {
     try {
       switch (_tipo) {
         case _TipoReporte.ventas:
+          // Las notas de crédito del periodo se restan de las ventas.
+          final rn = await ApiService.get('/notas-credito/?negocio=${widget.negocio.id}&fecha_inicio=$inicioStr&fecha_fin=$finStr');
+          if (rn.statusCode == 200) {
+            final data = json.decode(utf8.decode(rn.bodyBytes)) as List;
+            _notasCredito = data
+                .map((j) => NotaCredito.fromJson(j))
+                .where((n) => n.estadoHacienda != '4' && n.estadoHacienda != '5')
+                .toList();
+          }
           final r = await ApiService.get('/facturas/?negocio=${widget.negocio.id}&fecha_inicio=$inicioStr&fecha_fin=$finStr');
           if (r.statusCode == 200) {
             final data = json.decode(utf8.decode(r.bodyBytes)) as List;
@@ -190,7 +199,8 @@ class _ReportesScreenState extends State<ReportesScreen> {
   double get _totalActual {
     switch (_tipo) {
       case _TipoReporte.ventas:
-        return _facturas.fold(0.0, (s, f) => s + f.totalFactura);
+        // Ventas netas: facturas válidas menos notas de crédito.
+        return _facturas.fold(0.0, (s, f) => s + f.totalFactura) - _notasCredito.fold(0.0, (s, n) => s + n.total);
       case _TipoReporte.ingresos:
         return _ingresos.fold(0.0, (s, i) => s + i.total);
       case _TipoReporte.compras:
@@ -220,7 +230,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
   void _exportarPdf() {
     switch (_tipo) {
       case _TipoReporte.ventas:
-        ExportService.exportFacturasToPdf(_facturas, widget.negocio.nombreComercial, _periodoTexto);
+        ExportService.exportFacturasToPdf(_facturas, widget.negocio.nombreComercial, _periodoTexto, notasCredito: _notasCredito);
         break;
       case _TipoReporte.ingresos:
         ExportService.exportIngresosToPdf(_ingresos, widget.negocio.nombreComercial, _periodoTexto);
@@ -240,7 +250,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
   void _exportarExcel() {
     switch (_tipo) {
       case _TipoReporte.ventas:
-        ExportService.exportFacturasToExcel(_facturas);
+        ExportService.exportFacturasToExcel(_facturas, notasCredito: _notasCredito);
         break;
       case _TipoReporte.ingresos:
         ExportService.exportIngresosToExcel(_ingresos);
@@ -371,7 +381,12 @@ class _ReportesScreenState extends State<ReportesScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("$_cantidadActual documento(s) en el periodo", style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+          Text(
+            _tipo == _TipoReporte.ventas
+                ? "Ventas netas · ${_facturas.length} venta(s)${_notasCredito.isEmpty ? '' : ' − ${_notasCredito.length} nota(s) de crédito'}"
+                : "$_cantidadActual documento(s) en el periodo",
+            style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+          ),
           const SizedBox(height: 4),
           Text(formatearColones(_totalActual), style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.primary)),
           const SizedBox(height: 14),
@@ -384,12 +399,22 @@ class _ReportesScreenState extends State<ReportesScreen> {
   Widget _buildLista() {
     switch (_tipo) {
       case _TipoReporte.ventas:
-        if (_facturas.isEmpty) return _vacio("No hay ventas en este periodo.");
+        if (_facturas.isEmpty && _notasCredito.isEmpty) return _vacio("No hay ventas en este periodo.");
         return ListView.separated(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-          itemCount: _facturas.length,
+          itemCount: _facturas.length + _notasCredito.length,
           separatorBuilder: (_, __) => const SizedBox(height: 10),
           itemBuilder: (context, i) {
+            // Después de las facturas, las notas de crédito (restan).
+            if (i >= _facturas.length) {
+              final n = _notasCredito[i - _facturas.length];
+              return _filaReporte(
+                icono: Icons.assignment_return_outlined,
+                titulo: n.receptorNombre,
+                subtitulo: "Nota de crédito ${n.consecutivo} • anula F-${n.facturaConsecutivo ?? ''} • ${n.fechaEmision.split('T')[0]}",
+                monto: -n.total,
+              );
+            }
             final f = _facturas[i];
             return _filaReporte(
               icono: Icons.receipt_long_outlined,
@@ -581,7 +606,10 @@ class _ReportesScreenState extends State<ReportesScreen> {
         leading: CircleAvatar(backgroundColor: const Color(0xFFEEF2FF), child: Icon(icono, color: AppColors.primary, size: 20)),
         title: Text(titulo, style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Text(subtitulo, style: const TextStyle(fontSize: 12)),
-        trailing: Text(formatearColones(monto), style: const TextStyle(fontWeight: FontWeight.bold)),
+        trailing: Text(
+          monto < 0 ? "-${formatearColones(-monto)}" : formatearColones(monto),
+          style: TextStyle(fontWeight: FontWeight.bold, color: monto < 0 ? Colors.red[400] : null),
+        ),
       ),
     );
   }

@@ -42,6 +42,7 @@ import 'widgets/asistente_ia_bar.dart';
 import 'perfil_sesion.dart';
 import 'widgets/asistente_flotante.dart';
 import 'widgets/selector_periodo.dart';
+import 'nota_credito.dart';
 
 /// Envuelve a un hijo y le avisa a [builder] si el cursor está encima
 /// (hover) -- solo tiene efecto real con mouse (escritorio/web), en touch no
@@ -553,13 +554,34 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     });
   }
 
+  // Notas de crédito del periodo: se restan de las ventas del dashboard y
+  // de los reportes exportados desde la lista de facturas.
+  List<NotaCredito> _notasPeriodo = [];
+
+  Future<void> _cargarNotasPeriodo(String inicioStr, String finStr) async {
+    try {
+      final r = await ApiService.get('/notas-credito/?negocio=${widget.negocio.id}&fecha_inicio=$inicioStr&fecha_fin=$finStr');
+      if (r.statusCode == 200) {
+        final data = json.decode(utf8.decode(r.bodyBytes)) as List;
+        _notasPeriodo = data
+            .map((j) => NotaCredito.fromJson(j))
+            .where((n) => n.estadoHacienda != '4' && n.estadoHacienda != '5')
+            .toList();
+      }
+    } catch (_) {
+      _notasPeriodo = [];
+    }
+  }
+
   Future<List<Factura>> obtenerFacturas() async {
     String inicioStr = "${_fechaInicio.year}-${_fechaInicio.month.toString().padLeft(2, '0')}-${_fechaInicio.day.toString().padLeft(2, '0')}";
     String finStr = "${_fechaFin.year}-${_fechaFin.month.toString().padLeft(2, '0')}-${_fechaFin.day.toString().padLeft(2, '0')}";
 
+    final notas = _cargarNotasPeriodo(inicioStr, finStr);
     final response = await ApiService.get(
       '/facturas/?negocio=${widget.negocio.id}&fecha_inicio=$inicioStr&fecha_fin=$finStr',
     );
+    await notas;
 
     if (response.statusCode == 200) {
       List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
@@ -1447,13 +1469,14 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
                     facturasOrdenadas,
                     widget.negocio.nombreComercial,
                     "Del ${_fechaInicio.day}/${_fechaInicio.month} al ${_fechaFin.day}/${_fechaFin.month}",
+                    notasCredito: _notasPeriodo,
                   ),
                   icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent, size: 18),
                   label: const Text("Exportar PDF", style: TextStyle(fontSize: 12)),
                 ),
                 const SizedBox(width: 10),
                 TextButton.icon(
-                  onPressed: () => ExportService.exportFacturasToExcel(facturasOrdenadas),
+                  onPressed: () => ExportService.exportFacturasToExcel(facturasOrdenadas, notasCredito: _notasPeriodo),
                   icon: const Icon(Icons.table_chart, color: Colors.green, size: 18),
                   label: const Text("Exportar Excel", style: TextStyle(fontSize: 12)),
                 ),
@@ -1663,7 +1686,12 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     } catch (e) { return dateKey; }
   }
 
-  Widget _renderizarDashboard(List<Factura> facturas, bool cargando) {
+  Widget _renderizarDashboard(List<Factura> todasLasFacturas, bool cargando) {
+    // Ventas reales: sin rechazadas ni con error ante Hacienda, y menos las
+    // notas de crédito del periodo.
+    final facturas = todasLasFacturas.where((f) => f.estadoHacienda != '4' && f.estadoHacienda != '5').toList();
+    final notasTotal = _notasPeriodo.fold(0.0, (s, n) => s + n.total);
+    final notasIva = _notasPeriodo.fold(0.0, (s, n) => s + n.montoIva);
     final tema = Theme.of(context);
     final bool anchoCorto = MediaQuery.of(context).size.width < _anchoBreakpointMovil;
 
@@ -1674,8 +1702,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     }
     var listaVentasCliente = comprasPorCliente.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
 
-    double totalBruto = facturas.fold(0.0, (sum, f) => sum + f.totalFactura);
-    double totalIva = facturas.fold(0.0, (sum, f) => sum + f.totalIva);
+    double totalBruto = facturas.fold(0.0, (sum, f) => sum + f.totalFactura) - notasTotal;
+    double totalIva = facturas.fold(0.0, (sum, f) => sum + f.totalIva) - notasIva;
     double totalNeto = totalBruto - totalIva;
 
     return SingleChildScrollView(
@@ -1720,7 +1748,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
           anchoCorto
               ? Column(
                   children: [
-                    _buildStatCard("Total Facturado", totalBruto, Icons.analytics, AppColors.primary),
+                    _buildStatCard("Ventas netas", totalBruto, Icons.analytics, AppColors.primary),
                     const SizedBox(height: 15),
                     _buildStatCard("Ingreso Neto", totalNeto, Icons.account_balance_wallet, Colors.green),
                     const SizedBox(height: 15),
@@ -1729,7 +1757,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
                 )
               : Row(
                   children: [
-                    Expanded(child: _buildStatCard("Total Facturado", totalBruto, Icons.analytics, AppColors.primary)),
+                    Expanded(child: _buildStatCard("Ventas netas", totalBruto, Icons.analytics, AppColors.primary)),
                     const SizedBox(width: 15),
                     Expanded(child: _buildStatCard("Ingreso Neto", totalNeto, Icons.account_balance_wallet, Colors.green)),
                     const SizedBox(width: 15),
