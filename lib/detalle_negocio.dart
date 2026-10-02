@@ -41,6 +41,7 @@ import 'widgets/primeros_pasos_card.dart';
 import 'widgets/asistente_ia_bar.dart';
 import 'perfil_sesion.dart';
 import 'widgets/asistente_flotante.dart';
+import 'widgets/selector_periodo.dart';
 
 /// Envuelve a un hijo y le avisa a [builder] si el cursor está encima
 /// (hover) -- solo tiene efecto real con mouse (escritorio/web), en touch no
@@ -739,12 +740,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         texto: "Período",
         tooltip: "Cambiar período (actual: ${_fechaInicio.day}/${_fechaInicio.month} al ${_fechaFin.day}/${_fechaFin.month})",
         onTap: () async {
-          final DateTimeRange? rango = await showDateRangePicker(
-            context: context,
-            firstDate: DateTime(2023),
-            lastDate: DateTime(2030),
-            initialDateRange: DateTimeRange(start: _fechaInicio, end: _fechaFin),
-          );
+          final DateTimeRange? rango = await elegirPeriodo(context, inicial: DateTimeRange(start: _fechaInicio, end: _fechaFin));
           if (rango != null) {
             setState(() {
               _fechaInicio = rango.start;

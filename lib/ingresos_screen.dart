@@ -9,6 +9,7 @@ import 'ingreso_operativo.dart';
 import 'importar_externo_dialog.dart';
 import 'negocio.dart';
 import 'formato.dart';
+import 'widgets/selector_periodo.dart';
 
 /// Ingresos/ventas que no pasan por Factura -- para negocios que llevan su
 /// contabilidad con Equilibra pero no facturan electrónicamente acá (ver
@@ -78,12 +79,7 @@ class _IngresosScreenState extends State<IngresosScreen> {
   }
 
   Future<void> _elegirRangoFechas() async {
-    final rango = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2023),
-      lastDate: DateTime(2030),
-      initialDateRange: DateTimeRange(start: _fechaInicio, end: _fechaFin),
-    );
+    final rango = await elegirPeriodo(context, inicial: DateTimeRange(start: _fechaInicio, end: _fechaFin));
     if (rango != null) {
       setState(() {
         _fechaInicio = rango.start;

@@ -11,6 +11,8 @@ import 'gasto_operativo.dart';
 import 'ingreso_operativo.dart';
 import 'negocio.dart';
 import 'nota_credito.dart';
+import 'widgets/selector_periodo.dart';
+import 'widgets/botones_exportar.dart';
 
 enum _TipoReporte { ventas, ingresos, compras, gastos, notasCredito }
 
@@ -175,12 +177,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
   }
 
   Future<void> _elegirRangoFechas() async {
-    final rango = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2023),
-      lastDate: DateTime(2030),
-      initialDateRange: DateTimeRange(start: _fechaInicio, end: _fechaFin),
-    );
+    final rango = await elegirPeriodo(context, inicial: DateTimeRange(start: _fechaInicio, end: _fechaFin));
     if (rango != null) {
       setState(() {
         _fechaInicio = rango.start;
@@ -371,29 +368,14 @@ class _ReportesScreenState extends State<ReportesScreen> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("$_cantidadActual documento(s) en el periodo", style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-                const SizedBox(height: 4),
-                Text(formatearColones(_totalActual), style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.primary)),
-              ],
-            ),
-          ),
-          TextButton.icon(
-            onPressed: vacio ? null : _exportarPdf,
-            icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent, size: 18),
-            label: const Text("Exportar PDF", style: TextStyle(fontSize: 12)),
-          ),
-          const SizedBox(width: 6),
-          TextButton.icon(
-            onPressed: vacio ? null : _exportarExcel,
-            icon: const Icon(Icons.table_chart, color: Colors.green, size: 18),
-            label: const Text("Exportar Excel", style: TextStyle(fontSize: 12)),
-          ),
+          Text("$_cantidadActual documento(s) en el periodo", style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+          const SizedBox(height: 4),
+          Text(formatearColones(_totalActual), style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.primary)),
+          const SizedBox(height: 14),
+          BotonesExportar(onPdf: vacio ? null : _exportarPdf, onExcel: vacio ? null : _exportarExcel),
         ],
       ),
     );

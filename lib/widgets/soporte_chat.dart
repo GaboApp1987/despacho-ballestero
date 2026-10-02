@@ -200,9 +200,15 @@ class _PropuestaFactura {
   // Negocio del cliente cuando la arma el asistente del contador.
   final int? negocioId;
   final String? negocioNombre;
+  // Los precios de `items` van SIEMPRE en colones (igual que el formulario
+  // de factura); en una factura en dólares se muestran divididos por esto.
+  final String moneda; // 'CRC' | 'USD'
+  final double tipoCambio;
   _PropuestaFactura({
     this.negocioId,
     this.negocioNombre,
+    this.moneda = 'CRC',
+    this.tipoCambio = 1.0,
     required this.clienteId,
     required this.clienteNombre,
     required this.clienteCedula,
@@ -225,8 +231,14 @@ class _PropuestaFactura {
       medioPago: json['medio_pago'] ?? '01',
       negocioId: json['negocio_id'],
       negocioNombre: json['negocio_nombre'],
+      moneda: json['moneda'] == 'USD' ? 'USD' : 'CRC',
+      tipoCambio: (json['tipo_cambio'] as num?)?.toDouble() ?? 1.0,
     );
   }
+
+  bool get enDolares => moneda == 'USD' && tipoCambio > 1;
+  /// Un monto (en colones) en la moneda de la factura.
+  String formatear(num colones) => enDolares ? formatearDolares(colones / tipoCambio) : formatearColones(colones);
 
   bool get esTiquete => tipoDocumento == '04';
   bool get esCredito => condicionVenta == '02';
@@ -523,6 +535,8 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
         'receptor_cedula': propuesta.clienteCedula,
         'total_iva': redondear2(propuesta.montoIva),
         'total_factura': redondear2(propuesta.total),
+        'moneda': propuesta.enDolares ? 'USD' : 'CRC',
+        'tipo_cambio': propuesta.enDolares ? propuesta.tipoCambio : 1.0,
         'condicion_venta': propuesta.condicionVenta,
         'plazo_credito': propuesta.plazoCredito,
         'medio_pago': propuesta.medioPago,
@@ -704,7 +718,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
           ...propuesta.items.map((it) => Padding(
                 padding: const EdgeInsets.only(bottom: 2),
                 child: Text(
-                  '• ${it['cantidad']} x ${it['nombre_producto']} (${formatearColones((it['precio_unitario'] as num).toDouble())})',
+                  '• ${it['cantidad']} x ${it['nombre_producto']} (${propuesta.formatear(it['precio_unitario'] as num)})',
                   style: TextStyle(fontSize: 12.5, color: AppColors.textMuted),
                 ),
               )),
@@ -716,9 +730,17 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
                 propuesta.esCredito ? 'Total (crédito ${propuesta.plazoCredito} días)' : 'Total (contado, ${propuesta.medioPagoNombre})',
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               ),
-              Text(formatearColones(propuesta.total), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary)),
+              Text(propuesta.formatear(propuesta.total), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary)),
             ],
           ),
+          if (propuesta.enDolares)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Factura en dólares · tipo de cambio ${formatearNumero(propuesta.tipoCambio)} (≈ ${formatearColones(propuesta.total)})',
+                style: TextStyle(fontSize: 11.5, color: AppColors.textMuted),
+              ),
+            ),
           const SizedBox(height: 10),
           if (mensaje.estadoPropuesta == 'creada')
             Row(

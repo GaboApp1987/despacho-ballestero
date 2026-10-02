@@ -7,6 +7,8 @@ import 'api_service.dart';
 import 'export_service.dart';
 import 'formato.dart';
 import 'negocio.dart';
+import 'widgets/selector_periodo.dart';
+import 'widgets/botones_exportar.dart';
 
 enum _TipoReporteContador { ventas, compras, ambos, renta }
 
@@ -127,12 +129,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
       "${_fechaInicio.day}/${_fechaInicio.month}/${_fechaInicio.year} - ${_fechaFin.day}/${_fechaFin.month}/${_fechaFin.year}";
 
   Future<void> _elegirRangoFechas() async {
-    final rango = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2023),
-      lastDate: DateTime(2030),
-      initialDateRange: DateTimeRange(start: _fechaInicio, end: _fechaFin),
-    );
+    final rango = await elegirPeriodo(context, inicial: DateTimeRange(start: _fechaInicio, end: _fechaFin));
     if (rango != null) {
       setState(() {
         _fechaInicio = rango.start;
@@ -305,11 +302,8 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              "Elegí el cliente, el período y qué querés ver.",
-              style: TextStyle(fontSize: 13, color: _colorTenue),
-            ),
-            const SizedBox(height: 20),
+            _encabezado(),
+            const SizedBox(height: 18),
             _tarjetaFiltros(),
             const SizedBox(height: 20),
             if (_error != null)
@@ -333,136 +327,377 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
     );
   }
 
-  Widget _tarjetaFiltros() {
+  // ---------------------------------------------------------------- diseño
+
+  static const _tipos = <_TipoReporteContador, (IconData, String, String, Color)>{
+    _TipoReporteContador.ventas: (Icons.receipt_long_rounded, "Ventas", "Facturas, tiquetes y notas de crédito", Color(0xFF059669)),
+    _TipoReporteContador.compras: (Icons.shopping_bag_rounded, "Compras", "Facturas de proveedores y notas de débito", Color(0xFFEA580C)),
+    _TipoReporteContador.ambos: (Icons.compare_arrows_rounded, "Ventas y compras", "Con el resumen para la declaración de IVA", Color(0xFF2563EB)),
+    _TipoReporteContador.renta: (Icons.account_balance_rounded, "Renta (D-101)", "Borrador anual del impuesto sobre la renta", Color(0xFF7C3AED)),
+  };
+
+  Color get _colorTipo => _tipos[_tipo]!.$4;
+
+  Widget _encabezado() {
+    final (icono, titulo, _, _) = _tipos[_tipo]!;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: _colorSuperficie,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(18),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1D4ED8), Color(0xFF4F46E5), Color(0xFF7C3AED)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [BoxShadow(color: const Color(0xFF4F46E5).withValues(alpha: 0.25), blurRadius: 18, offset: const Offset(0, 8))],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -10,
+            top: -18,
+            child: Icon(Icons.insights_rounded, size: 120, color: Colors.white.withValues(alpha: 0.08)),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(12)),
+                    child: const Icon(Icons.analytics_rounded, color: Colors.white, size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("Centro de reportes", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
+                        SizedBox(height: 2),
+                        Text(
+                          "Ventas, compras, IVA y renta de tu cartera, listos en PDF o Excel.",
+                          style: TextStyle(color: Colors.white70, fontSize: 12.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _pastillaEncabezado(Icons.groups_rounded, _cargandoNegocios ? "Cargando cartera…" : "${_negocios.length} cliente${_negocios.length == 1 ? '' : 's'} en cartera"),
+                  _pastillaEncabezado(icono, titulo),
+                  _pastillaEncabezado(Icons.event_rounded, _esRenta ? "Periodo fiscal $_anioRenta" : _periodoCorto),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pastillaEncabezado(IconData icono, String texto) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icono, size: 14, color: Colors.white),
+            const SizedBox(width: 6),
+            Text(texto, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      );
+
+  static const _mesesLargos = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'setiembre', 'octubre', 'noviembre', 'diciembre'];
+
+  /// "Setiembre 2026" si el rango es un mes completo; si no, las fechas.
+  String get _periodoCorto {
+    final finDeMes = DateTime(_fechaInicio.year, _fechaInicio.month + 1, 0);
+    if (_fechaInicio.day == 1 && _fechaFin.year == finDeMes.year && _fechaFin.month == finDeMes.month && _fechaFin.day == finDeMes.day) {
+      final m = _mesesLargos[_fechaInicio.month - 1];
+      return "${m[0].toUpperCase()}${m.substring(1)} ${_fechaInicio.year}";
+    }
+    return _periodoTexto;
+  }
+
+  Widget _paso(int numero, String titulo, {Widget? extra}) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 24,
+              height: 24,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: _colorAcento, shape: BoxShape.circle),
+              child: Text("$numero", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800)),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: Text(titulo, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _colorFuerte))),
+            if (extra != null) extra,
+          ],
+        ),
+      );
+
+  void _cambiarTipo(_TipoReporteContador t) => setState(() {
+        _tipo = t;
+        _reporte = null;
+        _reportes = null;
+        _rentas = null;
+      });
+
+  Widget _tarjetaTipo(_TipoReporteContador t, double ancho) {
+    final (icono, titulo, descripcion, color) = _tipos[t]!;
+    final elegido = _tipo == t;
+    return SizedBox(
+      width: ancho,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: () => _cambiarTipo(t),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: elegido ? color.withValues(alpha: 0.08) : _colorSuperficie,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: elegido ? color : _colorBorde, width: elegido ? 2 : 1),
+              boxShadow: elegido ? [BoxShadow(color: color.withValues(alpha: 0.18), blurRadius: 14, offset: const Offset(0, 6))] : null,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+                      child: Icon(icono, color: color, size: 22),
+                    ),
+                    const Spacer(),
+                    AnimatedScale(
+                      scale: elegido ? 1 : 0,
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeOutBack,
+                      child: Icon(Icons.check_circle_rounded, color: color, size: 20),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(titulo, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: _colorFuerte)),
+                const SizedBox(height: 2),
+                Text(descripcion, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, color: _colorTenue, height: 1.3)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Atajos de período: este mes, el pasado, el trimestre y el año.
+  List<(String, DateTime, DateTime)> get _atajosPeriodo {
+    final hoy = DateTime.now();
+    final trimestre = ((hoy.month - 1) ~/ 3) * 3 + 1;
+    return [
+      ("Este mes", DateTime(hoy.year, hoy.month, 1), DateTime(hoy.year, hoy.month + 1, 0)),
+      ("Mes pasado", DateTime(hoy.year, hoy.month - 1, 1), DateTime(hoy.year, hoy.month, 0)),
+      ("Este trimestre", DateTime(hoy.year, trimestre, 1), DateTime(hoy.year, trimestre + 3, 0)),
+      ("Este año", DateTime(hoy.year, 1, 1), DateTime(hoy.year, 12, 31)),
+    ];
+  }
+
+  Widget _chip(String texto, bool elegido, VoidCallback onTap, {IconData? icono}) => ChoiceChip(
+        avatar: icono == null ? null : Icon(icono, size: 16, color: elegido ? Colors.white : _colorTenue),
+        label: Text(texto),
+        selected: elegido,
+        onSelected: (_) => onTap(),
+        selectedColor: _colorAcento,
+        backgroundColor: _colorSuperficie,
+        side: BorderSide(color: elegido ? _colorAcento : _colorBorde),
+        labelStyle: TextStyle(color: elegido ? Colors.white : _colorFuerte, fontWeight: FontWeight.w600, fontSize: 12.5),
+        showCheckmark: false,
+      );
+
+  Widget _tarjetaFiltros() {
+    final todos = _negocios.isNotEmpty && _negociosSeleccionados.length == _negocios.length;
+    final atajo = _atajosPeriodo.where((a) => DateUtils.isSameDay(a.$2, _fechaInicio) && DateUtils.isSameDay(a.$3, _fechaFin)).firstOrNull;
+    final (_, tituloTipo, _, _) = _tipos[_tipo]!;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: _colorFondo,
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: _colorBorde),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 14, offset: const Offset(0, 6))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("Cliente(s)", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _colorTenue)),
-          const SizedBox(height: 6),
+          // 1. Tipo de reporte
+          _paso(1, "¿Qué reporte querés?"),
+          LayoutBuilder(builder: (context, c) {
+            final columnas = c.maxWidth >= 760 ? 4 : 2;
+            final ancho = (c.maxWidth - 10 * (columnas - 1)) / columnas;
+            return Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [for (final t in _TipoReporteContador.values) _tarjetaTipo(t, ancho)],
+            );
+          }),
+          const SizedBox(height: 22),
+
+          // 2. Clientes
+          _paso(
+            2,
+            "¿De qué clientes?",
+            extra: _negocios.length > 1
+                ? _chip(todos ? "Todos ✓" : "Todos", todos, () => setState(() {
+                      if (todos) {
+                        _negociosSeleccionados
+                          ..clear()
+                          ..add(_negocios.first);
+                      } else {
+                        _negociosSeleccionados.addAll(_negocios);
+                      }
+                    }), icono: Icons.select_all_rounded)
+                : null,
+          ),
           _cargandoNegocios
               ? const LinearProgressIndicator()
               : _negocios.isEmpty
                   ? Text("No tenés negocios en tu cartera todavía.", style: TextStyle(color: _colorTenue))
                   : InkWell(
                       onTap: _elegirClientes,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
                       child: Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                        decoration: BoxDecoration(border: Border.all(color: _colorBorde), borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: _colorSuperficie,
+                          border: Border.all(color: _colorBorde),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         child: Row(
                           children: [
-                            Icon(Icons.people_outline, size: 18, color: _colorTenue),
-                            const SizedBox(width: 8),
                             Expanded(
-                              child: Text(
-                                _negociosSeleccionados.isEmpty
-                                    ? "Elegí uno o más clientes"
-                                    : _negociosSeleccionados.length == 1
-                                        ? _negociosSeleccionados.first.nombreComercial
-                                        : _negociosSeleccionados.length == _negocios.length
-                                            ? "Todos los clientes (${_negocios.length})"
-                                            : "${_negociosSeleccionados.length} clientes seleccionados",
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(color: _colorFuerte),
-                              ),
+                              child: _negociosSeleccionados.isEmpty
+                                  ? Padding(
+                                      padding: const EdgeInsets.all(4),
+                                      child: Text("Elegí uno o más clientes", style: TextStyle(color: _colorTenue)),
+                                    )
+                                  : Wrap(
+                                      spacing: 6,
+                                      runSpacing: 6,
+                                      children: [
+                                        for (final n in _negociosSeleccionados.take(todos ? 0 : 4)) _chipCliente(n.nombreComercial),
+                                        if (todos)
+                                          _chipCliente("Todos los clientes (${_negocios.length})", icono: Icons.groups_rounded)
+                                        else if (_negociosSeleccionados.length > 4)
+                                          _chipCliente("+${_negociosSeleccionados.length - 4} más", icono: Icons.more_horiz_rounded),
+                                      ],
+                                    ),
                             ),
-                            Icon(Icons.arrow_drop_down, color: _colorTenue),
+                            const SizedBox(width: 6),
+                            Icon(Icons.edit_rounded, size: 18, color: _colorAcento),
                           ],
                         ),
                       ),
                     ),
-          const SizedBox(height: 16),
-          Text(_esRenta ? "Periodo fiscal" : "Período", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _colorTenue)),
-          const SizedBox(height: 6),
-          if (_esRenta)
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (var a = DateTime.now().year; a >= DateTime.now().year - 4; a--)
-                  ChoiceChip(
-                    label: Text("$a"),
-                    selected: _anioRenta == a,
-                    onSelected: (_) => setState(() {
-                      _anioRenta = a;
-                      _rentas = null;
-                    }),
-                    selectedColor: _colorAcento,
-                    labelStyle: TextStyle(color: _anioRenta == a ? Colors.white : _colorFuerte, fontWeight: FontWeight.w600),
-                    showCheckmark: false,
-                  ),
-              ],
-            )
-          else
-          InkWell(
-            onTap: _elegirRangoFechas,
-            borderRadius: BorderRadius.circular(10),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              decoration: BoxDecoration(border: Border.all(color: _colorBorde), borderRadius: BorderRadius.circular(10)),
-              child: Row(
-                children: [
-                  Icon(Icons.date_range, size: 18, color: _colorTenue),
-                  const SizedBox(width: 8),
-                  Text(_periodoTexto, style: TextStyle(color: _colorFuerte)),
-                ],
-              ),
-            ),
+          const SizedBox(height: 22),
+
+          // 3. Período
+          _paso(3, _esRenta ? "¿Qué periodo fiscal?" : "¿Qué período?"),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _esRenta
+                ? [
+                    for (var a = DateTime.now().year; a >= DateTime.now().year - 4; a--)
+                      _chip("$a", _anioRenta == a, () => setState(() {
+                            _anioRenta = a;
+                            _rentas = null;
+                          })),
+                  ]
+                : [
+                    for (final a in _atajosPeriodo)
+                      _chip(a.$1, atajo == a, () => setState(() {
+                            _fechaInicio = a.$2;
+                            _fechaFin = a.$3;
+                          })),
+                    _chip(atajo == null ? _periodoTexto : "Personalizado", atajo == null, _elegirRangoFechas, icono: Icons.date_range_rounded),
+                  ],
           ),
-          const SizedBox(height: 16),
-          Text("Qué mostrar", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _colorTenue)),
-          const SizedBox(height: 6),
-          SegmentedButton<_TipoReporteContador>(
-            segments: const [
-              ButtonSegment(value: _TipoReporteContador.ventas, label: Text("Ventas")),
-              ButtonSegment(value: _TipoReporteContador.compras, label: Text("Compras")),
-              ButtonSegment(value: _TipoReporteContador.ambos, label: Text("Ambos")),
-              ButtonSegment(value: _TipoReporteContador.renta, label: Text("Renta (D-101)")),
-            ],
-            selected: {_tipo},
-            onSelectionChanged: (s) => setState(() {
-              _tipo = s.first;
-              _reporte = null;
-              _reportes = null;
-              _rentas = null;
-            }),
-            style: widget.esContador
-                ? SegmentedButton.styleFrom(
-                    selectedBackgroundColor: TemaContador.acento,
-                    selectedForegroundColor: Colors.white,
-                    foregroundColor: TemaContador.textoFuerte,
-                    side: const BorderSide(color: TemaContador.borde),
-                  )
-                : null,
-          ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 22),
+
+          // Generar
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton.icon(
-              style: widget.esContador
-                  ? ElevatedButton.styleFrom(backgroundColor: TemaContador.acento, foregroundColor: Colors.white)
-                  : null,
-              onPressed: (_generando || _negociosSeleccionados.isEmpty) ? null : _generarReporte,
-              icon: _generando
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.insert_chart_outlined),
-              label: Text(_generando ? "Generando..." : "Generar reporte"),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                gradient: (_generando || _negociosSeleccionados.isEmpty)
+                    ? null
+                    : LinearGradient(colors: [_colorAcento, _colorTipo]),
+                boxShadow: (_generando || _negociosSeleccionados.isEmpty)
+                    ? null
+                    : [BoxShadow(color: _colorTipo.withValues(alpha: 0.3), blurRadius: 14, offset: const Offset(0, 6))],
+              ),
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: _colorBorde,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                onPressed: (_generando || _negociosSeleccionados.isEmpty) ? null : _generarReporte,
+                icon: _generando
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.auto_graph_rounded),
+                label: Text(
+                  _generando ? "Generando..." : "Generar reporte de ${tituloTipo.toLowerCase()}",
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                ),
+              ),
             ),
           ),
         ],
       ),
     );
   }
+
+  Widget _chipCliente(String nombre, {IconData icono = Icons.storefront_rounded}) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: _colorAcento.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icono, size: 14, color: _colorAcento),
+            const SizedBox(width: 5),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 220),
+              child: Text(nombre, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: _colorFuerte)),
+            ),
+          ],
+        ),
+      );
 
   /// Tarjeta animada mientras se genera: ícono que late, el cliente que se
   /// está procesando, una barra que avanza cliente por cliente y mensajes
@@ -540,17 +775,16 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _colorFuerte),
               ),
             ),
-            TextButton.icon(
-              onPressed: () => _exportar(() => ExportService.exportReportesConsolidadosToPdf(_reportes!, _periodoTexto), formato: 'PDF'),
-              icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent, size: 18),
-              label: const Text("PDF"),
-            ),
-            TextButton.icon(
-              onPressed: () => _exportar(() => ExportService.exportReportesConsolidadosToExcel(_reportes!, periodo: _periodoTexto), formato: 'Excel'),
-              icon: const Icon(Icons.table_chart, color: Colors.green, size: 18),
-              label: const Text("Excel"),
-            ),
           ],
+        ),
+        const SizedBox(height: 10),
+        BotonesExportar(
+          onPdf: () => _exportar(() => ExportService.exportReportesConsolidadosToPdf(_reportes!, _periodoTexto), formato: 'PDF'),
+          onExcel: () => _exportar(() => ExportService.exportReportesConsolidadosToExcel(_reportes!, periodo: _periodoTexto), formato: 'Excel'),
+          fondo: _colorSuperficie,
+          borde: _colorBorde,
+          texto: _colorFuerte,
+          tenue: _colorTenue,
         ),
         const SizedBox(height: 4),
         Text(
@@ -604,17 +838,16 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
             Expanded(
               child: Text("Resultado", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _colorFuerte)),
             ),
-            TextButton.icon(
-              onPressed: () => _exportar(() => ExportService.exportReporteConsolidadoToPdf(_reporte!, _periodoTexto), formato: 'PDF'),
-              icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent, size: 18),
-              label: const Text("PDF"),
-            ),
-            TextButton.icon(
-              onPressed: () => _exportar(() => ExportService.exportReporteConsolidadoToExcel(_reporte!), formato: 'Excel'),
-              icon: const Icon(Icons.table_chart, color: Colors.green, size: 18),
-              label: const Text("Excel"),
-            ),
           ],
+        ),
+        const SizedBox(height: 10),
+        BotonesExportar(
+          onPdf: () => _exportar(() => ExportService.exportReporteConsolidadoToPdf(_reporte!, _periodoTexto), formato: 'PDF'),
+          onExcel: () => _exportar(() => ExportService.exportReporteConsolidadoToExcel(_reporte!), formato: 'Excel'),
+          fondo: _colorSuperficie,
+          borde: _colorBorde,
+          texto: _colorFuerte,
+          tenue: _colorTenue,
         ),
         const SizedBox(height: 8),
         if (resumen != null) _seccionResumenDeclaracion(resumen),
@@ -642,17 +875,16 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _colorFuerte),
               ),
             ),
-            TextButton.icon(
-              onPressed: () => _exportar(() => ExportService.exportRentaContadorToPdf(rentas, _anioRenta), formato: 'PDF'),
-              icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent, size: 18),
-              label: const Text("PDF"),
-            ),
-            TextButton.icon(
-              onPressed: () => _exportar(() => ExportService.exportRentaContadorToExcel(rentas, _anioRenta), formato: 'Excel'),
-              icon: const Icon(Icons.table_chart, color: Colors.green, size: 18),
-              label: const Text("Excel"),
-            ),
           ],
+        ),
+        const SizedBox(height: 10),
+        BotonesExportar(
+          onPdf: () => _exportar(() => ExportService.exportRentaContadorToPdf(rentas, _anioRenta), formato: 'PDF'),
+          onExcel: () => _exportar(() => ExportService.exportRentaContadorToExcel(rentas, _anioRenta), formato: 'Excel'),
+          fondo: _colorSuperficie,
+          borde: _colorBorde,
+          texto: _colorFuerte,
+          tenue: _colorTenue,
         ),
         const SizedBox(height: 4),
         Text(

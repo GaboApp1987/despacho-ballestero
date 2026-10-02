@@ -11,6 +11,7 @@ import 'factura.dart';
 import 'gasto_operativo.dart';
 import 'negocio.dart';
 import 'nota_credito.dart';
+import 'widgets/selector_periodo.dart';
 
 /// Lo primero que ve el contador al entrar a un cliente: el resumen fiscal
 /// completo (IVA del periodo + Renta del año) antes de meterse a administrar
@@ -72,12 +73,7 @@ class _ResumenFiscalNegocioScreenState extends State<ResumenFiscalNegocioScreen>
   }
 
   Future<void> _cambiarPeriodoIva() async {
-    final rango = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2023),
-      lastDate: DateTime(2030),
-      initialDateRange: DateTimeRange(start: _fechaInicio, end: _fechaFin),
-    );
+    final rango = await elegirPeriodo(context, inicial: DateTimeRange(start: _fechaInicio, end: _fechaFin));
     if (rango == null) return;
     setState(() {
       _fechaInicio = rango.start;
