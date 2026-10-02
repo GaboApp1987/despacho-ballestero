@@ -136,15 +136,14 @@ const Map<String, String> tiposProducto = {
   'servicio': 'Servicio',
 };
 
-/// Catálogo (curado, no exhaustivo) de unidades de medida oficiales de
-/// Hacienda para la facturación electrónica v4.3. Los códigos y mayúsculas
-/// deben coincidir EXACTO con lo que Alanube valida (confirmado por su
-/// propio error AP0079 "Value must be one of: ..."); versiones previas de
-/// este catálogo incluían códigos que Hacienda en realidad no acepta
-/// ('kg' en vez de 'Kg', 'cm' en vez de 'Cm', 'm2'/'m3' en vez de 'm²'/'m³',
-/// y 'g', 'm', 'h', 'd', 'Kit', 'Pqt', 'Doc' que no existen en su catálogo
-/// real), lo que hacía que la factura se guardara bien pero Hacienda la
-/// rechazara después con "Error Técnico" al no poder validar la unidad.
+/// Unidades de medida de Hacienda para la factura electrónica v4.4 (las
+/// de uso común; el catálogo oficial completo tiene ~100 y el backend las
+/// acepta todas, ver UNIDADES_MEDIDA_HACIENDA en gestion/utils.py).
+/// Códigos verificados contra FacturaElectronica_V4.4.xsd (UnidadMedidaType):
+/// ojo que distingue mayúsculas -- "Cm" es COMISIONES y "cm" es centímetro,
+/// "G" es gramo, "D" es día y "h" es hora. Antes este catálogo tenía "Cm"
+/// rotulado como centímetro, así que esos productos salían ante Hacienda
+/// como comisiones (la migración 0107 los pasó a "cm").
 /// "Kit"/"Paquete"/"Docena" no son unidades de Hacienda -- ese caso ya lo
 /// cubre PresentacionProducto (ver Producto.presentaciones): la unidad real
 /// del producto es "Unid" y la presentación (ej. "Caja" = 20 Unid) es solo
@@ -152,17 +151,43 @@ const Map<String, String> tiposProducto = {
 /// Hacienda.
 const Map<String, String> unidadesMedidaHacienda = {
   'Unid': 'Unidad',
+  // Servicios
   'Sp': 'Servicios profesionales',
+  'Spe': 'Servicios personales',
   'St': 'Servicios técnicos',
-  'Os': 'Otros servicios',
+  'Os': 'Otro tipo de servicio',
+  'Al': 'Alquiler de uso habitacional',
+  'Alc': 'Alquiler de uso comercial',
+  'Cm': 'Comisiones',
+  'I': 'Intereses',
+  // Tiempo
+  'h': 'Hora',
+  'D': 'Día',
+  'Min': 'Minuto',
+  // Peso
+  'G': 'Gramo',
   'Kg': 'Kilogramo',
-  'L': 'Litro',
+  'Oz': 'Onza',
+  'Qq': 'Quintal',
+  'T': 'Tonelada',
+  // Volumen
   'mL': 'Mililitro',
+  'L': 'Litro',
+  'Gal': 'Galón',
+  'm³': 'Metro cúbico',
+  // Longitud y superficie
+  'Mm': 'Milímetro',
+  'cm': 'Centímetro',
+  'Ln': 'Pulgada',
   'M': 'Metro',
-  'Cm': 'Centímetro',
   'Km': 'Kilómetro',
   'm²': 'Metro cuadrado',
-  'm³': 'Metro cúbico',
-  'Min': 'Minuto',
+  // Energía
+  'Kw': 'Kilovatio',
+  'kWh': 'Kilovatio hora',
   'Otros': 'Otros',
 };
+
+/// Unidades que corresponden a servicios (mismo criterio que
+/// UNIDADES_SERVICIO en gestion/utils.py).
+const Set<String> unidadesDeServicio = {'Sp', 'Spe', 'St', 'Os', 'Al', 'Alc', 'Cm', 'I'};

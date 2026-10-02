@@ -67,7 +67,9 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
     _precioCtrl = TextEditingController(text: p != null ? p.precioUnitario.toString() : '');
     _stockCtrl = TextEditingController(text: p != null ? p.stock.toString() : '0');
     _categoriaSeleccionada = p?.categoriaId;
-    _unidadSeleccionada = unidadesMedidaHacienda.containsKey(p?.unidadMedida) ? p!.unidadMedida : 'Unid';
+    // Una unidad válida que no está en la lista corta se respeta (antes se
+    // cambiaba a "Unid" en silencio al editar el producto).
+    _unidadSeleccionada = (p?.unidadMedida ?? '').isNotEmpty ? p!.unidadMedida : 'Unid';
     _tipoSeleccionado = tiposProducto.containsKey(p?.tipo) ? p!.tipo : 'mercancia';
     _monedaPrecio = p?.monedaPrecio == 'USD' ? 'USD' : 'CRC';
     _imagenUrlActual = p?.imagenUrl;
@@ -562,10 +564,18 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.straighten_outlined),
                 ),
-                items: unidadesMedidaHacienda.entries
-                    .map((e) => DropdownMenuItem(value: e.key, child: Text("${e.key} - ${e.value}")))
-                    .toList(),
-                onChanged: (val) => setState(() => _unidadSeleccionada = val!),
+                isExpanded: true,
+                items: [
+                  ...unidadesMedidaHacienda.entries
+                      .map((e) => DropdownMenuItem(value: e.key, child: Text("${e.value} (${e.key})", overflow: TextOverflow.ellipsis))),
+                  if (!unidadesMedidaHacienda.containsKey(_unidadSeleccionada))
+                    DropdownMenuItem(value: _unidadSeleccionada, child: Text(_unidadSeleccionada)),
+                ],
+                onChanged: (val) => setState(() {
+                  _unidadSeleccionada = val!;
+                  // Alquiler, comisiones, servicios profesionales...: es un servicio.
+                  if (unidadesDeServicio.contains(val)) _tipoSeleccionado = 'servicio';
+                }),
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
