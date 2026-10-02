@@ -960,8 +960,12 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textStrong),
                   ),
+                  // El saludo vive acá (antes era una tarjeta aparte en Inicio
+                  // que repetía logo y nombre y ocupaba espacio).
                   Text(
-                    _tituloSeccionActiva(),
+                    _nombreUsuario == "Usuario"
+                        ? _tituloSeccionActiva()
+                        : "¡Hola, ${_nombreUsuario.split(' ').first}!  ·  ${_tituloSeccionActiva()}",
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, letterSpacing: 0.3, color: AppColors.primary),
@@ -1668,8 +1672,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
               (Icons.percent, "¿Cuánto IVA voy a pagar?"),
             ],
           ),
-          _buildBannerBienvenida(),
-          const SizedBox(height: 25),
+          const SizedBox(height: 12),
           // Guía para cuentas nuevas -- se oculta sola al completarla (y
           // nunca la ve el contador ni un colaborador, ver backend).
           PrimerosPasosCard(
@@ -2042,50 +2045,6 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildBannerBienvenida() {
-    final tieneLogo = widget.negocio.logoUrl != null && widget.negocio.logoUrl!.isNotEmpty;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: tieneLogo
-                ? Image.network(
-                    widget.negocio.logoUrl!,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Icon(Icons.business_center, color: AppColors.primary, size: 26),
-                  )
-                : Icon(Icons.business_center, color: AppColors.primary, size: 26),
-          ),
-          const SizedBox(width: 18),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("¡Hola, $_nombreUsuario!", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textStrong)),
-                const SizedBox(height: 4),
-                Text("Gestionando: ${widget.negocio.nombreComercial}", style: TextStyle(color: AppColors.textMuted, fontSize: 14)),
-              ],
-            ),
-          )
-        ],
       ),
     );
   }
