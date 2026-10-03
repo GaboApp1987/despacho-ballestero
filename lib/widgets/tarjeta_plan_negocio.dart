@@ -23,6 +23,9 @@ class TarjetaPlanNegocio extends StatelessWidget {
   final bool actual;
   final VoidCallback? onTap;
   final bool compacta;
+  /// En una fila de tarjetas de igual altura: empuja el pie (botón) al
+  /// fondo para que quede alineado entre tarjetas.
+  final bool pieAlFondo;
 
   const TarjetaPlanNegocio({
     super.key,
@@ -32,6 +35,7 @@ class TarjetaPlanNegocio extends StatelessWidget {
     this.actual = false,
     this.onTap,
     this.compacta = false,
+    this.pieAlFondo = false,
   });
 
   @override
@@ -45,13 +49,16 @@ class TarjetaPlanNegocio extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.all(16),
+          // El borde resaltado es 1px más grueso: se compensa en el relleno
+          // para que todas las tarjetas midan igual y los botones se alineen.
+          padding: EdgeInsets.all(resaltar ? 15 : 16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: colorBorde, width: resaltar ? 2 : 1),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: pieAlFondo ? MainAxisSize.max : MainAxisSize.min,
             children: [
               Row(children: [
                 Expanded(
@@ -96,6 +103,7 @@ class TarjetaPlanNegocio extends StatelessWidget {
                     ]),
                   ),
               ],
+              if (pieAlFondo) const Spacer(),
               if (pie != null) ...[const SizedBox(height: 12), pie!],
             ],
           ),

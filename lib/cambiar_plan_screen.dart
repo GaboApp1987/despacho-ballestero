@@ -231,12 +231,30 @@ class _CambiarPlanScreenState extends State<CambiarPlanScreen> {
                         ],
                         LayoutBuilder(builder: (context, c) {
                           final columnas = c.maxWidth >= 960 ? 3 : (c.maxWidth >= 620 ? 2 : 1);
-                          final ancho = (c.maxWidth - (columnas - 1) * 14) / columnas;
-                          return Wrap(
-                            spacing: 14,
-                            runSpacing: 14,
-                            children: [for (final plan in _planes) SizedBox(width: ancho, child: _tarjetaPlan(plan))],
-                          );
+                          if (columnas == 1) {
+                            return Column(children: [
+                              for (final plan in _planes)
+                                Padding(padding: const EdgeInsets.only(bottom: 14), child: _tarjetaPlan(plan)),
+                            ]);
+                          }
+                          // Filas de tarjetas de la misma altura, con los
+                          // botones alineados abajo.
+                          final filas = <Widget>[];
+                          for (int i = 0; i < _planes.length; i += columnas) {
+                            final grupo = _planes.sublist(i, (i + columnas).clamp(0, _planes.length));
+                            filas.add(Padding(
+                              padding: const EdgeInsets.only(bottom: 14),
+                              child: IntrinsicHeight(
+                                child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                                  for (int k = 0; k < columnas; k++) ...[
+                                    if (k > 0) const SizedBox(width: 14),
+                                    Expanded(child: k < grupo.length ? _tarjetaPlan(grupo[k], pieAlFondo: true) : const SizedBox()),
+                                  ],
+                                ]),
+                              ),
+                            ));
+                          }
+                          return Column(children: filas);
                         }),
                       ],
                     ),
@@ -245,7 +263,7 @@ class _CambiarPlanScreenState extends State<CambiarPlanScreen> {
     );
   }
 
-  Widget _tarjetaPlan(Plan plan) {
+  Widget _tarjetaPlan(Plan plan, {bool pieAlFondo = false}) {
     final esActual = plan.id == widget.negocio.planId;
     final esBaja = !esActual && _esBaja(plan);
     Widget? pie;
@@ -270,6 +288,6 @@ class _CambiarPlanScreenState extends State<CambiarPlanScreen> {
         ),
       );
     }
-    return TarjetaPlanNegocio(plan: plan, actual: esActual, pie: pie);
+    return TarjetaPlanNegocio(plan: plan, actual: esActual, pie: pie, pieAlFondo: pieAlFondo);
   }
 }
