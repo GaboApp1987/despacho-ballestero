@@ -119,6 +119,8 @@ class _OnvoCobroAutomaticoScreenState extends State<OnvoCobroAutomaticoScreen> {
         'subscription_id': datosInicio['subscription_id'].toString(),
         'customer_id': datosInicio['customer_id'].toString(),
         'publishable_key': datosInicio['publishable_key'].toString(),
+        'concepto': widget.planNombre != null ? "Plan ${widget.planNombre}" : "Suscripción Equilibra",
+        'detalle': "Cobro automático con tu tarjeta",
       });
 
       setState(() {

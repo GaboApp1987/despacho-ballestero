@@ -7,6 +7,7 @@ import 'formato.dart';
 import 'login.dart';
 import 'plan.dart';
 import 'theme/app_theme.dart';
+import 'widgets/tarjeta_plan_negocio.dart';
 import 'ubicacion_cr.dart';
 import 'widgets/campo_cedula_hacienda.dart';
 
@@ -41,7 +42,9 @@ class _PlanOption {
   final String nombre;
   final double? precioMensual;
   final String textoLimite;
-  _PlanOption({required this.id, required this.nombre, required this.precioMensual, required this.textoLimite});
+  /// Solo en planes de negocio: el plan completo, para la tarjeta detallada.
+  final Plan? planNegocio;
+  _PlanOption({required this.id, required this.nombre, required this.precioMensual, required this.textoLimite, this.planNegocio});
 }
 
 class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
@@ -173,7 +176,10 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
         setState(() {
           _planes = planes;
           _cargandoPlanes = false;
-          if (_planes.isNotEmpty) _planSeleccionadoId ??= _planes.first.id;
+          if (_planes.isNotEmpty) {
+            final destacado = _planes.where((p) => p.planNegocio?.destacado == true);
+            _planSeleccionadoId ??= (destacado.isNotEmpty ? destacado.first : _planes.first).id;
+          }
         });
       } else {
         setState(() => _cargandoPlanes = false);
@@ -201,7 +207,8 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
         final p = Plan.fromJson(json);
         return _PlanOption(
           id: p.id, nombre: p.nombre, precioMensual: p.precioMensual,
-          textoLimite: "${p.limiteFacturasMensual} facturas/mes",
+          textoLimite: p.resumenLimites,
+          planNegocio: p,
         );
     }
   }
@@ -549,6 +556,17 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                               ? const Text("No hay planes disponibles en este momento.", style: TextStyle(color: Colors.red))
                               : Column(
                                   children: _planes.map((p) {
+                                    if (p.planNegocio != null) {
+                                      return Padding(
+                                        padding: const EdgeInsets.only(bottom: 10),
+                                        child: TarjetaPlanNegocio(
+                                          plan: p.planNegocio!,
+                                          compacta: true,
+                                          seleccionada: _planSeleccionadoId == p.id,
+                                          onTap: () => setState(() => _planSeleccionadoId = p.id),
+                                        ),
+                                      );
+                                    }
                                     return Card(
                                       margin: const EdgeInsets.only(bottom: 8),
                                       shape: RoundedRectangleBorder(

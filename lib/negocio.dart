@@ -69,6 +69,9 @@ class Negocio {
   final int? limiteFacturasMensual;
   final int? facturasUsadasMes;
   final int? facturasDisponibles;
+  /// Uso del plan (documentos del período, usuarios, consultas de IA) --
+  /// ver uso_plan_negocio en el backend. null si no tiene plan.
+  final Map<String, dynamic>? usoPlan;
   final int? suscripcionId;
   final String? suscripcionEstado;
   final bool suscripcionCobroAutomatico;
@@ -103,6 +106,7 @@ class Negocio {
     this.limiteFacturasMensual,
     this.facturasUsadasMes,
     this.facturasDisponibles,
+    this.usoPlan,
     this.suscripcionId,
     this.suscripcionEstado,
     this.suscripcionCobroAutomatico = false,
@@ -141,6 +145,7 @@ class Negocio {
       limiteFacturasMensual: json['limite_facturas_mensual'],
       facturasUsadasMes: json['facturas_usadas_mes'],
       facturasDisponibles: json['facturas_disponibles'],
+      usoPlan: json['uso_plan'] is Map ? Map<String, dynamic>.from(json['uso_plan']) : null,
       suscripcionId: json['suscripcion_id'],
       suscripcionEstado: json['suscripcion_estado'],
       suscripcionCobroAutomatico: json['suscripcion_cobro_automatico'] ?? false,

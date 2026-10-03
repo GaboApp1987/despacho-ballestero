@@ -53,8 +53,10 @@ class _PlanesScreenState extends State<PlanesScreen> {
   void _mostrarFormulario({Plan? planExistente}) {
     final nombreCtrl = TextEditingController(text: planExistente?.nombre ?? '');
     final limiteCtrl = TextEditingController(
-      text: planExistente != null ? planExistente.limiteFacturasMensual.toString() : '',
+      text: planExistente?.limiteFacturasMensual?.toString() ?? '',
     );
+    final usuariosCtrl = TextEditingController(text: planExistente?.limiteUsuarios?.toString() ?? '');
+    final iaCtrl = TextEditingController(text: planExistente?.limiteConsultasIa?.toString() ?? '');
     final precioCtrl = TextEditingController(
       text: planExistente?.precioMensual != null ? planExistente!.precioMensual.toString() : '',
     );
@@ -84,9 +86,32 @@ class _PlanesScreenState extends State<PlanesScreen> {
                     controller: limiteCtrl,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
-                      labelText: "Facturas electrónicas por mes *",
+                      labelText: "Documentos por período (vacío = ilimitados)",
                       border: OutlineInputBorder(),
                     ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(children: [
+                    Expanded(
+                      child: TextField(
+                        controller: usuariosCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: "Usuarios", hintText: "Ilimitados", border: OutlineInputBorder()),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextField(
+                        controller: iaCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: "Consultas IA/mes", hintText: "Ilimitadas", border: OutlineInputBorder()),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 4),
+                  const Text(
+                    "Periodicidad, documento extra, recargas, \"incluye\" y \"Más popular\" se ajustan en el panel de administración.",
+                    style: TextStyle(fontSize: 11.5, color: Colors.grey),
                   ),
                   const SizedBox(height: 10),
                   TextField(
@@ -117,16 +142,18 @@ class _PlanesScreenState extends State<PlanesScreen> {
                   ? null
                   : () async {
                       final limite = int.tryParse(limiteCtrl.text.trim());
-                      if (nombreCtrl.text.trim().isEmpty || limite == null) {
+                      if (nombreCtrl.text.trim().isEmpty || (limiteCtrl.text.trim().isNotEmpty && limite == null)) {
                         ScaffoldMessenger.of(ctx).showSnackBar(
-                          const SnackBar(content: Text("Complete el nombre y un límite de facturas válido.")),
+                          const SnackBar(content: Text("Complete el nombre y un límite de documentos válido (o vacío).")),
                         );
                         return;
                       }
                       setStateDialog(() => guardando = true);
                       final body = {
                         'nombre': nombreCtrl.text.trim(),
-                        'limite_facturas_mensual': limite.toString(),
+                        'limite_facturas_mensual': limite,
+                        'limite_usuarios': int.tryParse(usuariosCtrl.text.trim()),
+                        'limite_consultas_ia': int.tryParse(iaCtrl.text.trim()),
                         'precio_mensual': precioCtrl.text.trim(),
                         'descripcion': descripcionCtrl.text.trim(),
                         'activo': activo.toString(),
@@ -218,8 +245,8 @@ class _PlanesScreenState extends State<PlanesScreen> {
                         ),
                         title: Text(p.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
                         subtitle: Text(
-                          "${p.limiteFacturasMensual} facturas/mes"
-                          "${p.precioMensual != null ? " · ₡${p.precioMensual!.toStringAsFixed(0)}/mes" : ""}"
+                          "${p.resumenLimites}"
+                          "${p.precioMensual != null ? " · ₡${p.precioMensual!.toStringAsFixed(0)}/${p.unidadPeriodo}" : ""}"
                           "${!p.activo ? " · Inactivo" : ""}",
                         ),
                         trailing: Row(

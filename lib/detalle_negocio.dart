@@ -795,10 +795,14 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     }
 
     if (_negocioConCuota.planNombre != null && _negocioConCuota.planNombre!.isNotEmpty) {
+      final uso = _negocioConCuota.usoPlan;
+      final ilimitado = uso != null && uso['documentos_limite'] == null;
       final disponibles = _negocioConCuota.facturasDisponibles ?? 0;
       final limite = _negocioConCuota.limiteFacturasMensual ?? 0;
+      final extraPermitido = uso?['precio_documento_extra'] != null;
+      final unidad = uso?['periodicidad'] == 'anual' ? 'año' : 'mes';
       Color? color;
-      if (limite > 0) {
+      if (limite > 0 && !ilimitado && !extraPermitido) {
         final proporcion = disponibles / limite;
         if (proporcion <= 0.1) {
           color = Colors.redAccent;
@@ -812,9 +816,12 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         // cuando disponibles supera el limite del plan (ej. despues de
         // comprar mas facturas antes de que se acabaran, algo valido y
         // esperado, no un error).
-        texto: "$disponibles disp.",
-        tooltip: "Plan ${_negocioConCuota.planNombre} ($limite facturas/mes): $disponibles disponibles "
-            "ahora -- tocá para cambiar o sumar más",
+        texto: ilimitado ? (_negocioConCuota.planNombre ?? '') : "$disponibles disp.",
+        tooltip: ilimitado
+            ? "Plan ${_negocioConCuota.planNombre}: documentos ilimitados "
+                "(${uso['documentos_usados']} este mes) -- tocá para ver tu plan"
+            : "Plan ${_negocioConCuota.planNombre} ($limite documentos/$unidad): $disponibles disponibles"
+                "${extraPermitido ? ' (después se cobran como extra)' : ''} -- tocá para ver o cambiar tu plan",
         colorTexto: color,
         onTap: () async {
           final actualizo = await Navigator.push<bool>(

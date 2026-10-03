@@ -1542,7 +1542,9 @@ class _NegociosScreenState extends State<NegociosScreen> {
                               "Cédula: ${n.cedula}",
                               if (n.nombreSocio != null && n.nombreSocio!.isNotEmpty) "Contador: ${n.nombreSocio}",
                               n.planNombre != null && n.planNombre!.isNotEmpty
-                                  ? "Plan: ${n.planNombre} (${n.facturasDisponibles ?? 0}/${n.limiteFacturasMensual ?? 0} facturas disp.)"
+                                  ? (n.limiteFacturasMensual == null
+                                      ? "Plan: ${n.planNombre} (documentos ilimitados)"
+                                      : "Plan: ${n.planNombre} (${n.facturasDisponibles ?? 0}/${n.limiteFacturasMensual} documentos disp.)")
                                   : "Sin plan asignado",
                             ].join(" · "),
                             style: esContador ? const TextStyle(color: _PaletaContador.textoTenue, fontSize: 12.5) : null,
