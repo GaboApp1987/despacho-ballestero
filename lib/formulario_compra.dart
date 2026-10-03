@@ -205,17 +205,27 @@ class _FormularioCompraState extends State<FormularioCompra> {
 
       // Líneas de producto: las que ya coinciden por CABYS se agregan
       // directo; las que no, piden vincular o crear un producto.
+      // El producto_id de un CorreoCompraRecibido se calculó cuando llegó el
+      // correo: si el producto se creó después (p. ej. al revisarlo una vez
+      // antes), venía null y pedía vincular de nuevo en cada "Revisar" --
+      // por eso también se busca por CABYS en la lista actual.
       final List lineas = datos['lineas'] ?? [];
       for (final linea in lineas) {
         final productoId = linea['producto_id'];
-        if (productoId != null) {
-          final producto = _listaProductos.firstWhere(
-            (p) => p.id == productoId,
-            orElse: () => _listaProductos.first,
-          );
+        final cabysLinea = (linea['codigo_cabys'] as String? ?? '').trim();
+        Producto? producto;
+        for (final p in _listaProductos) {
+          if ((productoId != null && p.id == productoId) ||
+              (cabysLinea.isNotEmpty && p.codigoCabys.trim() == cabysLinea)) {
+            producto = p;
+            break;
+          }
+        }
+        if (producto != null) {
+          final productoLinea = producto;
           setState(() {
             _carritoCompra.add(LineaCompra(
-              producto: producto,
+              producto: productoLinea,
               cantidad: (linea['cantidad'] as num).toInt(),
               precioCosto: redondear2((linea['precio_unitario'] as num) * tipoCambioAplicar),
             ));
