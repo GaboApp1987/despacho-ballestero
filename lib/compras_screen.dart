@@ -437,7 +437,8 @@ class _ComprasScreenState extends State<ComprasScreen> {
         'cedula_juridica': datos['proveedor_cedula'] ?? '',
         'correo': datos['proveedor_correo'] ?? '',
       });
-      if (resProv.statusCode != 201) throw Exception("No se pudo crear el proveedor");
+      // 200 = ya existía con esa cédula (el backend no duplica proveedores).
+      if (resProv.statusCode != 201 && resProv.statusCode != 200) throw Exception("No se pudo crear el proveedor");
       proveedorId = json.decode(utf8.decode(resProv.bodyBytes))['id'];
     }
     if (proveedorId == null) throw Exception("El XML no trae datos del proveedor");

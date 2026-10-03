@@ -163,34 +163,42 @@ class _FormularioCompraState extends State<FormularioCompra> {
 
       // Proveedor: si ya existe (por cédula) se selecciona; si no, se crea
       // automáticamente con los datos del XML.
+      // Se busca por id (si el backend ya lo reconoció) o por cédula en la
+      // lista actual (pudo crearse después de que llegó el correo). OJO: acá
+      // nunca se llama a _cargarDatos() -- con datosPrecarga eso vuelve a
+      // ejecutar esta misma precarga y creaba el proveedor en bucle.
       final proveedorId = datos['proveedor_id'];
-      if (proveedorId != null) {
-        setState(() {
-          _proveedorSeleccionado = _listaProveedores.firstWhere(
-            (p) => p.id == proveedorId,
-            orElse: () => _listaProveedores.first,
-          );
-        });
+      final cedulaProveedor = (datos['proveedor_cedula'] ?? '').toString().trim();
+      Proveedor? encontrado;
+      for (final p in _listaProveedores) {
+        if ((proveedorId != null && p.id == proveedorId) ||
+            (cedulaProveedor.isNotEmpty && (p.cedula ?? '').trim() == cedulaProveedor)) {
+          encontrado = p;
+          break;
+        }
+      }
+      if (encontrado != null) {
+        setState(() => _proveedorSeleccionado = encontrado);
       } else if (datos['proveedor_nombre'] != null) {
         final resProv = await ApiService.post('/proveedores/', {
           'negocio': widget.negocio.id,
           'nombre': datos['proveedor_nombre'],
-          'cedula_juridica': datos['proveedor_cedula'] ?? '',
+          'cedula_juridica': cedulaProveedor,
           'correo': datos['proveedor_correo'] ?? '',
         });
-        if (resProv.statusCode == 201) {
-          final nuevo = json.decode(utf8.decode(resProv.bodyBytes));
-          await _cargarDatos();
-          setState(() {
-            _proveedorSeleccionado = _listaProveedores.firstWhere(
-              (p) => p.id == nuevo['id'],
-              orElse: () => _listaProveedores.first,
-            );
-          });
+        // 201 = creado; 200 = ya existía con esa cédula (el backend no duplica).
+        if (resProv.statusCode == 201 || resProv.statusCode == 200) {
+          final proveedor = Proveedor.fromJson(json.decode(utf8.decode(resProv.bodyBytes)));
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text("Proveedor creado automáticamente: ${datos['proveedor_nombre']}")),
-            );
+            setState(() {
+              if (!_listaProveedores.any((p) => p.id == proveedor.id)) _listaProveedores.add(proveedor);
+              _proveedorSeleccionado = _listaProveedores.firstWhere((p) => p.id == proveedor.id);
+            });
+            if (resProv.statusCode == 201) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text("Proveedor agregado automáticamente: ${datos['proveedor_nombre']}")),
+              );
+            }
           }
         }
       }
