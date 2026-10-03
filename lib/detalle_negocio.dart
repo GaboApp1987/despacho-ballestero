@@ -794,43 +794,72 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
       ));
     }
 
-    if (_negocioConCuota.planNombre != null && _negocioConCuota.planNombre!.isNotEmpty) {
+    // Cupo del plan: documentos y consultas de IA que le quedan (cupo del
+    // plan + saldo de recargas, ver uso_plan en el backend). Siempre
+    // visible -- sin plan muestra "Sin plan" para que se pueda elegir uno.
+    {
       final uso = _negocioConCuota.usoPlan;
-      final ilimitado = uso != null && uso['documentos_limite'] == null;
-      final disponibles = _negocioConCuota.facturasDisponibles ?? 0;
-      final limite = _negocioConCuota.limiteFacturasMensual ?? 0;
-      final extraPermitido = uso?['precio_documento_extra'] != null;
-      final unidad = uso?['periodicidad'] == 'anual' ? 'año' : 'mes';
-      Color? color;
-      if (limite > 0 && !ilimitado && !extraPermitido) {
-        final proporcion = disponibles / limite;
-        if (proporcion <= 0.1) {
-          color = Colors.redAccent;
-        } else if (proporcion <= 0.3) {
-          color = Colors.amber.shade800;
+      final tienePlan = _negocioConCuota.planNombre != null && _negocioConCuota.planNombre!.isNotEmpty;
+      Future<void> abrirPlanes() async {
+        final actualizo = await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(builder: (_) => CambiarPlanScreen(negocio: _negocioConCuota)),
+        );
+        if (actualizo == true) {
+          _cargarNegocioActualizado();
+          _recargarDatos();
         }
       }
-      segmentos.add(_segmentoDatosAppBar(
-        icono: Icons.receipt_long_outlined,
-        // Solo el numero disponible -- "$disponibles/$limite" confundia
-        // cuando disponibles supera el limite del plan (ej. despues de
-        // comprar mas facturas antes de que se acabaran, algo valido y
-        // esperado, no un error).
-        texto: ilimitado ? (_negocioConCuota.planNombre ?? '') : "$disponibles disp.",
-        tooltip: ilimitado
-            ? "Plan ${_negocioConCuota.planNombre}: documentos ilimitados "
-                "(${uso['documentos_usados']} este mes) -- tocá para ver tu plan"
-            : "Plan ${_negocioConCuota.planNombre} ($limite documentos/$unidad): $disponibles disponibles"
-                "${extraPermitido ? ' (después se cobran como extra)' : ''} -- tocá para ver o cambiar tu plan",
-        colorTexto: color,
-        onTap: () async {
-          final actualizo = await Navigator.push<bool>(
-            context,
-            MaterialPageRoute(builder: (_) => CambiarPlanScreen(negocio: _negocioConCuota)),
-          );
-          if (actualizo == true) _recargarDatos();
-        },
-      ));
+
+      Color? colorSegun(int? disponibles, int? limite) {
+        if (disponibles == null || limite == null || limite == 0) return null;
+        if (disponibles <= 0) return Colors.redAccent;
+        final proporcion = disponibles / limite;
+        if (proporcion <= 0.1) return Colors.redAccent;
+        if (proporcion <= 0.3) return Colors.amber.shade800;
+        return null;
+      }
+
+      if (!tienePlan) {
+        segmentos.add(_segmentoDatosAppBar(
+          icono: Icons.workspace_premium_outlined,
+          texto: "Sin plan",
+          tooltip: "Este negocio no tiene plan -- tocá para ver los planes",
+          onTap: abrirPlanes,
+        ));
+      } else {
+        final unidad = uso?['periodicidad'] == 'anual' ? 'este año' : 'este mes';
+        final extraPermitido = uso?['precio_documento_extra'] != null;
+        final docsDisp = uso != null ? (uso['documentos_disponibles'] as num?)?.toInt() : _negocioConCuota.facturasDisponibles;
+        final docsLimite = uso != null ? (uso['documentos_limite'] as num?)?.toInt() : _negocioConCuota.limiteFacturasMensual;
+        final docsIlimitados = uso != null ? uso['documentos_limite'] == null : _negocioConCuota.limiteFacturasMensual == null;
+        segmentos.add(_segmentoDatosAppBar(
+          icono: Icons.receipt_long_outlined,
+          texto: docsIlimitados ? "∞ facturas" : "${docsDisp ?? 0} facturas",
+          tooltip: docsIlimitados
+              ? "Plan ${_negocioConCuota.planNombre}: documentos ilimitados -- tocá para ver tu plan"
+              : "Plan ${_negocioConCuota.planNombre}: te quedan ${docsDisp ?? 0} documentos $unidad"
+                  "${(uso?['saldo_documentos_recarga'] ?? 0) > 0 ? ' (incluye ${uso!['saldo_documentos_recarga']} de recargas)' : ''}"
+                  "${extraPermitido ? '; después se cobran como extra' : ''} -- tocá para ver tu plan o comprar más",
+          colorTexto: extraPermitido ? null : colorSegun(docsDisp, docsLimite),
+          onTap: abrirPlanes,
+        ));
+        if (uso != null) {
+          final iaIlimitada = uso['consultas_ia_limite'] == null;
+          final iaDisp = (uso['consultas_ia_disponibles'] as num?)?.toInt();
+          segmentos.add(_segmentoDatosAppBar(
+            icono: Icons.auto_awesome_outlined,
+            texto: iaIlimitada ? "∞ IA" : "${iaDisp ?? 0} IA",
+            tooltip: iaIlimitada
+                ? "Consultas al asistente de IA ilimitadas"
+                : "Te quedan ${iaDisp ?? 0} consultas al asistente de IA este mes"
+                    "${(uso['saldo_consultas_ia_recarga'] ?? 0) > 0 ? ' (incluye ${uso['saldo_consultas_ia_recarga']} de recargas)' : ''}"
+                    " -- tocá para comprar más",
+            colorTexto: colorSegun(iaDisp, (uso['consultas_ia_limite'] as num?)?.toInt()),
+            onTap: abrirPlanes,
+          ));
+        }
+      }
     }
 
     return Padding(
