@@ -5,6 +5,7 @@ class Cliente {
   final String tipoCedula;
   final String cedula;
   final String correo;
+  final String correoCopia;
   final String telefono;
   final String direccion;
   final String codigoActividad;
@@ -16,6 +17,7 @@ class Cliente {
     required this.tipoCedula,
     required this.cedula,
     required this.correo,
+    this.correoCopia = '',
     required this.telefono,
     required this.direccion,
     this.codigoActividad = '',
@@ -29,6 +31,7 @@ class Cliente {
       tipoCedula: json['tipo_cedula'] ?? '01',
       cedula: json['cedula'] ?? '',
       correo: json['correo'] ?? '',
+      correoCopia: json['correo_copia'] ?? '',
       telefono: json['telefono'] ?? '',
       direccion: json['direccion'] ?? '',
       codigoActividad: json['codigo_actividad'] ?? '',

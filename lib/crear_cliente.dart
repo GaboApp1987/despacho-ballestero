@@ -25,6 +25,7 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
   late final _nombreController = TextEditingController(text: widget.clienteExistente?.nombre ?? '');
   late final _cedulaController = TextEditingController(text: widget.clienteExistente?.cedula ?? '');
   late final _correoController = TextEditingController(text: widget.clienteExistente?.correo ?? '');
+  late final _correoCopiaController = TextEditingController(text: widget.clienteExistente?.correoCopia ?? '');
   late final _telefonoController = TextEditingController(text: widget.clienteExistente?.telefono ?? '');
   late final _direccionController = TextEditingController(text: widget.clienteExistente?.direccion ?? '');
   late final _actividadController = TextEditingController(text: widget.clienteExistente?.codigoActividad ?? '');
@@ -191,6 +192,7 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
     _nombreController.dispose();
     _cedulaController.dispose();
     _correoController.dispose();
+    _correoCopiaController.dispose();
     _telefonoController.dispose();
     _direccionController.dispose();
     _actividadController.dispose();
@@ -209,6 +211,7 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
         'tipo_cedula': _tipoCedulaSeleccionada,
         'cedula': _cedulaController.text.trim(),
         'correo': _correoController.text.trim(),
+        'correo_copia': _correoCopiaController.text.trim(),
         'telefono': _telefonoController.text.trim(),
         'direccion': _direccionController.text.trim(),
         'codigo_actividad': _actividadController.text.trim(),
@@ -348,6 +351,19 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
                   labelText: "Correo Electrónico",
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.email),
+                ),
+              ),
+              const SizedBox(height: 15),
+
+              // Otro destinatario que recibe copia de cada factura (ej. su contador).
+              TextFormField(
+                controller: _correoCopiaController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: "Otro correo (copia de facturas)",
+                  helperText: "Opcional: también recibe cada factura que se le envíe",
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.forward_to_inbox),
                 ),
               ),
               const SizedBox(height: 15),
