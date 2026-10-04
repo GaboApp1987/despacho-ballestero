@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'theme/app_theme.dart';
 
@@ -407,6 +408,7 @@ class _SolicitudPublicaScreenState extends State<SolicitudPublicaScreen> {
                             Expanded(
                               child: TextField(
                                 controller: _cedulaCtrl,
+                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                                 style: const TextStyle(color: TemaContador.textoFuerte),
                                 decoration: _decoracion("Cédula *", error: _errorSiVacio(_cedulaCtrl)),
                                 onChanged: (_) => setState(() {}),

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'theme/app_theme.dart';
 
 import 'api_service.dart';
@@ -305,6 +306,7 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
                     flex: 3,
                     child: TextFormField(
                       controller: _cedulaController,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       keyboardType: TextInputType.number,
                       onChanged: _alCambiarCedula,
                       onFieldSubmitted: (_) => _buscarEnHacienda(),

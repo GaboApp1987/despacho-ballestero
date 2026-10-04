@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../api_service.dart';
 
 /// Campo de cédula que busca solo en Hacienda (GET /consultar-cedula/, ver
@@ -106,6 +107,7 @@ class _CampoCedulaHaciendaState extends State<CampoCedulaHacienda> {
       children: [
         TextFormField(
           controller: widget.controller,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           keyboardType: TextInputType.number,
           onChanged: _alCambiar,
           onFieldSubmitted: (_) => _buscar(),

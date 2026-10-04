@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'theme/app_theme.dart';
 import 'api_service.dart';
 import 'avatar_logo.dart';
@@ -858,6 +859,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
                         flex: 2,
                         child: TextField(
                           controller: cedulaCtrl,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                           decoration: const InputDecoration(labelText: "Cédula *", border: OutlineInputBorder()),
                         ),
                       ),

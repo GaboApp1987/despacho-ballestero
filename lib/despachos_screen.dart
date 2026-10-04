@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'theme/app_theme.dart';
 import 'api_service.dart';
 import 'avatar_logo.dart';
@@ -101,6 +102,7 @@ class _DespachosScreenState extends State<DespachosScreen> {
                 const SizedBox(height: 10),
                 TextField(
                   controller: cedulaCtrl,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   decoration: const InputDecoration(labelText: "Cédula Jurídica", border: OutlineInputBorder()),
                 ),
                 const Divider(height: 30),
@@ -204,6 +206,7 @@ class _DespachosScreenState extends State<DespachosScreen> {
                 const SizedBox(height: 10),
                 TextField(
                   controller: cedulaCtrl,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   decoration: const InputDecoration(labelText: "Cédula Jurídica", border: OutlineInputBorder()),
                 ),
                 const Divider(height: 30),
