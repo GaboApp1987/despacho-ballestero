@@ -154,6 +154,9 @@ class ComprasScreen extends StatefulWidget {
 class _ComprasScreenState extends State<ComprasScreen> {
   bool _cargando = true;
   List<Compra> _compras = [];
+  // Filtro del Historial por la respuesta a Hacienda (Mensaje Receptor):
+  // 'todas', 'aceptadas', 'pendientes' o 'rechazadas'.
+  String _filtroHacienda = 'todas';
   List<Proveedor> _proveedores = [];
   List<dynamic> _correosPendientes = [];
   bool _modoSeleccion = false;
@@ -631,8 +634,8 @@ class _ComprasScreenState extends State<ComprasScreen> {
           actions: _modoSeleccion
               ? [
                   IconButton(
-                    icon: Icon(_comprasSeleccionadas.length == _compras.length ? Icons.deselect : Icons.select_all),
-                    tooltip: _comprasSeleccionadas.length == _compras.length ? "Deseleccionar todas" : "Seleccionar todas",
+                    icon: Icon(_comprasSeleccionadas.length == _comprasFiltradas.length ? Icons.deselect : Icons.select_all),
+                    tooltip: _comprasSeleccionadas.length == _comprasFiltradas.length ? "Deseleccionar todas" : "Seleccionar todas",
                     onPressed: _alternarSeleccionTodas,
                   ),
                   IconButton(
@@ -910,26 +913,77 @@ class _ComprasScreenState extends State<ComprasScreen> {
     );
   }
 
+  /// En qué grupo del filtro cae una compra. Las que no tienen clave de
+  /// Hacienda (tecleadas a mano, sin XML) no se le pueden responder a
+  /// Hacienda, así que no cuentan como "pendientes".
+  String? _grupoHacienda(Compra c) {
+    switch (c.mensajeReceptorEstado) {
+      case 'ACEPTADO':
+        return 'aceptadas';
+      case 'RECHAZADO':
+        return 'rechazadas';
+      default:
+        return c.claveHacienda != null ? 'pendientes' : null;
+    }
+  }
+
+  List<Compra> get _comprasFiltradas => _filtroHacienda == 'todas'
+      ? _compras
+      : _compras.where((c) => _grupoHacienda(c) == _filtroHacienda).toList();
+
+  Widget _buildFiltroHacienda() {
+    final opciones = [
+      ('todas', 'Todas', _compras.length),
+      ('aceptadas', 'Aceptadas', _compras.where((c) => _grupoHacienda(c) == 'aceptadas').length),
+      ('pendientes', 'Pendientes', _compras.where((c) => _grupoHacienda(c) == 'pendientes').length),
+      ('rechazadas', 'Rechazadas', _compras.where((c) => _grupoHacienda(c) == 'rechazadas').length),
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final (valor, texto, cantidad) in opciones)
+            ChoiceChip(
+              label: Text("$texto ($cantidad)"),
+              selected: _filtroHacienda == valor,
+              onSelected: (_) => setState(() {
+                _filtroHacienda = valor;
+                _comprasSeleccionadas.clear();
+              }),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildHistorial() {
     if (_compras.isEmpty && _correosPendientes.isEmpty) {
       return const Center(
         child: Text("Todavía no hay compras registradas.", style: TextStyle(color: Colors.grey)),
       );
     }
+    final compras = _comprasFiltradas;
+    final encabezados = <Widget>[
+      if (_correosPendientes.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _buildCorreosPendientes(),
+        ),
+      if (_compras.isNotEmpty) _buildFiltroHacienda(),
+      if (_compras.isNotEmpty && compras.isEmpty)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 24),
+          child: Center(child: Text("No hay compras con ese estado.", style: TextStyle(color: Colors.grey))),
+        ),
+    ];
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: _compras.length + (_correosPendientes.isEmpty ? 0 : 1),
+      itemCount: compras.length + encabezados.length,
       itemBuilder: (context, index) {
-        if (_correosPendientes.isNotEmpty) {
-          if (index == 0) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _buildCorreosPendientes(),
-            );
-          }
-          index -= 1;
-        }
-        final c = _compras[index];
+        if (index < encabezados.length) return encabezados[index];
+        final c = compras[index - encabezados.length];
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1021,12 +1075,12 @@ class _ComprasScreenState extends State<ComprasScreen> {
 
   void _alternarSeleccionTodas() {
     setState(() {
-      if (_comprasSeleccionadas.length == _compras.length) {
+      if (_comprasSeleccionadas.length == _comprasFiltradas.length) {
         _comprasSeleccionadas.clear();
       } else {
         _comprasSeleccionadas
           ..clear()
-          ..addAll(_compras.map((c) => c.id));
+          ..addAll(_comprasFiltradas.map((c) => c.id));
       }
     });
   }
