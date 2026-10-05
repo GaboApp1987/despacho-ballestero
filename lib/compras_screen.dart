@@ -201,6 +201,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
           _correosPendientes = correosData;
           _cargando = false;
         });
+        _consultarMensajesEnviados();
       } else {
         setState(() => _cargando = false);
       }
@@ -216,7 +217,13 @@ class _ComprasScreenState extends State<ComprasScreen> {
       context,
       MaterialPageRoute(builder: (context) => FormularioCompra(negocio: widget.negocio)),
     );
-    if (resultado == true) _cargarDatos();
+    if (resultado == true) {
+      await _cargarDatos();
+      // Si se aceptó ante Hacienda al confirmar, Hacienda lo procesa en
+      // unos segundos: se vuelve a consultar para que pase a "Aceptadas".
+      await Future.delayed(const Duration(seconds: 6));
+      if (mounted) await _consultarMensajesEnviados();
+    }
   }
 
   /// Abre "Nueva Compra" precargada con lo que ya se leyó del XML que llegó
@@ -234,7 +241,13 @@ class _ComprasScreenState extends State<ComprasScreen> {
         ),
       ),
     );
-    if (resultado == true) _cargarDatos();
+    if (resultado == true) {
+      await _cargarDatos();
+      // Si se aceptó ante Hacienda al confirmar, Hacienda lo procesa en
+      // unos segundos: se vuelve a consultar para que pase a "Aceptadas".
+      await Future.delayed(const Duration(seconds: 6));
+      if (mounted) await _consultarMensajesEnviados();
+    }
   }
 
   Future<void> _descartarCorreoPendiente(Map correo) async {
@@ -883,12 +896,15 @@ class _ComprasScreenState extends State<ComprasScreen> {
                         });
                         if (res.statusCode == 200) {
                           if (ctx.mounted) Navigator.pop(ctx);
-                          _cargarDatos();
+                          await _cargarDatos();
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("Mensaje Receptor enviado a Hacienda.")),
+                              const SnackBar(content: Text("Mensaje Receptor enviado a Hacienda. Consultando la respuesta...")),
                             );
                           }
+                          // Hacienda lo procesa en unos segundos.
+                          await Future.delayed(const Duration(seconds: 6));
+                          await _consultarMensajeReceptorManual(c);
                         } else {
                           final error = json.decode(utf8.decode(res.bodyBytes))['detail'] ?? 'Error desconocido';
                           setStateDialog(() => enviando = false);
@@ -913,13 +929,53 @@ class _ComprasScreenState extends State<ComprasScreen> {
     );
   }
 
+  /// Pregunta a Hacienda cómo terminó el Mensaje Receptor de una compra
+  /// (ENVIADO -> ACEPTADO/RECHAZADO) y actualiza la fila. Devuelve la
+  /// compra actualizada, o null si Hacienda no respondió.
+  Future<Compra?> _consultarMensajeReceptor(Compra c) async {
+    try {
+      final res = await ApiService.post('/compras/${c.id}/consultar-mensaje-receptor/', {});
+      if (res.statusCode != 200) return null;
+      final actualizada = Compra.fromJson(json.decode(utf8.decode(res.bodyBytes)));
+      if (mounted) {
+        setState(() {
+          final i = _compras.indexWhere((x) => x.id == actualizada.id);
+          if (i >= 0) _compras[i] = actualizada;
+        });
+      }
+      return actualizada;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Sin esto el Mensaje Receptor quedaba "Enviado" para siempre: nadie le
+  /// volvía a preguntar a Hacienda. Se hace en segundo plano al cargar.
+  Future<void> _consultarMensajesEnviados() async {
+    for (final c in _compras.where((c) => c.mensajeReceptorEstado == 'ENVIADO').toList()) {
+      if (!mounted) return;
+      await _consultarMensajeReceptor(c);
+    }
+  }
+
+  Future<void> _consultarMensajeReceptorManual(Compra c) async {
+    final actualizada = await _consultarMensajeReceptor(c);
+    if (!mounted) return;
+    final texto = actualizada == null
+        ? "No se pudo consultar a Hacienda. Intentá de nuevo en un momento."
+        : actualizada.mensajeReceptorEstado == 'ENVIADO'
+            ? "Hacienda todavía lo está procesando. Intentá de nuevo en unos minutos."
+            : _textoEstadoMensajeReceptor(actualizada);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(texto)));
+  }
+
   /// En qué grupo del filtro cae una compra. Las que no tienen clave de
   /// Hacienda (tecleadas a mano, sin XML) no se le pueden responder a
   /// Hacienda, así que no cuentan como "pendientes".
   String? _grupoHacienda(Compra c) {
     switch (c.mensajeReceptorEstado) {
       case 'ACEPTADO':
-        return 'aceptadas';
+        return c.mensajeReceptorTipo == '3' ? 'rechazadas' : 'aceptadas';
       case 'RECHAZADO':
         return 'rechazadas';
       default:
@@ -1019,6 +1075,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
                         onSelected: (opcion) {
                           if (opcion == 'nota_debito') mostrarDialogoNotaDebito(context, c, onCreada: _cargarDatos);
                           if (opcion == 'mensaje_receptor') _abrirMensajeReceptor(c);
+                          if (opcion == 'consultar_mensaje') _consultarMensajeReceptorManual(c);
                           if (opcion == 'borrar') _eliminarCompra(c);
                         },
                         itemBuilder: (context) => [
@@ -1028,6 +1085,8 @@ class _ComprasScreenState extends State<ComprasScreen> {
                               value: 'mensaje_receptor',
                               child: Text(c.mensajeReceptorEstado == null ? "Responder a Hacienda" : "Ver / reenviar respuesta a Hacienda"),
                             ),
+                          if (c.mensajeReceptorEstado == 'ENVIADO')
+                            const PopupMenuItem(value: 'consultar_mensaje', child: Text("Consultar estado en Hacienda")),
                           const PopupMenuItem(value: 'borrar', child: Text("Borrar compra")),
                         ],
                       ),

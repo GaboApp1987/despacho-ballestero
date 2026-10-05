@@ -51,6 +51,10 @@ class _FormularioCompraState extends State<FormularioCompra> {
   // presente si esta compra vino de un XML real): se guarda para poder
   // mandarle después a Hacienda el Mensaje Receptor de esta compra.
   String? _claveHacienda;
+  // Si la compra trae clave de Hacienda (vino de un XML), al confirmarla se
+  // manda de una vez el Mensaje Receptor de aceptación -- antes había que
+  // hacerlo aparte desde el Historial y se olvidaba.
+  bool _aceptarEnHacienda = true;
   // Si lo que suman las líneas leídas no cuadra con el total del
   // comprobante (ver verificar_cuadre_lineas en el backend), probablemente
   // la IA leyó mal un precio en el PDF/foto -- se avisa acá para que se
@@ -571,9 +575,30 @@ class _FormularioCompraState extends State<FormularioCompra> {
       final res = await ApiService.post('/compras/', body);
 
       if (res.statusCode == 201 || res.statusCode == 200) {
+        final compraId = json.decode(utf8.decode(res.bodyBytes))['id'];
         if (_bytesComprobante != null) {
-          final compraId = json.decode(utf8.decode(res.bodyBytes))['id'];
           await ApiService.uploadBytes('/compras/$compraId/', 'comprobante', _bytesComprobante!, _nombreComprobante ?? 'comprobante');
+        }
+        if (_claveHacienda != null && _aceptarEnHacienda) {
+          // La compra ya quedó registrada: si la aceptación falla (ej. sin
+          // llave criptográfica) solo se avisa, se puede reintentar desde
+          // el Historial con "Responder a Hacienda".
+          String? errorAceptacion;
+          try {
+            final resMr = await ApiService.post('/compras/$compraId/mensaje-receptor/', {'tipo': '1', 'detalle': ''});
+            if (resMr.statusCode != 200) {
+              errorAceptacion = (json.decode(utf8.decode(resMr.bodyBytes))['detail'] ?? 'Error desconocido').toString();
+            }
+          } catch (e) {
+            errorAceptacion = e.toString();
+          }
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(errorAceptacion == null
+                  ? "Compra registrada y aceptada ante Hacienda."
+                  : "Compra registrada, pero no se pudo aceptar ante Hacienda: $errorAceptacion"),
+            ));
+          }
         }
         if (widget.correoId != null) {
           try {
@@ -826,6 +851,15 @@ class _FormularioCompraState extends State<FormularioCompra> {
               ),
             ),
           ),
+          if (_claveHacienda != null)
+            CheckboxListTile(
+              value: _aceptarEnHacienda,
+              onChanged: _isSaving ? null : (v) => setState(() => _aceptarEnHacienda = v ?? true),
+              title: const Text("Aceptar ante Hacienda al confirmar"),
+              subtitle: const Text("Manda el Mensaje Receptor de aceptación (crédito fiscal del IVA)"),
+              controlAffinity: ListTileControlAffinity.leading,
+              dense: true,
+            ),
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: ElevatedButton(
