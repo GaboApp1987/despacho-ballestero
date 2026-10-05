@@ -14,6 +14,7 @@ import 'importar_externo_dialog.dart';
 import 'negocio.dart';
 import 'formato.dart';
 import 'widgets/campo_cedula_hacienda.dart';
+import 'widgets/selector_ubicacion_cr.dart';
 
 /// Registra una Nota de Débito que el proveedor emitió sobre `compra` (le
 /// cobró de más) -- compartido entre la lista de Compras y la pantalla de
@@ -534,6 +535,12 @@ class _ComprasScreenState extends State<ComprasScreen> {
     final nombreCtrl = TextEditingController(text: proveedorExistente?.nombre ?? '');
     final cedulaCtrl = TextEditingController(text: proveedorExistente?.cedula ?? '');
     final correoCtrl = TextEditingController(text: proveedorExistente?.correo ?? '');
+    final senasCtrl = TextEditingController(text: proveedorExistente?.otrasSenas ?? '');
+    String tipoCedula = proveedorExistente?.tipoCedula ?? '01';
+    String regimen = proveedorExistente?.regimen ?? '';
+    String? provincia = proveedorExistente?.provincia;
+    String? canton = proveedorExistente?.canton;
+    String? distrito = proveedorExistente?.distrito;
     bool guardando = false;
 
     showDialog(
@@ -548,7 +555,19 @@ class _ComprasScreenState extends State<ComprasScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 // La cédula primero: con ella se carga el nombre de Hacienda.
-                CampoCedulaHacienda(controller: cedulaCtrl, nombreController: nombreCtrl, labelText: "Cédula (opcional)"),
+                CampoCedulaHacienda(
+                  controller: cedulaCtrl,
+                  nombreController: nombreCtrl,
+                  labelText: "Cédula (opcional)",
+                  // Hacienda dice el tipo de cédula y el régimen: así no hay
+                  // que adivinar si es del régimen simplificado.
+                  onEncontrado: (datos) => setStateDialog(() {
+                    final tipo = (datos['tipo_cedula'] ?? '').toString();
+                    if (tipo.isNotEmpty) tipoCedula = tipo;
+                    final reg = (datos['regimen'] ?? '').toString().toLowerCase();
+                    if (reg.isNotEmpty) regimen = reg.contains('simplific') ? 'simplificado' : 'tradicional';
+                  }),
+                ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: nombreCtrl,
@@ -559,6 +578,42 @@ class _ComprasScreenState extends State<ComprasScreen> {
                   controller: correoCtrl,
                   decoration: const InputDecoration(labelText: "Correo (Opcional)", border: OutlineInputBorder()),
                 ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  initialValue: regimen,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: "Régimen tributario", border: OutlineInputBorder()),
+                  items: const [
+                    DropdownMenuItem(value: '', child: Text("Sin indicar")),
+                    DropdownMenuItem(value: 'tradicional', child: Text("Tradicional (me da factura electrónica)")),
+                    DropdownMenuItem(value: 'simplificado', child: Text("Simplificado (yo emito la factura de compra)")),
+                  ],
+                  onChanged: (v) => setStateDialog(() => regimen = v ?? ''),
+                ),
+                if (regimen == 'simplificado') ...[
+                  const SizedBox(height: 10),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text("Ubicación del proveedor (Hacienda la exige en la factura de compra)",
+                        style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  ),
+                  const SizedBox(height: 6),
+                  SelectorUbicacionCR(
+                    provincia: provincia,
+                    canton: canton,
+                    distrito: distrito,
+                    onChanged: (p, c, d) {
+                      provincia = p;
+                      canton = c;
+                      distrito = d;
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: senasCtrl,
+                    decoration: const InputDecoration(labelText: "Otras señas", border: OutlineInputBorder()),
+                  ),
+                ],
               ],
             ),
           ),
@@ -578,6 +633,12 @@ class _ComprasScreenState extends State<ComprasScreen> {
                         'nombre': nombreCtrl.text.trim(),
                         'cedula_juridica': cedulaCtrl.text.trim(),
                         'correo': correoCtrl.text.trim(),
+                        'tipo_cedula': tipoCedula,
+                        'regimen': regimen,
+                        'provincia': provincia ?? '',
+                        'canton': canton ?? '',
+                        'distrito': distrito ?? '',
+                        'otras_senas': senasCtrl.text.trim(),
                       };
                       try {
                         final response = proveedorExistente == null
@@ -961,6 +1022,10 @@ class _ComprasScreenState extends State<ComprasScreen> {
       if (!mounted) return;
       await _consultarMensajeReceptor(c);
     }
+    for (final c in _compras.where((c) => c.fecEstado == 'ENVIADO').toList()) {
+      if (!mounted) return;
+      await _consultarFec(c, avisar: false);
+    }
   }
 
   Future<void> _consultarMensajeReceptorManual(Compra c) async {
@@ -974,10 +1039,76 @@ class _ComprasScreenState extends State<ComprasScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(texto)));
   }
 
+  /// Factura Electrónica de Compra: el proveedor es del régimen
+  /// simplificado y no da comprobante, así que el negocio lo emite.
+  Future<void> _emitirFec(Compra c) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Emitir factura de compra"),
+        content: const Text(
+          "Se va a generar, firmar y enviar a Hacienda una Factura Electrónica de Compra por esta compra, "
+          "como respaldo de lo que le compraste a un proveedor del régimen simplificado.\n\n"
+          "Usá esto solo si el proveedor NO te dio factura electrónica.",
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Emitir")),
+        ],
+      ),
+    );
+    if (confirmar != true) return;
+    try {
+      ApiService.verificar(await ApiService.post('/compras/${c.id}/emitir-fec/', {}));
+      await _cargarDatos();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Factura de compra enviada a Hacienda. Consultando la respuesta...")),
+        );
+      }
+      await Future.delayed(const Duration(seconds: 6));
+      await _consultarFec(c);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+    }
+  }
+
+  Future<void> _consultarFec(Compra c, {bool avisar = true}) async {
+    try {
+      final res = await ApiService.post('/compras/${c.id}/consultar-fec/', {});
+      if (res.statusCode != 200) throw Exception(ApiService.mensajeError(res));
+      final actualizada = Compra.fromJson(json.decode(utf8.decode(res.bodyBytes)));
+      if (!mounted) return;
+      setState(() {
+        final i = _compras.indexWhere((x) => x.id == actualizada.id);
+        if (i >= 0) _compras[i] = actualizada;
+      });
+      if (avisar) {
+        final texto = switch (actualizada.fecEstado) {
+          'ACEPTADO' => "Factura de compra aceptada por Hacienda.",
+          'RECHAZADO' => "Hacienda rechazó la factura de compra. Revisá los datos del proveedor.",
+          'ERROR' => "Hubo un error con la factura de compra.",
+          _ => "Hacienda todavía la está procesando. Intentá de nuevo en unos minutos.",
+        };
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(texto)));
+      }
+    } catch (e) {
+      if (avisar && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo consultar: $e")));
+    }
+  }
+
   /// En qué grupo del filtro cae una compra. Las que no tienen clave de
   /// Hacienda (tecleadas a mano, sin XML) no se le pueden responder a
   /// Hacienda, así que no cuentan como "pendientes".
   String? _grupoHacienda(Compra c) {
+    // Compra a régimen simplificado: cuenta el estado de la FEC que emitió el negocio.
+    if (c.fecEstado != null) {
+      return switch (c.fecEstado) {
+        'ACEPTADO' => 'aceptadas',
+        'RECHAZADO' => 'rechazadas',
+        _ => 'pendientes',
+      };
+    }
     switch (c.mensajeReceptorEstado) {
       case 'ACEPTADO':
         return c.mensajeReceptorTipo == '3' ? 'rechazadas' : 'aceptadas';
@@ -1067,6 +1198,13 @@ class _ComprasScreenState extends State<ComprasScreen> {
                 if (c.moneda == 'USD')
                   "US\$${(c.totalCompra / c.tipoCambio).toStringAsFixed(2)} @ ₡${c.tipoCambio.toStringAsFixed(2)}",
                 if (c.claveHacienda != null) _textoEstadoMensajeReceptor(c),
+                if (c.fecEstado != null)
+                  "Factura de compra: ${switch (c.fecEstado) {
+                    'ACEPTADO' => 'aceptada por Hacienda',
+                    'RECHAZADO' => 'rechazada por Hacienda',
+                    'ERROR' => 'error al enviar',
+                    _ => 'enviada, esperando respuesta',
+                  }}",
               ].join(" · "),
             ),
             trailing: _modoSeleccion
@@ -1081,6 +1219,8 @@ class _ComprasScreenState extends State<ComprasScreen> {
                           if (opcion == 'nota_debito') mostrarDialogoNotaDebito(context, c, onCreada: _cargarDatos);
                           if (opcion == 'mensaje_receptor') _abrirMensajeReceptor(c);
                           if (opcion == 'consultar_mensaje') _consultarMensajeReceptorManual(c);
+                          if (opcion == 'emitir_fec') _emitirFec(c);
+                          if (opcion == 'consultar_fec') _consultarFec(c);
                           if (opcion == 'borrar') _eliminarCompra(c);
                         },
                         itemBuilder: (context) => [
@@ -1092,6 +1232,10 @@ class _ComprasScreenState extends State<ComprasScreen> {
                             ),
                           if (c.mensajeReceptorEstado == 'ENVIADO')
                             const PopupMenuItem(value: 'consultar_mensaje', child: Text("Consultar estado en Hacienda")),
+                          if (c.claveHacienda == null && (c.fecEstado == null || c.fecEstado == 'ERROR' || c.fecEstado == 'RECHAZADO'))
+                            const PopupMenuItem(value: 'emitir_fec', child: Text("Emitir factura de compra (régimen simplificado)")),
+                          if (c.fecEstado == 'ENVIADO')
+                            const PopupMenuItem(value: 'consultar_fec', child: Text("Consultar factura de compra en Hacienda")),
                           const PopupMenuItem(value: 'borrar', child: Text("Borrar compra")),
                         ],
                       ),

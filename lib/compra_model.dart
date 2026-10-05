@@ -5,8 +5,28 @@ class Proveedor {
   final String nombre;
   final String? cedula;
   final String? correo;
+  // Para la Factura Electrónica de Compra (régimen simplificado).
+  final String tipoCedula;
+  final String regimen; // '', 'tradicional' o 'simplificado'
+  final String provincia;
+  final String canton;
+  final String distrito;
+  final String otrasSenas;
 
-  Proveedor({required this.id, required this.nombre, this.cedula, this.correo});
+  Proveedor({
+    required this.id,
+    required this.nombre,
+    this.cedula,
+    this.correo,
+    this.tipoCedula = '01',
+    this.regimen = '',
+    this.provincia = '',
+    this.canton = '',
+    this.distrito = '',
+    this.otrasSenas = '',
+  });
+
+  bool get esSimplificado => regimen == 'simplificado';
 
   factory Proveedor.fromJson(Map<String, dynamic> json) {
     return Proveedor(
@@ -14,6 +34,12 @@ class Proveedor {
       nombre: json['nombre'],
       cedula: json['cedula_juridica'],
       correo: json['correo'],
+      tipoCedula: json['tipo_cedula'] ?? '01',
+      regimen: json['regimen'] ?? '',
+      provincia: json['provincia'] ?? '',
+      canton: json['canton'] ?? '',
+      distrito: json['distrito'] ?? '',
+      otrasSenas: json['otras_senas'] ?? '',
     );
   }
 }
@@ -110,6 +136,9 @@ class Compra {
   final String? claveHacienda;
   final String? mensajeReceptorTipo;
   final String? mensajeReceptorEstado;
+  // Factura Electrónica de Compra emitida por el negocio (régimen simplificado).
+  final String? fecEstado;
+  final String? fecConsecutivo;
   final String? mensajeReceptorFecha;
   // Si la factura del proveedor vino en dólares, totalCompra ya está
   // convertido a colones con este tipo de cambio -- el monto original en
@@ -132,6 +161,8 @@ class Compra {
     this.claveHacienda,
     this.mensajeReceptorTipo,
     this.mensajeReceptorEstado,
+    this.fecEstado,
+    this.fecConsecutivo,
     this.mensajeReceptorFecha,
     this.moneda = 'CRC',
     this.tipoCambio = 1.0,
@@ -157,6 +188,8 @@ class Compra {
       claveHacienda: (json['clave_hacienda'] as String?)?.isNotEmpty == true ? json['clave_hacienda'] : null,
       mensajeReceptorTipo: (json['mensaje_receptor_tipo'] as String?)?.isNotEmpty == true ? json['mensaje_receptor_tipo'] : null,
       mensajeReceptorEstado: (json['mensaje_receptor_estado'] as String?)?.isNotEmpty == true ? json['mensaje_receptor_estado'] : null,
+      fecEstado: (json['fec_estado'] as String?)?.isNotEmpty == true ? json['fec_estado'] : null,
+      fecConsecutivo: (json['fec_consecutivo'] as String?)?.isNotEmpty == true ? json['fec_consecutivo'] : null,
       mensajeReceptorFecha: json['mensaje_receptor_fecha'],
       moneda: json['moneda'] ?? 'CRC',
       tipoCambio: double.tryParse(json['tipo_cambio']?.toString() ?? '') ?? 1.0,
