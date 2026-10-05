@@ -30,6 +30,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
   late TextEditingController _correoController;
   late TextEditingController _alanubeActividadController;
   late String _entornoSeleccionado;
+  late bool _avisosPorCorreo;
   bool _cargando = false;
   String? _logoUrl;
   bool _subiendoLlave = false;
@@ -74,6 +75,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
     _usuarioController = TextEditingController(text: widget.negocio.usuarioApi ?? '');
     _pinController = TextEditingController(text: widget.negocio.pinLlave ?? '');
     _entornoSeleccionado = widget.negocio.entornoHacienda ?? 'STAGING';
+    _avisosPorCorreo = widget.negocio.avisosPorCorreo;
     _passwordController = TextEditingController();
     _nombreComercialController = TextEditingController(text: widget.negocio.nombreComercial);
     _direccionController = TextEditingController(text: widget.negocio.direccion ?? '');
@@ -414,6 +416,49 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
     );
   }
 
+  /// Revisa (sin emitir nada) llave, PIN, vigencia, cédula de la llave y
+  /// usuario/clave de la API -- lo que antes se descubría recién cuando la
+  /// primera factura fallaba. Usa lo GUARDADO: si hay cambios sin guardar,
+  /// hay que guardar primero.
+  Future<void> _probarConexionHacienda() async {
+    setState(() => _cargando = true);
+    try {
+      final res = ApiService.verificar(await ApiService.post('/negocios/${widget.negocio.id}/verificar-hacienda/', {}));
+      final data = json.decode(utf8.decode(res.bodyBytes));
+      final pasos = (data['pasos'] as List).cast<Map>();
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(data['listo'] == true ? "Todo listo para facturar" : "Hay cosas por corregir"),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final p in pasos)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(p['ok'] == true ? Icons.check_circle : Icons.error,
+                        color: p['ok'] == true ? Colors.green : Colors.red),
+                    title: Text(p['paso'].toString()),
+                    subtitle: Text(p['detalle'].toString()),
+                  ),
+                const SizedBox(height: 4),
+                const Text("Se revisa lo que ya está guardado: si cambiaste algo, guardá primero.",
+                    style: TextStyle(fontSize: 12, color: Colors.grey)),
+              ],
+            ),
+          ),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cerrar"))],
+        ),
+      );
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo probar la conexión: $e")));
+    } finally {
+      if (mounted) setState(() => _cargando = false);
+    }
+  }
+
   // 🌐 FUNCIÓN DE RED DIRECTA A TU VIEWSET PARCIAL DE DJANGO
   Future<void> _actualizarConfiguracionHacienda() async {
     setState(() {
@@ -432,6 +477,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
         'canton': _cantonSel ?? '',
         'distrito': _distritoSel ?? '',
         'telefono': _telefonoController.text.trim(),
+        'avisos_por_correo': _avisosPorCorreo,
         'correo_hacienda': _correoController.text.trim(),
         'alanube_economic_activity': _alanubeActividadController.text.trim(),
       };
@@ -633,6 +679,15 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
                             border: OutlineInputBorder(),
                           ),
                         ),
+                      ),
+                      SwitchListTile(
+                        value: _avisosPorCorreo,
+                        onChanged: (v) => setState(() => _avisosPorCorreo = v),
+                        title: const Text("Avisos por correo"),
+                        subtitle: const Text(
+                          "Certificado por vencer, compras por aceptar ante Hacienda, recordatorio de IVA y resumen semanal los lunes",
+                        ),
+                        secondary: const Icon(Icons.notifications_active_outlined),
                       ),
                       const SizedBox(height: 12),
                       Padding(
@@ -901,7 +956,17 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
                   )
                       : const Text("GUARDAR CONFIGURACIONES", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                 ),
-              )
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.verified_user_outlined),
+                  label: const Text("PROBAR CONEXIÓN CON HACIENDA"),
+                  onPressed: _cargando ? null : _probarConexionHacienda,
+                ),
+              ),
             ],
           ),
         ),

@@ -326,7 +326,12 @@ class _CotizacionScreenState extends State<CotizacionScreen> {
       final response = await ApiService.post('/facturas/', body);
       if (response.statusCode == 201) {
         final facturaCreada = json.decode(utf8.decode(response.bodyBytes));
-        await ApiService.patch('/cotizaciones/${c['id']}/?negocio=${widget.negocio.id}', {'estado': 'A'});
+        final resEstado = await ApiService.patch('/cotizaciones/${c['id']}/?negocio=${widget.negocio.id}', {'estado': 'A'});
+        if (resEstado.statusCode != 200 && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text("La factura se emitió, pero la cotización no se pudo marcar como aceptada: ${ApiService.mensajeError(resEstado)}"),
+          ));
+        }
         widget.onFacturaCreada?.call();
         _cargarCotizaciones();
         if (mounted) {

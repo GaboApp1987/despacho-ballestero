@@ -75,6 +75,7 @@ class Negocio {
   final int? suscripcionId;
   final String? suscripcionEstado;
   final bool suscripcionCobroAutomatico;
+  final bool avisosPorCorreo;
   final int ultimoConsecutivoFactura;
   final int ultimoConsecutivoTiquete;
   final int ultimoConsecutivoNotaCredito;
@@ -99,6 +100,7 @@ class Negocio {
     this.canton,
     this.distrito,
     this.telefono,
+    this.avisosPorCorreo = true,
     this.correoHacienda,
     this.alanubeEconomicActivity,
     this.planId,
@@ -138,6 +140,7 @@ class Negocio {
       canton: json['canton'],
       distrito: json['distrito'],
       telefono: json['telefono'],
+      avisosPorCorreo: json['avisos_por_correo'] ?? true,
       correoHacienda: json['correo_hacienda'],
       alanubeEconomicActivity: json['alanube_economic_activity'],
       planId: json['plan'],

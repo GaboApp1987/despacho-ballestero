@@ -205,7 +205,12 @@ class _GastosScreenState extends State<GastosScreen> {
                           if (response.statusCode == 200 || response.statusCode == 201) {
                             if (bytesComprobante != null) {
                               final gastoId = gastoExistente?.id ?? json.decode(utf8.decode(response.bodyBytes))['id'];
-                              await ApiService.uploadBytes('/gastos-operativos/$gastoId/', 'comprobante', bytesComprobante!, nombreComprobante ?? 'comprobante');
+                              final resAdjunto = await ApiService.uploadBytes('/gastos-operativos/$gastoId/', 'comprobante', bytesComprobante!, nombreComprobante ?? 'comprobante');
+                              if (resAdjunto.statusCode != 200 && context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                  content: Text("El gasto se guardó, pero no se pudo adjuntar el comprobante: ${ApiService.mensajeError(resAdjunto)}"),
+                                ));
+                              }
                             }
                             if (ctx.mounted) Navigator.pop(ctx);
                             _cargarDatos();

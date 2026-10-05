@@ -176,6 +176,32 @@ class ApiService {
     return _conRenovacion((headers) => http.patch(url, headers: headers, body: json.encode(body)));
   }
 
+  /// Texto legible del error que devolvió el backend: "detail"/"error" o
+  /// el primer error de campo de DRF ({"campo": ["mensaje"]}).
+  static String mensajeError(http.Response r) {
+    try {
+      final data = json.decode(utf8.decode(r.bodyBytes));
+      if (data is Map) {
+        final directo = data['detail'] ?? data['error'];
+        if (directo != null) return directo.toString();
+        for (final entrada in data.entries) {
+          final v = entrada.value;
+          return "${entrada.key}: ${v is List && v.isNotEmpty ? v.first : v}";
+        }
+      }
+    } catch (_) {}
+    return "Error del servidor (HTTP ${r.statusCode})";
+  }
+
+  /// Lanza una excepción con el mensaje del backend si la respuesta no es
+  /// 2xx -- para las llamadas que antes se hacían con `await` sin revisar
+  /// el código (ej. descartar un correo de compra daba 500 y la app no
+  /// decía nada).
+  static http.Response verificar(http.Response r) {
+    if (r.statusCode < 200 || r.statusCode >= 300) throw Exception(mensajeError(r));
+    return r;
+  }
+
   /// Método DELETE genérico
   static Future<http.Response> delete(String endpoint) async {
     final url = Uri.parse('$baseUrl$endpoint');

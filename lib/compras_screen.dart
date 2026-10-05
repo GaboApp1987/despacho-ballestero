@@ -268,7 +268,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
     );
     if (confirmar != true) return;
     try {
-      await ApiService.delete('/correos-compra-recibidos/${correo['id']}/');
+      ApiService.verificar(await ApiService.delete('/correos-compra-recibidos/${correo['id']}/'));
       _cargarDatos();
     } catch (e) {
       if (mounted) {
@@ -510,7 +510,12 @@ class _ComprasScreenState extends State<ComprasScreen> {
     if (resCompra.statusCode != 201) throw Exception("No se pudo crear la compra");
 
     final compraId = json.decode(utf8.decode(resCompra.bodyBytes))['id'];
-    await ApiService.uploadBytes('/compras/$compraId/', 'comprobante', bytes, nombreArchivo);
+    final resAdjunto = await ApiService.uploadBytes('/compras/$compraId/', 'comprobante', bytes, nombreArchivo);
+    if (resAdjunto.statusCode != 200 && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text("$nombreArchivo: la compra se registró, pero no se pudo adjuntar el archivo (${ApiService.mensajeError(resAdjunto)})."),
+      ));
+    }
 
     final cuadre = datos['cuadre'] as Map?;
     return (cuadre != null && cuadre['cuadra'] != true) ? cuadre : null;

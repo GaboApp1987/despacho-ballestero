@@ -76,7 +76,7 @@ class _CorreosCompraScreenState extends State<CorreosCompraScreen> {
     );
     if (confirmar != true) return;
     try {
-      await ApiService.delete('/correos-compra-recibidos/${correo['id']}/');
+      ApiService.verificar(await ApiService.delete('/correos-compra-recibidos/${correo['id']}/'));
       _cargar();
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al descartar: $e")));

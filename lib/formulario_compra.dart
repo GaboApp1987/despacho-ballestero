@@ -577,7 +577,12 @@ class _FormularioCompraState extends State<FormularioCompra> {
       if (res.statusCode == 201 || res.statusCode == 200) {
         final compraId = json.decode(utf8.decode(res.bodyBytes))['id'];
         if (_bytesComprobante != null) {
-          await ApiService.uploadBytes('/compras/$compraId/', 'comprobante', _bytesComprobante!, _nombreComprobante ?? 'comprobante');
+          final resAdjunto = await ApiService.uploadBytes('/compras/$compraId/', 'comprobante', _bytesComprobante!, _nombreComprobante ?? 'comprobante');
+          if (resAdjunto.statusCode != 200 && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text("La compra se registró, pero no se pudo adjuntar el comprobante: ${ApiService.mensajeError(resAdjunto)}"),
+            ));
+          }
         }
         if (_claveHacienda != null && _aceptarEnHacienda) {
           // La compra ya quedó registrada: si la aceptación falla (ej. sin
