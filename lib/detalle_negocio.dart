@@ -94,6 +94,10 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
   String _nombreUsuario = "Usuario";
 
   int _seccionActiva = 1;
+  // Sube con el botón "Actualizar": cambia la key de la sección abierta para
+  // que se vuelva a crear y recargue sus datos (Compras, Inventario, etc.
+  // cargan los suyos propios -- antes el botón solo recargaba el panel).
+  int _recargasSeccion = 0;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   // Controla el scroll horizontal de la barra de pildoras de escritorio: con
@@ -1089,7 +1093,10 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: "Actualizar",
-            onPressed: () => _recargarDatos(clientes: true),
+            onPressed: () {
+              setState(() => _recargasSeccion++);
+              _recargarDatos(clientes: true);
+            },
           ),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -1116,7 +1123,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
       // barra de pildoras horizontal) -- el contenido usa todo el ancho
       // disponible, igual que en el diseño de referencia.
       body: KeyedSubtree(
-        key: ValueKey(_seccionActiva),
+        key: ValueKey('$_seccionActiva-$_recargasSeccion'),
         child: _construirCuerpoSeccion(),
       ),
       floatingActionButton: () {
