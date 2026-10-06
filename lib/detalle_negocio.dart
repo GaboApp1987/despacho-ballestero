@@ -39,6 +39,7 @@ import 'widgets/bloqueo_salida_raiz.dart';
 import 'widgets/soporte_chat.dart';
 import 'widgets/primeros_pasos_card.dart';
 import 'widgets/tarjeta_d105.dart';
+import 'bancos_screen.dart';
 import 'widgets/asistente_ia_bar.dart';
 import 'perfil_sesion.dart';
 import 'widgets/asistente_flotante.dart';
@@ -269,6 +270,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     // -- Contabilidad --
     (id: 10, icono: Icons.bar_chart_outlined, titulo: "Reportes"),
     (id: 7, icono: Icons.percent, titulo: "Impuestos"),
+    (id: 20, icono: Icons.account_balance_outlined, titulo: "Bancos"),
     // -- Administración --
     (id: 14, icono: Icons.badge_outlined, titulo: "Colaboradores"),
     (id: 12, icono: Icons.extension_outlined, titulo: "Add-ons"),
@@ -293,7 +295,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     "Principal": [1, 2, 3],
     "Ventas": [0, 4, 15, 11, 16, 6, 19],
     "Compras": [8, 17, 13, 9],
-    "Finanzas": [18, 10, 7],
+    "Finanzas": [18, 20, 10, 7],
     "Administración": [14, 12, 5],
   };
 
@@ -301,7 +303,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
   // bloquea la escritura/lectura correspondiente de todas formas (ver
   // BloqueaCajeroMixin y los chequeos de es_cajero en views.py), esto es
   // solo para no mostrar botones que van a fallar. 'completo' ve todo esto.
-  static const Set<int> _idsOcultosParaCajero = {6, 8, 13, 9, 7, 10, 11, 12, 5, 15, 16, 17, 18, 19};
+  static const Set<int> _idsOcultosParaCajero = {6, 8, 13, 9, 7, 10, 11, 12, 5, 15, 16, 17, 18, 19, 20};
 
   List<({int id, IconData icono, String titulo})> get _menuItemsVisibles {
     // "Colaboradores" (id 14) es exclusivo del dueño real -- ni 'cajero' ni
@@ -686,6 +688,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         return "Recibos de Pago";
       case 19:
         return "Pagos en línea";
+      case 20:
+        return "Bancos";
       case 3:
         return "Inventario";
       case 4:
@@ -961,6 +965,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         return RecibosPagoScreen(negocio: widget.negocio);
       case 19:
         return PagosEnLineaVista(negocioId: widget.negocio.id);
+      case 20:
+        return BancosScreen(negocioId: widget.negocio.id, negocioNombre: widget.negocio.nombreComercial, embebido: true);
       case 7:
         return const ImpuestosScreen();
       case 8:
