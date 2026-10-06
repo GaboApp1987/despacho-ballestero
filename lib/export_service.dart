@@ -600,37 +600,89 @@ class ExportService {
     return null;
   }
 
-  /// Pie de página formal con los datos de identificación del negocio,
-  /// para el cierre de facturas y notas de crédito.
-  static pw.Widget _piePagina(NegocioInfo? info, PdfColor colorAccent) {
-    if (info == null) return pw.SizedBox();
-
+  /// Encabezado de facturas y notas de crédito: logo y datos del negocio
+  /// que factura ARRIBA a la izquierda (antes el nombre iba chiquito a la
+  /// derecha y la cédula/dirección/contacto quedaban en el pie de página), y
+  /// a la derecha un recuadro con el tipo de documento, número y fecha.
+  static pw.Widget _encabezadoDocumento({
+    required NegocioInfo? info,
+    required String nombreNegocio,
+    required pw.MemoryImage? logo,
+    required String titulo,
+    required List<String> datos,
+    required PdfColor color,
+  }) {
+    const gris = pw.TextStyle(fontSize: 9, color: PdfColors.grey700);
     final contacto = [
-      if (info.telefono != null && info.telefono!.isNotEmpty) 'Tel: ${info.telefono}',
-      if (info.correo != null && info.correo!.isNotEmpty) info.correo!,
-    ].join('   ·   ');
-
+      if (info?.telefono != null && info!.telefono!.isNotEmpty) 'Tel. ${info.telefono}',
+      if (info?.correo != null && info!.correo!.isNotEmpty) info.correo!,
+    ].join('  |  ');
+    final nombre = (info?.nombreComercial.isNotEmpty ?? false) ? info!.nombreComercial : nombreNegocio;
     return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
       children: [
-        pw.SizedBox(height: 30),
-        pw.Divider(color: colorAccent, thickness: 1),
-        pw.SizedBox(height: 8),
-        pw.Text(info.nombreComercial, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11)),
-        pw.SizedBox(height: 2),
-        pw.Text(info.cedulaEtiquetada, style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
-        if (info.direccion != null && info.direccion!.isNotEmpty)
-          pw.Text(info.direccion!, style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
-        if (contacto.isNotEmpty)
-          pw.Text(contacto, style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
-        pw.SizedBox(height: 10),
-        pw.Text(
-          'Documento generado electrónicamente. No requiere firma manuscrita.',
-          style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500, fontStyle: pw.FontStyle.italic),
+        pw.Row(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            if (logo != null) ...[
+              pw.Container(width: 70, height: 56, alignment: pw.Alignment.topLeft, child: pw.Image(logo, fit: pw.BoxFit.contain)),
+              pw.SizedBox(width: 10),
+            ],
+            pw.Expanded(
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(nombre, style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
+                  if (info?.nombreLegal != null && info!.nombreLegal!.isNotEmpty && info.nombreLegal != nombre)
+                    pw.Text(info.nombreLegal!, style: gris),
+                  if (info != null) pw.Text(info.cedulaEtiquetada, style: gris),
+                  if (info?.direccion != null && info!.direccion!.isNotEmpty) pw.Text(info.direccion!, style: gris),
+                  if (contacto.isNotEmpty) pw.Text(contacto, style: gris),
+                ],
+              ),
+            ),
+            pw.SizedBox(width: 10),
+            pw.Container(
+              width: 170,
+              decoration: pw.BoxDecoration(border: pw.Border.all(color: color, width: 0.8)),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                children: [
+                  pw.Container(
+                    color: color,
+                    padding: const pw.EdgeInsets.symmetric(vertical: 5, horizontal: 6),
+                    child: pw.Text(titulo,
+                        textAlign: pw.TextAlign.center,
+                        style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 10.5)),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(6),
+                    child: pw.Column(
+                      children: datos
+                          .map((d) => pw.Text(d, textAlign: pw.TextAlign.center, style: const pw.TextStyle(fontSize: 9)))
+                          .toList(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
+        pw.SizedBox(height: 10),
+        pw.Divider(color: PdfColors.grey400, thickness: 0.7),
       ],
     );
   }
+
+  /// Cierre de facturas y notas de crédito (los datos del negocio ahora van
+  /// en el encabezado, ver [_encabezadoDocumento]).
+  static pw.Widget _piePagina() => pw.Padding(
+        padding: const pw.EdgeInsets.only(top: 24),
+        child: pw.Text(
+          'Documento generado electrónicamente. No requiere firma manuscrita.',
+          style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500, fontStyle: pw.FontStyle.italic),
+        ),
+      );
 
   /// Exporta el listado de facturas a PDF
   static Future<void> exportFacturasToPdf(
@@ -1952,38 +2004,22 @@ class ExportService {
     pdf.addPage(pw.MultiPage(
       pageTheme: _temaPagina(),
       build: (pw.Context context) => [
-        pw.Header(
-          level: 0,
-          child: pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            children: [
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text(
-                    factura.esInterno
-                        ? 'TIQUETE INTERNO (NO FISCAL)'
-                        : (factura.esTiquete ? 'TIQUETE ELECTRÓNICO' : 'FACTURA ELECTRÓNICA'),
-                    style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
-                  ),
-                  pw.Text('Factura Número: F-${factura.consecutivo}'),
-                  pw.Text('Fecha: ${factura.fechaEmision.split('T')[0]}'),
-                  pw.Text('Condición: ${factura.condicionVenta == "02" ? 'Crédito' : 'Contado'}'),
-                  if (esUsd) pw.Text('Moneda: Dólares (US\$) -- Tipo de cambio: ${formatearColones(factura.tipoCambio)}'),
-                ],
-              ),
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.end,
-                children: [
-                  if (logo != null) pw.Image(logo, width: 60, height: 60, fit: pw.BoxFit.contain),
-                  if (logo != null) pw.SizedBox(height: 6),
-                  pw.Text(factura.nombreNegocio, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                ],
-              ),
-            ],
-          ),
+        _encabezadoDocumento(
+          info: factura.negocioInfo,
+          nombreNegocio: factura.nombreNegocio,
+          logo: logo,
+          titulo: factura.esInterno
+              ? 'TIQUETE INTERNO (NO FISCAL)'
+              : (factura.esTiquete ? 'TIQUETE ELECTRÓNICO' : 'FACTURA ELECTRÓNICA'),
+          datos: [
+            'N.° ${factura.consecutivo}',
+            'Fecha: ${factura.fechaEmision.split('T')[0]}',
+            'Condición: ${factura.condicionVenta == "02" ? 'Crédito' : 'Contado'}',
+            if (esUsd) 'Dólares (US\$) · T.C. ${formatearColones(factura.tipoCambio)}',
+          ],
+          color: PdfColors.indigo,
         ),
-        pw.SizedBox(height: 20),
+        pw.SizedBox(height: 14),
         pw.Text('RECEPTOR', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.indigo)),
         pw.Text(factura.receptorNombre),
         if (factura.receptorCedula != null && factura.receptorCedula!.isNotEmpty)
@@ -2140,7 +2176,7 @@ class ExportService {
             ),
           ),
         ],
-        _piePagina(factura.negocioInfo, PdfColors.indigo),
+        _piePagina(),
       ],
     ));
 
@@ -3841,33 +3877,20 @@ class ExportService {
     pdf.addPage(pw.MultiPage(
       pageTheme: _temaPagina(),
       build: (pw.Context context) => [
-        pw.Header(
-          level: 0,
-          child: pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            children: [
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text('NOTA DE CRÉDITO', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold, color: PdfColors.orange900)),
-                  pw.Text('Consecutivo: ${nota.consecutivo}'),
-                  pw.Text('Anula Factura: F-${nota.facturaConsecutivo ?? ''}'),
-                  pw.Text('Fecha: ${nota.fechaEmision.split('T')[0]}'),
-                  if (esUsd) pw.Text('Moneda: Dólares (US\$) -- Tipo de cambio: ${formatearColones(nota.facturaTipoCambio)}'),
-                ],
-              ),
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.end,
-                children: [
-                  if (logo != null) pw.Image(logo, width: 60, height: 60, fit: pw.BoxFit.contain),
-                  if (logo != null) pw.SizedBox(height: 6),
-                  pw.Text(nota.nombreNegocio, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                ],
-              ),
-            ],
-          ),
+        _encabezadoDocumento(
+          info: nota.negocioInfo,
+          nombreNegocio: nota.nombreNegocio,
+          logo: logo,
+          titulo: 'NOTA DE CRÉDITO',
+          datos: [
+            'N.° ${nota.consecutivo}',
+            'Fecha: ${nota.fechaEmision.split('T')[0]}',
+            'Anula factura: ${nota.facturaConsecutivo ?? ''}',
+            if (esUsd) 'Dólares (US\$) · T.C. ${formatearColones(nota.facturaTipoCambio)}',
+          ],
+          color: PdfColors.orange900,
         ),
-        pw.SizedBox(height: 20),
+        pw.SizedBox(height: 14),
         pw.Text('MOTIVO', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.orange900)),
         pw.Text(nota.motivo),
         pw.SizedBox(height: 12),
@@ -3882,8 +3905,25 @@ class ExportService {
         ],
         pw.SizedBox(height: 20),
         pw.TableHelper.fromTextArray(
-          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
           headerDecoration: const pw.BoxDecoration(color: PdfColors.orange900),
+          cellStyle: const pw.TextStyle(fontSize: 10),
+          cellAlignment: pw.Alignment.centerLeft,
+          // Mismos anchos que la factura: sin esto las columnas se
+          // repartían en partes iguales y los montos se partían en dos líneas.
+          columnWidths: const {
+            0: pw.FlexColumnWidth(3),
+            1: pw.FlexColumnWidth(1),
+            2: pw.FlexColumnWidth(1.8),
+            3: pw.FlexColumnWidth(1.5),
+            4: pw.FlexColumnWidth(1.8),
+          },
+          cellAlignments: const {
+            1: pw.Alignment.center,
+            2: pw.Alignment.centerRight,
+            3: pw.Alignment.centerRight,
+            4: pw.Alignment.centerRight,
+          },
           headers: const ['Producto', 'Cant', 'Precio Unit.', 'IVA', 'Total'],
           data: nota.detalles.isEmpty
               ? [
@@ -3913,7 +3953,7 @@ class ExportService {
             ],
           ),
         ),
-        _piePagina(nota.negocioInfo, PdfColors.orange900),
+        _piePagina(),
       ],
     ));
 

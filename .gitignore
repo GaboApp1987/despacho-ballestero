@@ -44,3 +44,6 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 .claude/
+
+# Ajustes locales de Claude Code (permisos personales)
+.claude/settings.local.json

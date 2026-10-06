@@ -38,6 +38,7 @@ import 'perfil_usuario_screen.dart';
 import 'widgets/bloqueo_salida_raiz.dart';
 import 'widgets/soporte_chat.dart';
 import 'widgets/primeros_pasos_card.dart';
+import 'widgets/tarjeta_d105.dart';
 import 'widgets/asistente_ia_bar.dart';
 import 'perfil_sesion.dart';
 import 'widgets/asistente_flotante.dart';
@@ -1824,69 +1825,76 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
           
           const SizedBox(height: 30),
 
-          // 🧾 DECLARACIÓN DE IVA (BORRADOR DEL PERIODO)
-          Text("Declaración de IVA (Borrador del Periodo)", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textStrong)),
-          const SizedBox(height: 15),
-          FutureBuilder<Map<String, dynamic>>(
-            future: _declaracionIvaFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) return const LinearProgressIndicator();
-              final d = snapshot.data ?? {};
-              if (d.isEmpty) {
-                return Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(color: AppColors.surfaceSubtle, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
-                  child: const Text("No se pudo cargar la declaración de IVA de este periodo", style: TextStyle(color: Colors.grey)),
-                );
-              }
-              return buildDeclaracionIva(d);
-            },
-          ),
+          // Régimen simplificado: D-105 trimestral en vez de D-104 y D-101.
+          if (widget.negocio.regimen == 'simplificado') ...[
+            Text("Declaración D-105 (Régimen Simplificado)", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textStrong)),
+            const SizedBox(height: 15),
+            TarjetaD105(negocioId: widget.negocio.id),
+          ] else ...[
+            // 🧾 DECLARACIÓN DE IVA (BORRADOR DEL PERIODO)
+            Text("Declaración de IVA (Borrador del Periodo)", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textStrong)),
+            const SizedBox(height: 15),
+            FutureBuilder<Map<String, dynamic>>(
+              future: _declaracionIvaFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) return const LinearProgressIndicator();
+                final d = snapshot.data ?? {};
+                if (d.isEmpty) {
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(color: AppColors.surfaceSubtle, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+                    child: const Text("No se pudo cargar la declaración de IVA de este periodo", style: TextStyle(color: Colors.grey)),
+                  );
+                }
+                return buildDeclaracionIva(d);
+              },
+            ),
 
-          const SizedBox(height: 30),
+            const SizedBox(height: 30),
 
-          // 🧾 DECLARACIÓN DE RENTA (BORRADOR ANUAL)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  "Declaración de Renta (Borrador Anual)",
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textStrong),
+            // 🧾 DECLARACIÓN DE RENTA (BORRADOR ANUAL)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    "Declaración de Renta (Borrador Anual)",
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textStrong),
+                  ),
                 ),
-              ),
-              DropdownButtonHideUnderline(
-                child: DropdownButton<int>(
-                  value: _anioRenta,
-                  items: List.generate(5, (i) => DateTime.now().year - i)
-                      .map((a) => DropdownMenuItem(value: a, child: Text("Periodo fiscal $a")))
-                      .toList(),
-                  onChanged: (v) {
-                    if (v != null) _cambiarAnioRenta(v);
-                  },
+                DropdownButtonHideUnderline(
+                  child: DropdownButton<int>(
+                    value: _anioRenta,
+                    items: List.generate(5, (i) => DateTime.now().year - i)
+                        .map((a) => DropdownMenuItem(value: a, child: Text("Periodo fiscal $a")))
+                        .toList(),
+                    onChanged: (v) {
+                      if (v != null) _cambiarAnioRenta(v);
+                    },
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 15),
-          FutureBuilder<Map<String, dynamic>>(
-            future: _declaracionRentaFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) return const LinearProgressIndicator();
-              final d = snapshot.data ?? {};
-              if (d.isEmpty) {
-                return Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(color: AppColors.surfaceSubtle, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
-                  child: const Text("No se pudo cargar la declaración de Renta de este periodo", style: TextStyle(color: Colors.grey)),
-                );
-              }
-              return buildDeclaracionRenta(d);
-            },
-          ),
+              ],
+            ),
+            const SizedBox(height: 15),
+            FutureBuilder<Map<String, dynamic>>(
+              future: _declaracionRentaFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) return const LinearProgressIndicator();
+                final d = snapshot.data ?? {};
+                if (d.isEmpty) {
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(color: AppColors.surfaceSubtle, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+                    child: const Text("No se pudo cargar la declaración de Renta de este periodo", style: TextStyle(color: Colors.grey)),
+                  );
+                }
+                return buildDeclaracionRenta(d);
+              },
+            ),
+          ],
 
           const SizedBox(height: 30),
 

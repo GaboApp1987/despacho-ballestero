@@ -2,6 +2,7 @@
 /// de crédito (Costa Rica: distinta forma de mostrar cédula física/jurídica).
 class NegocioInfo {
   final String nombreComercial;
+  final String? nombreLegal;
   final String cedula;
   final String tipoCedula;
   final String? correo;
@@ -11,6 +12,7 @@ class NegocioInfo {
 
   NegocioInfo({
     required this.nombreComercial,
+    this.nombreLegal,
     required this.cedula,
     required this.tipoCedula,
     this.correo,
@@ -31,6 +33,7 @@ class NegocioInfo {
   factory NegocioInfo.fromJson(Map<String, dynamic> json) {
     return NegocioInfo(
       nombreComercial: json['nombre_comercial'] ?? '',
+      nombreLegal: json['nombre_legal'],
       cedula: json['cedula'] ?? '',
       tipoCedula: json['tipo_cedula'] ?? '01',
       correo: json['correo_hacienda'],
@@ -76,6 +79,12 @@ class Negocio {
   final String? suscripcionEstado;
   final bool suscripcionCobroAutomatico;
   final bool avisosPorCorreo;
+  final String regimen;
+  final double? factorRtsRenta;
+  final double? factorRtsIva13;
+  final double? factorRtsIva2;
+  final double? factorRtsIva1;
+  final bool aceptarComprasAutomatico;
   final int ultimoConsecutivoFactura;
   final int ultimoConsecutivoTiquete;
   final int ultimoConsecutivoNotaCredito;
@@ -101,6 +110,12 @@ class Negocio {
     this.distrito,
     this.telefono,
     this.avisosPorCorreo = true,
+    this.regimen = 'tradicional',
+    this.factorRtsRenta,
+    this.factorRtsIva13,
+    this.factorRtsIva2,
+    this.factorRtsIva1,
+    this.aceptarComprasAutomatico = false,
     this.correoHacienda,
     this.alanubeEconomicActivity,
     this.planId,
@@ -141,6 +156,12 @@ class Negocio {
       distrito: json['distrito'],
       telefono: json['telefono'],
       avisosPorCorreo: json['avisos_por_correo'] ?? true,
+      regimen: json['regimen'] ?? 'tradicional',
+      factorRtsRenta: double.tryParse(json['factor_rts_renta']?.toString() ?? ''),
+      factorRtsIva13: double.tryParse(json['factor_rts_iva_13']?.toString() ?? ''),
+      factorRtsIva2: double.tryParse(json['factor_rts_iva_2']?.toString() ?? ''),
+      factorRtsIva1: double.tryParse(json['factor_rts_iva_1']?.toString() ?? ''),
+      aceptarComprasAutomatico: json['aceptar_compras_automatico'] ?? false,
       correoHacienda: json['correo_hacienda'],
       alanubeEconomicActivity: json['alanube_economic_activity'],
       planId: json['plan'],

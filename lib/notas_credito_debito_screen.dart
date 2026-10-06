@@ -12,9 +12,15 @@ import 'formato.dart';
 import 'export_service.dart';
 import 'detalle_factura_screen.dart';
 import 'compras_screen.dart';
+import 'nota_debito_venta_dialog.dart';
+import 'package:printing/printing.dart';
 
 /// Punto de entrada dedicado para notas de crédito (a clientes, sobre una
-/// factura) y notas de débito (de proveedores, sobre una compra) -- antes
+/// factura), notas de débito a clientes (las emite el negocio, ver
+/// nota_debito_venta_dialog.dart) y notas de débito de proveedores (sobre
+/// una compra). Antes la pestaña "Notas de Débito" era solo la de
+/// proveedores y pedía elegir un proveedor aunque se quisiera cobrarle a un
+/// cliente. -- antes
 /// solo se podían crear entrando primero a la factura/compra puntual; acá
 /// se ven todas juntas y se elige cliente/proveedor y luego el documento a
 /// acreditar/debitar, sin duplicar la lógica de creación que ya funciona
@@ -35,13 +41,16 @@ class _NotasCreditoDebitoScreenState extends State<NotasCreditoDebitoScreen> wit
   final Set<int> _consultandoIndividual = {};
   List<NotaCredito> _notasCredito = [];
   List<Map<String, dynamic>> _notasDebito = [];
+  bool _cargandoDebitoVenta = true;
+  List<Map<String, dynamic>> _notasDebitoVenta = [];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() => setState(() {}));
     _cargarNotasCredito();
+    _cargarNotasDebitoVenta();
     _cargarNotasDebito();
   }
 
@@ -123,6 +132,179 @@ class _NotasCreditoDebitoScreenState extends State<NotasCreditoDebitoScreen> wit
     }
     await _cargarNotasCredito();
     if (mounted) setState(() => _actualizandoEstados = false);
+  }
+
+  Future<void> _cargarNotasDebitoVenta() async {
+    if (mounted) setState(() => _cargandoDebitoVenta = true);
+    try {
+      final r = await ApiService.get('/notas-debito/?negocio=${widget.negocio.id}');
+      if (r.statusCode == 200) {
+        _notasDebitoVenta = (json.decode(utf8.decode(r.bodyBytes)) as List).cast<Map<String, dynamic>>();
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _cargandoDebitoVenta = false);
+  }
+
+  /// Elige cliente y una de sus facturas aceptadas (mismo flujo que la
+  /// nota de crédito) y abre el formulario de la nota de débito.
+  Future<void> _iniciarNuevaNotaDebitoVenta() async {
+    final clientesResp = await ApiService.get('/clientes/?negocio=${widget.negocio.id}');
+    if (!mounted || clientesResp.statusCode != 200) return;
+    final clientes = (json.decode(utf8.decode(clientesResp.bodyBytes)) as List).map((j) => Cliente.fromJson(j)).toList();
+    if (clientes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Todavía no hay clientes registrados.")));
+      return;
+    }
+    final cliente = await showDialog<Cliente>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text("¿A qué cliente le vas a cobrar?"),
+        children: clientes
+            .map((c) => SimpleDialogOption(onPressed: () => Navigator.pop(ctx, c), child: Text(c.nombre)))
+            .toList(),
+      ),
+    );
+    if (cliente == null || !mounted) return;
+    final facturasResp = await ApiService.get('/facturas/?negocio=${widget.negocio.id}&cliente=${cliente.id}');
+    if (!mounted || facturasResp.statusCode != 200) return;
+    final facturas = (json.decode(utf8.decode(facturasResp.bodyBytes)) as List)
+        .map((j) => Factura.fromJson(j))
+        .where((f) => !f.anulada && f.estadoHacienda == '3')
+        .toList();
+    if (facturas.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("${cliente.nombre} no tiene facturas aceptadas por Hacienda.")),
+      );
+      return;
+    }
+    final factura = await showDialog<Factura>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text("¿Sobre qué factura de ${cliente.nombre}?"),
+        children: facturas
+            .map((f) => SimpleDialogOption(
+                  onPressed: () => Navigator.pop(ctx, f),
+                  child: Text("F-${f.consecutivo} · ${f.enSuMoneda(f.totalFactura)}"),
+                ))
+            .toList(),
+      ),
+    );
+    if (factura == null || !mounted) return;
+    if (await mostrarDialogoNotaDebitoVenta(context, widget.negocio.id, factura)) {
+      await _cargarNotasDebitoVenta();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Nota de débito enviada a Hacienda. Consultando la respuesta...")),
+        );
+      }
+      await Future.delayed(const Duration(seconds: 6));
+      if (_notasDebitoVenta.isNotEmpty) await _consultarNotaDebitoVenta(_notasDebitoVenta.first);
+    }
+  }
+
+  Future<void> _consultarNotaDebitoVenta(Map<String, dynamic> n) async {
+    try {
+      final res = ApiService.verificar(await ApiService.post('/notas-debito/${n['id']}/consultar-hacienda/', {}));
+      final data = json.decode(utf8.decode(res.bodyBytes));
+      await _cargarNotasDebitoVenta();
+      if (!mounted) return;
+      final (_, texto) = _estadoNotaCredito(data['estado_hacienda'].toString());
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text("Nota de débito: $texto${data['correo_info'] != null ? ' · ${data['correo_info']}' : ''}"),
+      ));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo consultar: $e")));
+    }
+  }
+
+  Future<void> _verPdfNotaDebitoVenta(Map<String, dynamic> n) async {
+    try {
+      final res = ApiService.verificar(await ApiService.get('/notas-debito/${n['id']}/pdf/'));
+      final data = json.decode(utf8.decode(res.bodyBytes));
+      final bytes = base64.decode(data['pdf']);
+      await Printing.layoutPdf(onLayout: (_) async => bytes, name: data['nombre'] ?? 'nota_debito.pdf');
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo generar el PDF: $e")));
+    }
+  }
+
+  Widget _buildListaDebitoVenta() {
+    if (_cargandoDebitoVenta) return const Center(child: CircularProgressIndicator());
+    if (_notasDebitoVenta.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            "Todavía no le has emitido notas de débito a tus clientes.\n"
+            "Usalas para cobrar sobre una factura ya aceptada: intereses, cargos adicionales o diferencias de precio.",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey),
+          ),
+        ),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _cargarNotasDebitoVenta,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _notasDebitoVenta.length,
+        itemBuilder: (context, i) {
+          final n = _notasDebitoVenta[i];
+          final (color, texto) = _estadoNotaCredito(n['estado_hacienda'].toString());
+          final total = double.tryParse(n['total'].toString()) ?? 0.0;
+          return Card(
+            margin: const EdgeInsets.only(bottom: 10),
+            child: ListTile(
+              leading: const Icon(Icons.add_card_outlined, color: Colors.deepOrange),
+              title: Text(
+                "ND-${n['consecutivo']} · ${n['nombre_cliente'] ?? n['receptor_nombre'] ?? 'Cliente'}",
+                style: TextStyle(color: AppColors.textStrong, fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                "Sobre F-${n['factura_consecutivo']} · ${n['motivo']}"
+                "${n['motivo_rechazo'] != null ? '\nMotivo de Hacienda: ${n['motivo_rechazo']}' : ''}",
+                style: TextStyle(color: AppColors.textMuted),
+              ),
+              isThreeLine: n['motivo_rechazo'] != null,
+              trailing: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text("+${formatearColones(total)}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.deepOrange)),
+                  Text(texto, style: TextStyle(color: color, fontSize: 12)),
+                ],
+              ),
+              onTap: () => showModalBottomSheet(
+                context: context,
+                builder: (ctx) => SafeArea(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.sync),
+                        title: const Text("Consultar estado en Hacienda"),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _consultarNotaDebitoVenta(n);
+                        },
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.picture_as_pdf_outlined),
+                        title: const Text("Ver / imprimir PDF"),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _verPdfNotaDebitoVenta(n);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _cargarNotasDebito() async {
@@ -283,9 +465,11 @@ class _NotasCreditoDebitoScreenState extends State<NotasCreditoDebitoScreen> wit
                   labelColor: AppColors.primary,
                   unselectedLabelColor: AppColors.textMuted,
                   indicatorColor: AppColors.primary,
+                  isScrollable: true,
                   tabs: const [
                     Tab(text: "Notas de Crédito"),
                     Tab(text: "Notas de Débito"),
+                    Tab(text: "ND de proveedores"),
                   ],
                 ),
               ],
@@ -294,15 +478,23 @@ class _NotasCreditoDebitoScreenState extends State<NotasCreditoDebitoScreen> wit
           Expanded(
             child: TabBarView(
               controller: _tabController,
-              children: [_buildListaCredito(), _buildListaDebito()],
+              children: [_buildListaCredito(), _buildListaDebitoVenta(), _buildListaDebito()],
             ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _tabController.index == 0 ? _iniciarNuevaNotaCredito : _iniciarNuevaNotaDebito,
+        onPressed: switch (_tabController.index) {
+          0 => _iniciarNuevaNotaCredito,
+          1 => _iniciarNuevaNotaDebitoVenta,
+          _ => _iniciarNuevaNotaDebito,
+        },
         icon: const Icon(Icons.add),
-        label: Text(_tabController.index == 0 ? "Nueva Nota de Crédito" : "Nueva Nota de Débito"),
+        label: Text(switch (_tabController.index) {
+          0 => "Nueva Nota de Crédito",
+          1 => "Nueva Nota de Débito",
+          _ => "Registrar ND de proveedor",
+        }),
         backgroundColor: _tabController.index == 0 ? Colors.blue : Colors.deepOrange,
       ),
     );

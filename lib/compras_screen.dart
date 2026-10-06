@@ -836,8 +836,16 @@ class _ComprasScreenState extends State<ComprasScreen> {
                 leading: Icon(tieneError ? Icons.error_outline : Icons.description_outlined, color: tieneError ? Colors.red : AppColors.primary),
                 title: Text(correo['remitente']?.toString().isNotEmpty == true ? correo['remitente'].toString() : "Remitente desconocido"),
                 subtitle: Text(
-                  tieneError ? correo['error'].toString() : (correo['asunto']?.toString() ?? ''),
-                  maxLines: 2,
+                  tieneError
+                      ? correo['error'].toString()
+                      : [
+                          correo['asunto']?.toString() ?? '',
+                          // Si la aceptación automática está encendida y esta no
+                          // cumplió las condiciones, se dice por qué quedó acá.
+                          if ((correo['datos_parseados'] as Map?)?['aceptacion_automatica'] is Map)
+                            "No se aceptó sola: ${(correo['datos_parseados']['aceptacion_automatica'] as Map)['detalle']}",
+                        ].join('\n'),
+                  maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                 ),
                 trailing: Row(

@@ -31,6 +31,12 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
   late TextEditingController _alanubeActividadController;
   late String _entornoSeleccionado;
   late bool _avisosPorCorreo;
+  late bool _aceptarComprasAutomatico;
+  late String _regimen;
+  late TextEditingController _factorRentaCtrl;
+  late TextEditingController _factorIva13Ctrl;
+  late TextEditingController _factorIva2Ctrl;
+  late TextEditingController _factorIva1Ctrl;
   bool _cargando = false;
   String? _logoUrl;
   bool _subiendoLlave = false;
@@ -76,6 +82,13 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
     _pinController = TextEditingController(text: widget.negocio.pinLlave ?? '');
     _entornoSeleccionado = widget.negocio.entornoHacienda ?? 'STAGING';
     _avisosPorCorreo = widget.negocio.avisosPorCorreo;
+    _aceptarComprasAutomatico = widget.negocio.aceptarComprasAutomatico;
+    _regimen = widget.negocio.regimen;
+    String f(double? v) => v == null ? '' : v.toString();
+    _factorRentaCtrl = TextEditingController(text: f(widget.negocio.factorRtsRenta));
+    _factorIva13Ctrl = TextEditingController(text: f(widget.negocio.factorRtsIva13));
+    _factorIva2Ctrl = TextEditingController(text: f(widget.negocio.factorRtsIva2));
+    _factorIva1Ctrl = TextEditingController(text: f(widget.negocio.factorRtsIva1));
     _passwordController = TextEditingController();
     _nombreComercialController = TextEditingController(text: widget.negocio.nombreComercial);
     _direccionController = TextEditingController(text: widget.negocio.direccion ?? '');
@@ -478,6 +491,13 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
         'distrito': _distritoSel ?? '',
         'telefono': _telefonoController.text.trim(),
         'avisos_por_correo': _avisosPorCorreo,
+        'aceptar_compras_automatico': _aceptarComprasAutomatico,
+        'regimen': _regimen,
+        // Vacío = sin factor (no se estima); coma o punto decimal.
+        'factor_rts_renta': _factorRentaCtrl.text.trim().isEmpty ? null : _factorRentaCtrl.text.trim().replaceAll(',', '.'),
+        'factor_rts_iva_13': _factorIva13Ctrl.text.trim().isEmpty ? null : _factorIva13Ctrl.text.trim().replaceAll(',', '.'),
+        'factor_rts_iva_2': _factorIva2Ctrl.text.trim().isEmpty ? null : _factorIva2Ctrl.text.trim().replaceAll(',', '.'),
+        'factor_rts_iva_1': _factorIva1Ctrl.text.trim().isEmpty ? null : _factorIva1Ctrl.text.trim().replaceAll(',', '.'),
         'correo_hacienda': _correoController.text.trim(),
         'alanube_economic_activity': _alanubeActividadController.text.trim(),
       };
@@ -689,6 +709,62 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
                         ),
                         secondary: const Icon(Icons.notifications_active_outlined),
                       ),
+                      SwitchListTile(
+                        value: _aceptarComprasAutomatico,
+                        onChanged: (v) => setState(() => _aceptarComprasAutomatico = v),
+                        title: const Text("Aceptar compras automáticamente"),
+                        subtitle: const Text(
+                          "Las facturas que llegan al correo de compras se registran y se aceptan ante Hacienda solas, "
+                          "solo si son de un proveedor con el que ya compraste, a tu cédula, con todos los productos "
+                          "reconocidos y montos que cuadran. Si no, quedan por revisar como siempre.",
+                        ),
+                        secondary: const Icon(Icons.auto_mode_outlined),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _regimen,
+                          decoration: const InputDecoration(
+                            labelText: "Régimen tributario",
+                            prefixIcon: Icon(Icons.account_balance_outlined),
+                            border: OutlineInputBorder(),
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: 'tradicional', child: Text("Tradicional (D-104 IVA mensual, D-101 Renta)")),
+                            DropdownMenuItem(value: 'simplificado', child: Text("Simplificado / RTS (D-105 trimestral)")),
+                          ],
+                          onChanged: (v) => setState(() => _regimen = v ?? 'tradicional'),
+                        ),
+                      ),
+                      if (_regimen == 'simplificado')
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "Factores de TRIBU-CR (opcional): si los anotás, el Panel estima el impuesto de la D-105. "
+                                "Escribilos como aparecen en TRIBU-CR (ej. 0,0125).",
+                                style: TextStyle(fontSize: 12, color: Colors.grey),
+                              ),
+                              const SizedBox(height: 8),
+                              for (final (ctrl, etiqueta) in [
+                                (_factorRentaCtrl, "Factor Renta"),
+                                (_factorIva13Ctrl, "Factor IVA compras 13%"),
+                                (_factorIva2Ctrl, "Factor IVA compras 2%"),
+                                (_factorIva1Ctrl, "Factor IVA compras 1%"),
+                              ])
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: TextFormField(
+                                    controller: ctrl,
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    decoration: InputDecoration(labelText: etiqueta, border: const OutlineInputBorder(), isDense: true),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
                       const SizedBox(height: 12),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
