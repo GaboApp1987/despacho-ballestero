@@ -19,6 +19,7 @@ import 'gasto_operativo.dart';
 import 'ingreso_operativo.dart';
 import 'formato.dart';
 import 'negocio.dart';
+import 'cuenta_contable.dart';
 
 /// Montos de un documento (en colones) con la moneda y el tipo de cambio
 /// con que se emitió -- ver ExportService._celdasUsd.
@@ -4153,6 +4154,43 @@ class ExportService {
   /// Exporta el listado de compras a Excel -- mismo formato que el Reporte
   /// de Facturación: fila 1-2 el resumen de sumas, fila 4 el encabezado,
   /// desde la fila 5 el detalle, y el Detalle por Tarifa a la par (columna L).
+  /// Catálogo de cuentas de un cliente en Excel, con el MISMO formato que
+  /// lee la importación (catalogo_cuentas_util.leerCatalogoExcel): sirve de
+  /// respaldo y de plantilla para armar uno nuevo. Un catálogo vacío baja
+  /// solo los encabezados (el "formato de ejemplo").
+  static Future<void> exportCatalogoCuentasToExcel(List<CuentaContable> cuentas, String negocioNombre) async {
+    final excel = Excel.createExcel();
+    final sheet = excel['Catálogo'];
+    if (excel.sheets.containsKey('Sheet1')) excel.delete('Sheet1');
+    final porId = {for (final c in cuentas) if (c.id != null) c.id!: c};
+    sheet.appendRow([TextCellValue('Catálogo de cuentas -- $negocioNombre')]);
+    sheet.appendRow([]);
+    sheet.appendRow([
+      TextCellValue('Código'),
+      TextCellValue('Nombre'),
+      TextCellValue('Tipo'),
+      TextCellValue('Naturaleza'),
+      TextCellValue('Es detalle'),
+      TextCellValue('Código cuenta de mayor'),
+    ]);
+    _estilarUltimaFila(sheet, 6, _estiloEncabezadoTabla());
+    for (final c in cuentas) {
+      sheet.appendRow([
+        TextCellValue(c.codigo),
+        TextCellValue(c.nombre),
+        TextCellValue(c.tipo),
+        TextCellValue(c.naturaleza),
+        TextCellValue(c.esDetalle ? 'Sí' : 'No'),
+        TextCellValue(c.cuentaPadre != null ? (porId[c.cuentaPadre]?.codigo ?? '') : ''),
+      ]);
+    }
+    sheet.setColumnWidth(0, 14);
+    sheet.setColumnWidth(1, 42);
+    sheet.setColumnWidth(5, 22);
+    final nombreArchivo = 'Catalogo_cuentas_${negocioNombre.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_')}.xlsx';
+    await _guardarExcel(excel, dialogTitle: 'Guardar catálogo de cuentas', fileName: nombreArchivo);
+  }
+
   static Future<void> exportComprasToExcel(List<Compra> compras) async {
     var excel = Excel.createExcel();
     excel['Dashboard']; // primera pestaña (ver _escribirDashboard)

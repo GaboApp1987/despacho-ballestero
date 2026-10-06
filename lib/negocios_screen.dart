@@ -13,6 +13,7 @@ import 'plan.dart';
 import 'reportes_contador_screen.dart';
 import 'documentos_contador_screen.dart';
 import 'asientos_contables_screen.dart';
+import 'catalogo_cuentas_util.dart';
 import 'resumen_fiscal_screen.dart';
 import 'socio.dart';
 import 'login.dart';
@@ -193,6 +194,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
         await Navigator.push(this.context, MaterialPageRoute(builder: (context) => const ChatsContadorScreen()));
         _cargarNoLeidosChat();
       }, badge: _noLeidosChat),
+      entrada(Icons.account_tree_outlined, "Catálogo de cuentas", () => abrirCatalogoCuentas(this.context)),
       entrada(Icons.menu_book_outlined, "Asientos Contables",
           () => Navigator.push(this.context, MaterialPageRoute(builder: (context) => const AsientosContablesScreen()))),
       entrada(Icons.account_circle_rounded, "Mi Perfil", _abrirMiPerfil),
@@ -1193,6 +1195,12 @@ class _NegociosScreenState extends State<NegociosScreen> {
             ),
           if (esContador)
             _accionAppBarClara(
+              icono: Icons.account_tree_outlined,
+              tooltip: "Catálogo de cuentas",
+              onPressed: () => abrirCatalogoCuentas(context),
+            ),
+          if (esContador)
+            _accionAppBarClara(
               icono: Icons.menu_book_outlined,
               tooltip: "Asientos Contables",
               onPressed: () => Navigator.push(
@@ -1731,6 +1739,11 @@ class _NegociosScreenState extends State<NegociosScreen> {
                 await Navigator.push(context, MaterialPageRoute(builder: (context) => const ChatsContadorScreen()));
                 _cargarNoLeidosChat();
               },
+            ),
+            item(
+              icono: Icons.account_tree_outlined,
+              etiqueta: "Catálogo de cuentas",
+              onTap: () => abrirCatalogoCuentas(context),
             ),
             item(
               icono: Icons.menu_book_outlined,
