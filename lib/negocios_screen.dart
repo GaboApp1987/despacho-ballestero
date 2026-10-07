@@ -102,6 +102,9 @@ class _NegociosScreenState extends State<NegociosScreen> {
   // Sidebar fija del contador (pantallas anchas): colapsa a solo íconos en
   // vez de esconderse del todo, así la navegación siempre queda a mano.
   bool _sidebarColapsada = false;
+  // Pantallas angostas: la barra queda siempre visible como franja de
+  // íconos y al abrirla se superpone al contenido en vez de empujarlo.
+  bool _railAbierto = false;
   // Pestaña activa dentro de la sidebar (0 = Inicio/resumen, 1 = Clientes).
   // Solo aplica en pantallas anchas -- en móvil se sigue mostrando todo
   // junto en un solo scroll, como antes.
@@ -147,92 +150,19 @@ class _NegociosScreenState extends State<NegociosScreen> {
     }
   }
 
-  /// Menú lateral del contador en celular: lo mismo que la barra lateral de
-  /// escritorio (ver _barraLateralContador), arriba de las alertas.
-  List<Widget> _navegacionMenuContador(BuildContext context) {
-    Widget entrada(IconData icono, String texto, VoidCallback accion, {int? badge, bool destacada = false}) {
-      return ListTile(
-        leading: Icon(icono, color: destacada ? _PaletaContador.acento : _PaletaContador.textoTenue),
-        title: Text(texto, style: TextStyle(fontSize: 14.5, fontWeight: destacada ? FontWeight.w700 : FontWeight.w500)),
-        trailing: (badge ?? 0) > 0
-            ? Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(20)),
-                child: Text("$badge", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-              )
-            : null,
-        onTap: () {
-          Navigator.pop(context); // cierra el menú
-          accion();
-        },
-      );
-    }
-
-    void irA(double Function() destino) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+  /// Pantalla angosta: "Inicio" y "Clientes" de la barra lateral desplazan
+  /// el mismo scroll (en escritorio son pestañas).
+  void _desplazarEnPantallaAngosta(int pestana) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (pestana == 0) {
         if (_scrollContador.hasClients) {
-          _scrollContador.animateTo(destino(), duration: const Duration(milliseconds: 400), curve: Curves.easeOutCubic);
+          _scrollContador.animateTo(0, duration: const Duration(milliseconds: 400), curve: Curves.easeOutCubic);
         }
-      });
-    }
-
-    return [
-      entrada(Icons.auto_awesome, "Asistente Equilibra", _abrirAsistenteContador, destacada: true),
-      entrada(Icons.home_rounded, "Inicio", () => irA(() => 0)),
-      entrada(Icons.groups_outlined, "Clientes", () {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          final ctx = _claveClientes.currentContext;
-          if (ctx != null) Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 400), curve: Curves.easeOutCubic);
-        });
-      }),
-      entrada(Icons.insert_chart_outlined, "Reportes",
-          () => Navigator.push(this.context, MaterialPageRoute(builder: (context) => const ReportesContadorScreen(esContador: true)))),
-      entrada(Icons.badge_outlined, "Certificaciones", () async {
-        await Navigator.push(this.context, MaterialPageRoute(builder: (context) => const DocumentosContadorScreen()));
-        _cargarPendientesCertificaciones();
-      }, badge: _pendientesCertificaciones),
-      entrada(Icons.chat_bubble_outline, "Chats", () async {
-        await Navigator.push(this.context, MaterialPageRoute(builder: (context) => const ChatsContadorScreen()));
-        _cargarNoLeidosChat();
-      }, badge: _noLeidosChat),
-      entrada(Icons.account_tree_outlined, "Catálogo de cuentas", () => abrirCatalogoCuentas(this.context)),
-      entrada(Icons.account_balance_outlined, "Bancos", () => abrirBancos(this.context)),
-      entrada(Icons.menu_book_outlined, "Asientos Contables",
-          () => Navigator.push(this.context, MaterialPageRoute(builder: (context) => const AsientosContablesScreen()))),
-      entrada(Icons.account_circle_rounded, "Mi Perfil", _abrirMiPerfil),
-      entrada(Icons.support_agent, "Soporte", () => mostrarSoporteChat(this.context, contexto: 'usuario')),
-      entrada(Icons.logout, "Cerrar sesión", _cerrarSesion),
-    ];
-  }
-
-  Widget _encabezadoMenuContador() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 28, 20, 20),
-      color: _PaletaContador.sidebarFondo,
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 22,
-            backgroundColor: Colors.white.withOpacity(0.12),
-            child: Text(
-              (_miSocio?.nombre ?? 'C').trim().isEmpty ? 'C' : (_miSocio?.nombre ?? 'C').trim()[0].toUpperCase(),
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text("MODO CONTADOR", style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w800, fontSize: 10, letterSpacing: 1.2)),
-                Text(_miSocio?.nombre ?? 'Contador',
-                    maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+      } else {
+        final ctx = _claveClientes.currentContext;
+        if (ctx != null) Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 400), curve: Curves.easeOutCubic);
+      }
+    });
   }
   // Solicitudes de Certificación pendientes -- se muestra como badge sobre
   // el ícono de "Certificaciones" en la sidebar, igual que en el menú de
@@ -1113,16 +1043,6 @@ class _NegociosScreenState extends State<NegociosScreen> {
     return BloqueoSalidaRaiz(
       child: Scaffold(
       backgroundColor: esContador ? _PaletaContador.fondo : AppColors.background,
-      drawer: (!esAncho && widget.puedeCrear)
-          ? DashboardDrawer(
-              dashboardFuture: _dashboardFuture,
-              onAbrirNegocio: _abrirNegocioPorId,
-              mostrarContadores: false,
-              esContador: esContador,
-              encabezado: esContador ? _encabezadoMenuContador() : null,
-              navegacion: esContador ? _navegacionMenuContador(context) : const [],
-            )
-          : null,
       appBar: esAncho ? null : AppBar(
         leading: (ModalRoute.of(context)?.canPop ?? false)
             ? IconButton(
@@ -1272,7 +1192,24 @@ class _NegociosScreenState extends State<NegociosScreen> {
                 Expanded(child: _contenidoNegocios(context, esContador, esAncho)),
               ],
             )
-          : _contenidoNegocios(context, esContador, esAncho),
+          : esContador
+              ? Stack(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(left: _anchoRail),
+                      child: _contenidoNegocios(context, esContador, esAncho),
+                    ),
+                    if (_railAbierto)
+                      Positioned.fill(
+                        child: GestureDetector(
+                          onTap: () => setState(() => _railAbierto = false),
+                          child: const ColoredBox(color: Colors.black26),
+                        ),
+                      ),
+                    Positioned(top: 0, bottom: 0, left: 0, child: _sidebarContador(context, superpuesta: true)),
+                  ],
+                )
+              : _contenidoNegocios(context, esContador, esAncho),
       floatingActionButton: widget.puedeCrear
           ? FloatingActionButton.extended(
               onPressed: _mostrarFormularioCrear,
@@ -1614,10 +1551,31 @@ class _NegociosScreenState extends State<NegociosScreen> {
       );
   }
 
-  Widget _sidebarContador(BuildContext context) {
-    final ancho = _sidebarColapsada ? 72.0 : 240.0;
+  static const double _anchoRail = 72;
+
+  /// [superpuesta]: pantalla angosta -- la barra arranca como franja de
+  /// íconos y al expandirse se abre por encima del contenido.
+  Widget _sidebarContador(BuildContext context, {bool superpuesta = false}) {
+    final colapsada = superpuesta ? !_railAbierto : _sidebarColapsada;
+    final ancho = colapsada ? _anchoRail : 240.0;
+    void alternar() => setState(() {
+          if (superpuesta) {
+            _railAbierto = !_railAbierto;
+          } else {
+            _sidebarColapsada = !_sidebarColapsada;
+          }
+        });
+
+    void irAPestana(int pestana) {
+      if (superpuesta) {
+        _desplazarEnPantallaAngosta(pestana);
+      } else {
+        setState(() => _pestanaContador = pestana);
+      }
+    }
 
     Widget item({required IconData icono, required String etiqueta, required VoidCallback onTap, bool activo = false, int? badge}) {
+      if (superpuesta) activo = false; // en pantalla angosta no hay pestañas
       final iconoWidget = Icon(icono, size: 22, color: activo ? _PaletaContador.sidebarTextoActivo : _PaletaContador.sidebarTexto);
       final contenido = Row(
         mainAxisSize: MainAxisSize.min,
@@ -1630,7 +1588,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
                   offset: const Offset(4, -4),
                   child: iconoWidget,
                 ),
-          if (!_sidebarColapsada) ...[
+          if (!colapsada) ...[
             const SizedBox(width: 14),
             Expanded(
               child: Text(
@@ -1653,10 +1611,13 @@ class _NegociosScreenState extends State<NegociosScreen> {
           borderRadius: BorderRadius.circular(10),
           child: InkWell(
             borderRadius: BorderRadius.circular(10),
-            onTap: onTap,
+            onTap: () {
+              if (superpuesta && _railAbierto) setState(() => _railAbierto = false);
+              onTap();
+            },
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              child: _sidebarColapsada ? Center(child: contenido) : contenido,
+              child: colapsada ? Center(child: contenido) : contenido,
             ),
           ),
         ),
@@ -1674,7 +1635,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
               padding: const EdgeInsets.fromLTRB(16, 20, 12, 20),
               child: Row(
                 children: [
-                  if (!_sidebarColapsada) ...[
+                  if (!colapsada) ...[
                     avatarConLogo(
                       logoUrl: _miSocio?.logoUrl,
                       icono: Icons.badge_outlined,
@@ -1704,9 +1665,9 @@ class _NegociosScreenState extends State<NegociosScreen> {
                     ),
                   ],
                   IconButton(
-                    icon: Icon(_sidebarColapsada ? Icons.chevron_right : Icons.chevron_left, color: _PaletaContador.sidebarTexto),
-                    tooltip: _sidebarColapsada ? "Expandir menú" : "Colapsar menú",
-                    onPressed: () => setState(() => _sidebarColapsada = !_sidebarColapsada),
+                    icon: Icon(colapsada ? Icons.chevron_right : Icons.chevron_left, color: _PaletaContador.sidebarTexto),
+                    tooltip: colapsada ? "Expandir menú" : "Colapsar menú",
+                    onPressed: alternar,
                   ),
                 ],
               ),
@@ -1722,13 +1683,13 @@ class _NegociosScreenState extends State<NegociosScreen> {
               icono: Icons.home_rounded,
               etiqueta: "Inicio",
               activo: _pestanaContador == 0,
-              onTap: () => setState(() => _pestanaContador = 0),
+              onTap: () => irAPestana(0),
             ),
             item(
               icono: Icons.groups_outlined,
               etiqueta: "Clientes",
               activo: _pestanaContador == 1,
-              onTap: () => setState(() => _pestanaContador = 1),
+              onTap: () => irAPestana(1),
             ),
             item(
               icono: Icons.insert_chart_outlined,
@@ -1782,16 +1743,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
             item(
               icono: Icons.logout,
               etiqueta: "Cerrar sesión",
-              onTap: () async {
-                await ApiService.logout();
-                if (context.mounted) {
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(builder: (context) => const LoginScreen()),
-                    (route) => false,
-                  );
-                }
-              },
+              onTap: _cerrarSesion,
             ),
             const SizedBox(height: 12),
           ],
