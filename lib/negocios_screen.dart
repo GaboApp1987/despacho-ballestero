@@ -1712,7 +1712,12 @@ class _NegociosScreenState extends State<NegociosScreen> {
               ),
             ),
             const Divider(color: Colors.white12, height: 1),
-            const SizedBox(height: 12),
+            // Con scroll propio: con Catálogo y Bancos las entradas ya no
+            // caben en ventanas bajas y quedaban cortadas sin poder bajar.
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.only(top: 12, bottom: 8),
+                children: [
             item(
               icono: Icons.home_rounded,
               etiqueta: "Inicio",
@@ -1769,7 +1774,9 @@ class _NegociosScreenState extends State<NegociosScreen> {
               etiqueta: "Soporte",
               onTap: () => mostrarSoporteChat(context, contexto: 'usuario'),
             ),
-            const Spacer(),
+                ],
+              ),
+            ),
             const Divider(color: Colors.white12, height: 1),
             const SizedBox(height: 8),
             item(
