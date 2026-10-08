@@ -1721,7 +1721,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
       ),
     );
     final encabezado = colapsada
-        ? Column(children: [logo, const SizedBox(height: 12), botonAlternar])
+        ? Column(children: [logo, const SizedBox(height: 8), botonAlternar])
         : Padding(
             padding: const EdgeInsets.symmetric(horizontal: 18),
             child: Row(
@@ -1745,48 +1745,86 @@ class _NegociosScreenState extends State<NegociosScreen> {
             ),
           );
 
+    // Cuenta (abajo): una sola fila con el contador; Mi perfil, Soporte y
+    // Cerrar sesión van en su menú en vez de ocupar tres filas fijas.
     final avatar = avatarConLogo(
       logoUrl: _miSocio?.logoUrl,
       icono: Icons.badge_outlined,
-      radius: 19,
+      radius: 16,
       color: Colors.white,
       fondo: _PaletaContador.sidebarAvatar,
       nombre: _miSocio?.nombre ?? '',
     );
-    final tarjeta = colapsada
-        ? Tooltip(message: _miSocio?.nombre ?? 'Contador', child: avatar)
-        : Container(
-            margin: const EdgeInsets.symmetric(horizontal: 14),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: _PaletaContador.sidebarTarjeta, borderRadius: BorderRadius.circular(12)),
-            child: Row(
-              children: [
-                avatar,
-                const SizedBox(width: 11),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _miSocio?.nombre ?? 'Contador',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13.5),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        (_miSocio?.email ?? '').isNotEmpty ? _miSocio!.email : 'Contador',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: _PaletaContador.sidebarEtiqueta, fontSize: 11.5),
-                      ),
-                    ],
+    PopupMenuItem<String> opcionCuenta(String valor, IconData icono, String texto, {Color color = Colors.white}) => PopupMenuItem<String>(
+          value: valor,
+          height: 42,
+          child: Row(
+            children: [
+              Icon(icono, size: 18, color: color),
+              const SizedBox(width: 12),
+              Text(texto, style: TextStyle(color: color, fontSize: 13.5, fontWeight: FontWeight.w500)),
+            ],
+          ),
+        );
+    final cuenta = PopupMenuButton<String>(
+      tooltip: "Cuenta",
+      color: _PaletaContador.sidebarTarjeta,
+      elevation: 8,
+      position: PopupMenuPosition.over,
+      offset: const Offset(0, -8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.white.withOpacity(0.08)),
+      ),
+      onSelected: (opcion) => tocar(() {
+        switch (opcion) {
+          case 'perfil':
+            _abrirMiPerfil();
+          case 'soporte':
+            mostrarSoporteChat(context, contexto: 'usuario');
+          case 'salir':
+            _cerrarSesion();
+        }
+      }),
+      itemBuilder: (_) => [
+        opcionCuenta('perfil', Icons.account_circle_outlined, "Mi perfil"),
+        opcionCuenta('soporte', Icons.support_outlined, "Soporte"),
+        const PopupMenuDivider(height: 8),
+        opcionCuenta('salir', Icons.logout_rounded, "Cerrar sesión", color: _PaletaContador.sidebarSalir),
+      ],
+      child: colapsada
+          ? SizedBox(height: 52, child: Center(child: avatar))
+          : Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              child: Row(
+                children: [
+                  avatar,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _miSocio?.nombre ?? 'Contador',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                        ),
+                        Text(
+                          (_miSocio?.email ?? '').isNotEmpty ? _miSocio!.email : 'Contador',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: _PaletaContador.sidebarEtiqueta, fontSize: 11),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                  const Icon(Icons.unfold_more_rounded, size: 18, color: _PaletaContador.sidebarEtiqueta),
+                ],
+              ),
             ),
-          );
+    );
 
     // Buscar cliente: el mismo filtro que la lista de clientes, y lleva ahí.
     final buscador = colapsada
@@ -1832,10 +1870,8 @@ class _NegociosScreenState extends State<NegociosScreen> {
     final contenido = SafeArea(
       child: Column(
         children: [
-          const SizedBox(height: 20),
+          const SizedBox(height: 14),
           encabezado,
-          const SizedBox(height: 18),
-          tarjeta,
           const SizedBox(height: 14),
           buscador,
           // Con scroll propio: en ventanas bajas las entradas no caben.
@@ -1901,11 +1937,8 @@ class _NegociosScreenState extends State<NegociosScreen> {
             margin: EdgeInsets.symmetric(horizontal: colapsada ? 24 : 14),
             color: Colors.white.withOpacity(0.07),
           ),
-          const SizedBox(height: 8),
-          item(icono: Icons.account_circle_outlined, etiqueta: "Mi perfil", onTap: _abrirMiPerfil),
-          item(icono: Icons.support_outlined, etiqueta: "Soporte", onTap: () => mostrarSoporteChat(context, contexto: 'usuario')),
-          item(icono: Icons.logout_rounded, etiqueta: "Cerrar sesión", color: _PaletaContador.sidebarSalir, onTap: _cerrarSesion),
-          const SizedBox(height: 12),
+          cuenta,
+          const SizedBox(height: 4),
         ],
       ),
     );
