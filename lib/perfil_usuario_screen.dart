@@ -434,6 +434,41 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
     }
   }
 
+  /// Suelta el WhatsApp de ESTA cuenta (backend: whatsapp/desvincular/). Con
+  /// [cambiar] genera enseguida un código para vincular otro número.
+  Future<void> _desvincularWhatsApp({bool cambiar = false}) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(cambiar ? "¿Cambiar el número de WhatsApp?" : "¿Desvincular WhatsApp?"),
+        content: Text(cambiar
+            ? "Se desvincula ${_whatsappResultado?['telefono'] ?? 'el número actual'} de esta cuenta y te damos un código para vincular el nuevo."
+            : "El asistente ya no te va a responder por WhatsApp como esta cuenta. Lo podés volver a vincular cuando quieras."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: Text(cambiar ? "Cambiar número" : "Desvincular")),
+        ],
+      ),
+    );
+    if (confirmar != true) return;
+    setState(() => _whatsappCargando = true);
+    try {
+      final response = await ApiService.post('/whatsapp/desvincular/', {});
+      if (response.statusCode != 200) throw Exception(ApiService.mensajeError(response));
+      if (!mounted) return;
+      setState(() => _whatsappResultado = null);
+      if (cambiar) {
+        await _vincularWhatsApp();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("WhatsApp desvinculado de esta cuenta.")));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo desvincular: $e")));
+    } finally {
+      if (mounted) setState(() => _whatsappCargando = false);
+    }
+  }
+
   Future<void> _abrirCodigoEnWhatsApp() async {
     final uri = Uri.parse(_whatsappResultado!['wa_link']);
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication) && mounted) {
@@ -643,6 +678,24 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                             "Ya vinculado: ${_whatsappResultado!['telefono']}",
                             style: TextStyle(fontSize: 13, color: widget.esContador ? _colorFuerte : null),
                           ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: _whatsappCargando ? null : () => _desvincularWhatsApp(cambiar: true),
+                          icon: const Icon(Icons.swap_horiz, size: 18),
+                          label: const Text("Cambiar número"),
+                        ),
+                        TextButton.icon(
+                          onPressed: _whatsappCargando ? null : _desvincularWhatsApp,
+                          style: TextButton.styleFrom(foregroundColor: Colors.red.shade700),
+                          icon: const Icon(Icons.link_off, size: 18),
+                          label: const Text("Desvincular"),
                         ),
                       ],
                     ),
