@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_service.dart';
@@ -111,6 +114,8 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
   // Platos listos por orden en la consulta anterior: si sube, suena la
   // campana y se avisa qué mesa tiene platos para llevar.
   Map<int, int>? _listosAntes;
+  // Llamados y pedidos del menú QR ya vistos (para avisar solo lo nuevo).
+  Set<String>? _avisosQrAntes;
 
   @override
   bool get wantKeepAlive => true;
@@ -134,9 +139,41 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
       if (r.statusCode == 200 && mounted) {
         final datos = json.decode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
         _avisarListos(datos);
+        _avisarQr(datos);
         setState(() => _datos = datos);
       }
     } catch (_) {}
+  }
+
+  void _avisarQr(Map<String, dynamic> datos) {
+    final ahora = <String>{};
+    final textos = <String, String>{};
+    for (final m in (datos['mesas'] as List)) {
+      final llamado = m['llamado'];
+      if (llamado != null) {
+        final clave = "l${m['id']}-${llamado['en']}";
+        ahora.add(clave);
+        textos[clave] = "${m['nombre']}: ${llamado['motivo'] == 'cuenta' ? 'pide la cuenta' : 'llama al mesero'}";
+      }
+      final pedido = ((m['orden'] as Map?)?['pedido_qr'] ?? 0) as int;
+      if (pedido > 0) {
+        final clave = "p${m['id']}-$pedido";
+        ahora.add(clave);
+        textos[clave] = "${m['nombre']}: pidió desde el QR";
+      }
+    }
+    final antes = _avisosQrAntes;
+    _avisosQrAntes = ahora;
+    if (antes == null) return;
+    final nuevos = [for (final c in ahora.difference(antes)) textos[c]!];
+    if (nuevos.isEmpty) return;
+    Campana.sonar();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      behavior: SnackBarBehavior.floating,
+      width: MediaQuery.sizeOf(context).width >= 700 ? 420 : null,
+      backgroundColor: colorCuenta,
+      content: Text(nuevos.join(' · ')),
+    ));
   }
 
   void _avisarListos(Map<String, dynamic> datos) {
@@ -167,9 +204,12 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
     ));
   }
 
-  Future<void> _abrir({int? mesaId, int? ordenId, String nombre = ''}) async {
+  Future<void> _abrir({int? mesaId, int? ordenId, String nombre = '', bool atender = false}) async {
     if (_abriendo) return;
     setState(() => _abriendo = true);
+    if (atender && mesaId != null) {
+      ApiService.post('/restaurante/salon/atender/', {'negocio': widget.negocio.id, 'mesa': mesaId}).ignore();
+    }
     try {
       var id = ordenId;
       if (id == null) {
@@ -212,10 +252,19 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
     if (nombre != null) _abrir(nombre: nombre);
   }
 
-  Widget _tarjetaMesa({required String titulo, String subtitulo = '', Map<String, dynamic>? orden, required VoidCallback onTap}) {
+  Widget _tarjetaMesa({
+    required String titulo,
+    String subtitulo = '',
+    Map<String, dynamic>? orden,
+    Map<String, dynamic>? llamado,
+    required VoidCallback onTap,
+  }) {
     final listos = (orden?['listos'] ?? 0) as int;
     final cuenta = orden?['cuenta_pedida'] == true;
-    final color = orden == null ? colorLibre : (cuenta ? colorCuenta : (listos > 0 ? colorListo : colorOcupada));
+    final pedidoQr = (orden?['pedido_qr'] ?? 0) as int;
+    final color = llamado != null || pedidoQr > 0
+        ? colorCuenta
+        : (orden == null ? colorLibre : (cuenta ? colorCuenta : (listos > 0 ? colorListo : colorOcupada)));
     return Material(
       color: AppColors.surface,
       borderRadius: BorderRadius.circular(14),
@@ -225,7 +274,7 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: orden == null ? AppColors.border : color, width: orden == null ? 1 : 2),
+            border: Border.all(color: orden == null && llamado == null ? AppColors.border : color, width: orden == null && llamado == null ? 1 : 2),
           ),
           padding: const EdgeInsets.all(12),
           child: Column(
@@ -244,14 +293,20 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
                 style: TextStyle(color: AppColors.textMuted, fontSize: 12),
               ),
               const Spacer(),
+              if (llamado != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: _chip(llamado['motivo'] == 'cuenta' ? "🧾 Pide la cuenta" : "🙋 Llama al mesero", colorCuenta),
+                ),
               if (orden != null) ...[
                 Text(formatearColones(orden['total'] ?? 0, decimales: 0),
                     style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textStrong)),
                 const SizedBox(height: 4),
                 Wrap(spacing: 4, runSpacing: 4, children: [
-                  if (cuenta) _chip("Pidió la cuenta", colorCuenta),
+                  if (pedidoQr > 0) _chip("Pedido QR: $pedidoQr", colorCuenta),
+                  if (cuenta && llamado == null) _chip("Pidió la cuenta", colorCuenta),
                   if (listos > 0) _chip("$listos listo${listos == 1 ? '' : 's'}", colorListo),
-                  if ((orden['sin_enviar'] ?? 0) > 0) _chip("${orden['sin_enviar']} sin enviar", AppColors.textMuted),
+                  if ((orden['sin_enviar'] ?? 0) - pedidoQr > 0) _chip("${orden['sin_enviar'] - pedidoQr} sin enviar", AppColors.textMuted),
                 ]),
               ],
             ],
@@ -319,7 +374,8 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
                   titulo: m['nombre'],
                   subtitulo: "${m['capacidad']} personas",
                   orden: m['orden'],
-                  onTap: () => _abrir(mesaId: m['id'], ordenId: (m['orden'] as Map?)?['id'] as int?),
+                  llamado: m['llamado'],
+                  onTap: () => _abrir(mesaId: m['id'], ordenId: (m['orden'] as Map?)?['id'] as int?, atender: m['llamado'] != null),
                 ),
             ]),
           ],
@@ -652,6 +708,9 @@ class _ConfigMesas extends StatefulWidget {
 class _ConfigMesasState extends State<_ConfigMesas> {
   List<Map<String, dynamic>>? _mesas;
   bool? _cobrarServicio;
+  bool _menuQr = false;
+  bool _pedidosQr = false;
+  Set<int> _categoriasMenu = {};
   Map<String, dynamic>? _propinas;
   int _diasPropinas = 1;
   List<Map<String, dynamic>> _estaciones = [];
@@ -681,10 +740,112 @@ class _ConfigMesasState extends State<_ConfigMesas> {
           _mesas = lista(0);
           _estaciones = lista(1);
           _categorias = lista(2);
-          if (rs[3].statusCode == 200) _cobrarServicio = json.decode(utf8.decode(rs[3].bodyBytes))['cobrar_servicio'] == true;
+          if (rs[3].statusCode == 200) {
+            final config = json.decode(utf8.decode(rs[3].bodyBytes));
+            _cobrarServicio = config['cobrar_servicio'] == true;
+            _menuQr = config['menu_qr'] == true;
+            _pedidosQr = config['pedidos_qr'] == true;
+            _categoriasMenu = {...((config['categorias_menu'] as List?) ?? []).cast<int>()};
+          }
         });
       }
     } catch (_) {}
+  }
+
+  Future<void> _guardarConfig(Map<String, dynamic> datos) async {
+    final r = await ApiService.patch('/restaurante/config/?negocio=${widget.negocio.id}', datos);
+    if (r.statusCode != 200 && mounted) {
+      _aviso("No se pudo guardar: ${ApiService.mensajeError(r)}");
+      _cargar();
+    }
+  }
+
+  Future<void> _imprimirQrMesas() async {
+    final mesas = (_mesas ?? []).where((m) => m['url_menu'] != null).toList();
+    if (mesas.isEmpty) return;
+    final doc = pw.Document();
+    const porPagina = 6;
+    for (var i = 0; i < mesas.length; i += porPagina) {
+      final grupo = mesas.sublist(i, (i + porPagina).clamp(0, mesas.length));
+      doc.addPage(pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(24),
+        build: (_) => pw.GridView(
+          crossAxisCount: 2,
+          childAspectRatio: 1.25,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          children: [
+            for (final m in grupo)
+              pw.Container(
+                padding: const pw.EdgeInsets.all(12),
+                decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey400), borderRadius: pw.BorderRadius.circular(10)),
+                child: pw.Column(mainAxisAlignment: pw.MainAxisAlignment.center, children: [
+                  pw.Text(widget.negocio.nombreComercial, style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+                  pw.Text("${m['nombre']}", style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+                  pw.SizedBox(height: 8),
+                  pw.BarcodeWidget(barcode: pw.Barcode.qrCode(), data: m['url_menu'], width: 130, height: 130),
+                  pw.SizedBox(height: 8),
+                  pw.Text("Escaneá para ver el menú", style: const pw.TextStyle(fontSize: 11)),
+                ]),
+              ),
+          ],
+        ),
+      ));
+    }
+    await Printing.layoutPdf(onLayout: (_) async => doc.save(), name: 'QR_mesas_${widget.negocio.nombreComercial}.pdf');
+  }
+
+  Widget _seccionMenuQr() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text("Menú QR en las mesas", style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textStrong)),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        value: _menuQr,
+        onChanged: (v) {
+          setState(() => _menuQr = v);
+          _guardarConfig({'menu_qr': v});
+        },
+        title: Text("Activar el menú QR", style: TextStyle(color: AppColors.textStrong)),
+        subtitle: Text("Cada mesa tiene su QR: el cliente ve el menú, llama al mesero o pide la cuenta.",
+            style: TextStyle(color: AppColors.textMuted, fontSize: 12.5)),
+      ),
+      if (_menuQr) ...[
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: _pedidosQr,
+          onChanged: (v) {
+            setState(() => _pedidosQr = v);
+            _guardarConfig({'pedidos_qr': v});
+          },
+          title: Text("Dejar pedir desde el QR", style: TextStyle(color: AppColors.textStrong)),
+          subtitle: Text("Lo que pidan queda \"por enviar\" en su mesa y el mesero lo confirma antes de mandarlo a cocina.",
+              style: TextStyle(color: AppColors.textMuted, fontSize: 12.5)),
+        ),
+        if (_categorias.isNotEmpty) ...[
+          Text(_categoriasMenu.isEmpty ? "Categorías en el menú: todas" : "Categorías en el menú:",
+              style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+          const SizedBox(height: 6),
+          Wrap(spacing: 6, runSpacing: 6, children: [
+            for (final c in _categorias)
+              FilterChip(
+                label: Text(c['nombre']),
+                selected: _categoriasMenu.contains(c['id']),
+                onSelected: (v) {
+                  setState(() => v ? _categoriasMenu.add(c['id'] as int) : _categoriasMenu.remove(c['id']));
+                  _guardarConfig({'categorias_menu': _categoriasMenu.toList()});
+                },
+              ),
+          ]),
+          const SizedBox(height: 10),
+        ],
+        OutlinedButton.icon(
+          onPressed: (_mesas ?? []).isEmpty ? null : _imprimirQrMesas,
+          icon: const Icon(Icons.qr_code_2),
+          label: const Text("Imprimir los QR de las mesas"),
+        ),
+      ],
+    ]);
   }
 
   Future<void> _cargarPropinas() async {
@@ -951,6 +1112,8 @@ class _ConfigMesasState extends State<_ConfigMesas> {
                 style: TextStyle(color: AppColors.textMuted, fontSize: 12.5)),
           ),
         const SizedBox(height: 16),
+        _seccionMenuQr(),
+        const SizedBox(height: 22),
         _seccionPropinas(),
         const SizedBox(height: 22),
         _seccionEstaciones(),
