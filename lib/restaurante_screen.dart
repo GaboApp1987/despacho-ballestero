@@ -41,6 +41,21 @@ String minutosDesde(String? iso) {
   return '${m ~/ 60} h ${m % 60} min';
 }
 
+/// "08:42" (o "1:05:12" pasada la hora): cuánto lleva una comanda.
+String cronometro(Duration d) {
+  if (d.isNegative) d = Duration.zero;
+  final h = d.inHours, m = d.inMinutes % 60, s = d.inSeconds % 60;
+  String dos(int n) => n.toString().padLeft(2, '0');
+  return h > 0 ? "$h:${dos(m)}:${dos(s)}" : "${dos(m)}:${dos(s)}";
+}
+
+/// Amarillo a los 10 minutos, rojo a los 20.
+Color colorEspera(Duration d) {
+  if (d.inMinutes >= 20) return const Color(0xFFDC2626);
+  if (d.inMinutes >= 10) return colorCuenta;
+  return colorOcupada;
+}
+
 class _RestauranteScreenState extends State<RestauranteScreen> with SingleTickerProviderStateMixin {
   String _cocina = 'pantalla';
   bool _cargado = false;
@@ -417,6 +432,7 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
   bool _sonido = true;
   Set<String>? _vistas; // comandas ya vistas (para sonar solo con las nuevas)
   Timer? _timer;
+  Timer? _reloj; // cronómetros en vivo
 
   @override
   bool get wantKeepAlive => true;
@@ -437,6 +453,9 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
     } catch (_) {}
     await _cargar();
     _timer = Timer.periodic(const Duration(seconds: 5), (_) => _cargar());
+    _reloj = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && (_comandas?.isNotEmpty ?? false)) setState(() {});
+    });
   }
 
   Future<void> _guardarPrefs() async {
@@ -454,6 +473,7 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
   @override
   void dispose() {
     _timer?.cancel();
+    _reloj?.cancel();
     super.dispose();
   }
 
@@ -483,7 +503,10 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
     setState(() {
       for (final c in _comandas ?? []) {
         for (final i in (c['items'] as List)) {
-          if (ids.contains(i['id'])) i['estado'] = estado;
+          if (ids.contains(i['id'])) {
+            i['estado'] = estado;
+            i['listo_en'] = estado == 'listo' ? DateTime.now().toIso8601String() : null;
+          }
         }
       }
     });
@@ -493,13 +516,20 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
     _cargar();
   }
 
-  Color _colorTiempo(String? iso) {
-    final fecha = DateTime.tryParse(iso ?? '');
-    if (fecha == null) return colorOcupada;
-    final m = DateTime.now().difference(fecha.toLocal()).inMinutes;
-    if (m >= 20) return const Color(0xFFDC2626);
-    if (m >= 10) return colorCuenta;
-    return colorOcupada;
+  /// Desde que se envió hasta ahora; si ya está toda lista, hasta el último
+  /// plato que se marcó listo (el cronómetro se detiene).
+  Duration _espera(Map<String, dynamic> c, bool terminada) {
+    final desde = DateTime.tryParse(c['enviado_en'] ?? '')?.toLocal();
+    if (desde == null) return Duration.zero;
+    var hasta = DateTime.now();
+    if (terminada) {
+      final listos = (c['items'] as List)
+          .map((i) => DateTime.tryParse('${i['listo_en'] ?? ''}')?.toLocal())
+          .whereType<DateTime>()
+          .toList();
+      if (listos.isNotEmpty) hasta = listos.reduce((a, b) => a.isAfter(b) ? a : b);
+    }
+    return hasta.difference(desde);
   }
 
   Widget _comanda(Map<String, dynamic> c) {
@@ -507,7 +537,8 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
     final items = (c['items'] as List).cast<Map<String, dynamic>>();
     final pendientes = items.where((i) => i['estado'] == 'en_cocina').map((i) => i['id'] as int).toList();
     final terminada = pendientes.isEmpty;
-    final color = terminada ? colorListo : _colorTiempo(c['enviado_en']);
+    final espera = _espera(c, terminada);
+    final color = terminada ? colorListo : colorEspera(espera);
     final donde = (c['mesa'] ?? '').toString().isNotEmpty
         ? c['mesa']
         : ((c['nombre'] ?? '').toString().isNotEmpty ? "Llevar · ${c['nombre']}" : "Para llevar");
@@ -535,11 +566,23 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
               ]),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-              child: Text(
-                [minutosDesde(c['enviado_en']), if (estacion.isNotEmpty && _estacion == null) estacion].join(' · '),
-                style: TextStyle(color: AppColors.textMuted, fontSize: 12 * g),
-              ),
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 2),
+              child: Row(children: [
+                Icon(terminada ? Icons.check_circle_outline : Icons.timer_outlined, size: 20 * g, color: color),
+                const SizedBox(width: 6),
+                Text(
+                  terminada ? "Lista en ${cronometro(espera)}" : cronometro(espera),
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.w800,
+                    fontSize: (terminada ? 15 : 22) * g,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+                const Spacer(),
+                if (estacion.isNotEmpty && _estacion == null)
+                  Text(estacion, style: TextStyle(color: AppColors.textMuted, fontSize: 12 * g)),
+              ]),
             ),
             for (final i in items)
               InkWell(

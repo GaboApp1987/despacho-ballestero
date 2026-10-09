@@ -10,6 +10,7 @@ import 'formato.dart';
 import 'formulario_factura.dart';
 import 'negocio.dart';
 import 'producto.dart';
+import 'restaurante_screen.dart' show cronometro, colorEspera;
 import 'theme/app_theme.dart';
 
 /// Cuenta de una mesa (o pedido para llevar): menú a un lado y la orden al
@@ -49,18 +50,46 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
   int? _categoria;
   bool _enviando = false;
   Timer? _timer;
+  Timer? _reloj; // cronómetros de las rondas en vivo
 
   @override
   void initState() {
     super.initState();
     _cargarTodo();
     _timer = Timer.periodic(const Duration(seconds: 10), (_) => _cargarOrden());
+    _reloj = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && _items.any((i) => i['estado'] == 'en_cocina')) setState(() {});
+    });
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _reloj?.cancel();
     super.dispose();
+  }
+
+  /// Cuánto lleva una ronda desde que se envió (se detiene cuando ya no
+  /// queda nada en cocina: hasta el último plato listo).
+  Widget _cronometroRonda(List<Map<String, dynamic>> items) {
+    final enviados = items.map((i) => DateTime.tryParse('${i['enviado_en'] ?? ''}')?.toLocal()).whereType<DateTime>().toList();
+    if (enviados.isEmpty) return const SizedBox.shrink();
+    final desde = enviados.reduce((a, b) => a.isBefore(b) ? a : b);
+    final enCocina = items.any((i) => i['estado'] == 'en_cocina');
+    var hasta = DateTime.now();
+    if (!enCocina) {
+      final listos = items.map((i) => DateTime.tryParse('${i['listo_en'] ?? ''}')?.toLocal()).whereType<DateTime>().toList();
+      if (listos.isEmpty) return const SizedBox.shrink();
+      hasta = listos.reduce((a, b) => a.isAfter(b) ? a : b);
+    }
+    final espera = hasta.difference(desde);
+    final color = enCocina ? colorEspera(espera) : const Color(0xFF16A34A);
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(enCocina ? Icons.timer_outlined : Icons.check_circle_outline, size: 14, color: color),
+      const SizedBox(width: 3),
+      Text(enCocina ? cronometro(espera) : "lista en ${cronometro(espera)}",
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color, fontFeatures: const [FontFeature.tabularFigures()])),
+    ]);
   }
 
   void _aviso(String texto) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(texto)));
@@ -800,8 +829,12 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
               ),
             for (final r in rondas) ...[
               const SizedBox(height: 12),
-              Text(r == 0 ? "SIN ENVIAR" : "RONDA $r",
-                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: .6, color: AppColors.textMuted)),
+              Row(children: [
+                Text(r == 0 ? "SIN ENVIAR" : "RONDA $r",
+                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: .6, color: AppColors.textMuted)),
+                const Spacer(),
+                if (r > 0) _cronometroRonda(porRonda[r]!),
+              ]),
               const Divider(height: 10),
               for (final i in porRonda[r]!) _filaItem(i),
             ],
