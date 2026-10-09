@@ -124,6 +124,82 @@ class _CrmScreenState extends State<CrmScreen> {
     );
   }
 
+  /// Qué conexiones del CRM están activas (las que faltan se configuran con
+  /// variables en Railway, ver crm.py).
+  Widget _conexiones() {
+    Widget conexion(String nombre, bool activa, String comoActivar) => Tooltip(
+          message: activa ? "$nombre: activo" : "$nombre: apagado. $comoActivar",
+          child: Chip(
+            avatar: Icon(activa ? Icons.check_circle : Icons.radio_button_unchecked, size: 16, color: activa ? Colors.green : AppColors.textMuted),
+            label: Text(nombre, style: TextStyle(fontSize: 12, color: activa ? AppColors.textStrong : AppColors.textMuted)),
+            visualDensity: VisualDensity.compact,
+            side: BorderSide(color: AppColors.border),
+            backgroundColor: AppColors.surface,
+          ),
+        );
+    return Wrap(
+      spacing: 8,
+      runSpacing: 6,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text("Conexiones:", style: TextStyle(color: AppColors.textMuted, fontSize: 12.5, fontWeight: FontWeight.w600)),
+        conexion("Correos de Gabriel", true, ""),
+        conexion("WhatsApp", _resumen['whatsapp_activo'] == true, "Falta aprobar las plantillas en Meta (WHATSAPP_PLANTILLAS_CRM)."),
+        conexion("Formularios de anuncios", _resumen['entrada_anuncios_activa'] == true, "Falta CRM_TOKEN_ENTRADA y conectar Zapier o Make."),
+        conexion("Conversiones a Meta", _resumen['meta_activo'] == true, "Falta META_PIXEL_ID y META_CAPI_TOKEN."),
+      ],
+    );
+  }
+
+  Future<void> _agregarProspecto() async {
+    final campos = {for (final k in ['nombre', 'correo', 'telefono', 'canal', 'notas']) k: TextEditingController()};
+    final guardar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text("Agregar prospecto", style: TextStyle(color: AppColors.textStrong)),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final (clave, etiqueta, tipo) in [
+                ('nombre', "Nombre o negocio", TextInputType.name),
+                ('correo', "Correo", TextInputType.emailAddress),
+                ('telefono', "Teléfono / WhatsApp", TextInputType.phone),
+                ('canal', "¿De dónde salió? (feria, referido...)", TextInputType.text),
+                ('notas', "Notas", TextInputType.multiline),
+              ])
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: TextField(
+                    controller: campos[clave],
+                    keyboardType: tipo,
+                    maxLines: clave == 'notas' ? 3 : 1,
+                    decoration: InputDecoration(labelText: etiqueta, border: const OutlineInputBorder(), isDense: true),
+                  ),
+                ),
+              Text("No le salen correos automáticos: es para tu seguimiento a mano.",
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Agregar")),
+        ],
+      ),
+    );
+    if (guardar != true) return;
+    try {
+      final r = await ApiService.post('/crm/prospectos/', {for (final e in campos.entries) e.key: e.value.text.trim()});
+      if (r.statusCode != 201) throw Exception(ApiService.mensajeError(r));
+      _cargar();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo agregar: $e")));
+    }
+  }
+
   Widget _chip(String texto, {Color? color}) {
     final c = color ?? AppColors.textMuted;
     return Container(
@@ -251,7 +327,9 @@ class _CrmScreenState extends State<CrmScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _numeros(),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
+          _conexiones(),
+          const SizedBox(height: 12),
           SizedBox(
             width: 420,
             child: TextField(
@@ -313,6 +391,11 @@ class _CrmScreenState extends State<CrmScreen> {
         actions: [IconButton(tooltip: "Recargar", icon: const Icon(Icons.refresh), onPressed: _cargar)],
       ),
       body: cuerpo,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _agregarProspecto,
+        icon: const Icon(Icons.person_add_alt_1),
+        label: const Text("Agregar prospecto"),
+      ),
     );
   }
 }
@@ -386,7 +469,9 @@ class _FichaProspectoState extends State<_FichaProspecto> {
   @override
   Widget build(BuildContext context) {
     final telefono = (p['telefono'] ?? '').toString().replaceAll(RegExp(r'\D'), '');
-    final whatsapp = telefono.isEmpty ? null : (telefono.length == 8 ? '506$telefono' : telefono);
+    // Solo con código de país (el que sea): un número de 8 dígitos puede ser
+    // de Costa Rica, Panamá, Nicaragua... y no se adivina.
+    final whatsapp = telefono.length > 8 ? telefono : null;
     final correo = (p['correo'] ?? '').toString();
     final seguimientos = (p['seguimientos'] as List?)?.cast<Map>() ?? [];
     final conversacion = (p['conversacion'] ?? '').toString();
