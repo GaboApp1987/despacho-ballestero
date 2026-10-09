@@ -21,6 +21,7 @@ import 'login.dart';
 import 'widgets/bloqueo_salida_raiz.dart';
 import 'widgets/soporte_chat.dart';
 import 'widgets/asistente_ia_bar.dart';
+import 'widgets/menu_lateral.dart';
 import 'widgets/campo_cedula_hacienda.dart';
 import 'perfil_sesion.dart';
 import 'widgets/asistente_flotante.dart';
@@ -39,19 +40,7 @@ class _PaletaContador {
   static const Color textoFuerte = Color(0xFF0F172A);
   static const Color textoTenue = Color(0xFF64748B);
   static const Color borde = Color(0xFFE2E8F0);
-  // Barra lateral -- navy profundo, no negro puro (diseño "Menú lateral del
-  // contador", 2026-10-08).
-  static const Color sidebarFondo = Color(0xFF0E1726);
-  static const Color sidebarTarjeta = Color(0xFF16223A);
-  static const Color sidebarCampo = Color(0xFF121D31);
-  static const Color sidebarAvatar = Color(0xFF24324D);
-  static const Color sidebarTexto = Color(0xFFC3CBDA);
-  static const Color sidebarEtiqueta = Color(0xFF8A98B3);
-  static const Color sidebarTextoActivo = Colors.white;
-  // Más claro que `acento`: sobre el navy el azul de la app no contrasta.
-  static const Color sidebarAcento = Color(0xFF5B8CFF);
-  static const Color sidebarAviso = Color(0xFFE11D48);
-  static const Color sidebarSalir = Color(0xFFF4A3B4);
+  // La barra lateral usa MenuLateralColores (widgets/menu_lateral.dart).
 }
 
 /// Versión clara de accionAppBar (dashboard_despacho_widgets.dart) -- esa
@@ -1566,25 +1555,14 @@ class _NegociosScreenState extends State<NegociosScreen> {
       );
   }
 
-  static const double _anchoRail = 76;
-  static const double _anchoSidebar = 264;
+  static const double _anchoRail = MenuLateral.anchoColapsado;
 
-  /// Barra lateral del contador (diseño "Menú lateral del contador"):
-  /// secciones Principal / Contabilidad / Documentos / Comunicación, tarjeta
-  /// del contador y buscador de clientes. Colapsada queda en solo íconos.
-  /// [superpuesta]: pantalla angosta -- arranca como franja de íconos y al
-  /// expandirse se abre por encima del contenido.
+  /// Barra lateral del contador (widgets/menu_lateral.dart): secciones
+  /// Principal / Contabilidad / Documentos / Comunicación, buscador de
+  /// clientes y la fila de cuenta. [superpuesta]: pantalla angosta --
+  /// arranca como franja de íconos y al expandirse se abre por encima del
+  /// contenido.
   Widget _sidebarContador(BuildContext context, {bool superpuesta = false}) {
-    final colapsada = superpuesta ? !_railAbierto : _sidebarColapsada;
-    final ancho = colapsada ? _anchoRail : _anchoSidebar;
-    void alternar() => setState(() {
-          if (superpuesta) {
-            _railAbierto = !_railAbierto;
-          } else {
-            _sidebarColapsada = !_sidebarColapsada;
-          }
-        });
-
     void irAPestana(int pestana) {
       if (superpuesta) {
         _desplazarEnPantallaAngosta(pestana);
@@ -1593,371 +1571,90 @@ class _NegociosScreenState extends State<NegociosScreen> {
       }
     }
 
-    void tocar(VoidCallback accion) {
-      if (superpuesta && _railAbierto) setState(() => _railAbierto = false);
-      accion();
-    }
+    // En pantalla angosta no hay pestañas: nada se marca como activo.
+    bool activa(int pestana) => !superpuesta && _pestanaContador == pestana;
 
-    Widget globo(int cantidad, {bool chico = false}) => Container(
-          constraints: BoxConstraints(minWidth: chico ? 16 : 20),
-          height: chico ? 16 : 20,
-          padding: EdgeInsets.symmetric(horizontal: chico ? 4 : 6),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: _PaletaContador.sidebarAviso,
-            borderRadius: BorderRadius.circular(999),
-            border: chico ? Border.all(color: _PaletaContador.sidebarFondo, width: 2) : null,
-          ),
-          child: Text(
-            cantidad > 99 ? '99+' : '$cantidad',
-            style: TextStyle(color: Colors.white, fontSize: chico ? 9 : 11, fontWeight: FontWeight.w700, height: 1),
-          ),
-        );
-
-    Widget item({
-      required IconData icono,
-      required String etiqueta,
-      required VoidCallback onTap,
-      bool activo = false,
-      int? badge,
-      Widget? extra,
-      Color? color,
-      Color? colorIcono,
-    }) {
-      if (superpuesta) activo = false; // en pantalla angosta no hay pestañas
-      final hayBadge = badge != null && badge > 0;
-      final colorTexto = color ?? (activo ? _PaletaContador.sidebarTextoActivo : _PaletaContador.sidebarTexto);
-      final iconoW = Icon(icono, size: 19, color: colorIcono ?? (activo ? _PaletaContador.sidebarAcento : colorTexto));
-      final contenido = colapsada
-          ? Center(
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  iconoW,
-                  if (hayBadge) Positioned(top: -8, right: -11, child: globo(badge, chico: true)),
-                ],
-              ),
-            )
-          : Row(
-              children: [
-                iconoW,
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    etiqueta,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: colorTexto, fontSize: 13.5, fontWeight: activo ? FontWeight.w600 : FontWeight.w500),
-                  ),
-                ),
-                if (hayBadge) globo(badge),
-                if (extra != null) extra,
-              ],
-            );
-      final boton = Material(
-        color: activo ? _PaletaContador.sidebarAcento.withOpacity(0.16) : Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(10),
-          hoverColor: Colors.white.withOpacity(0.05),
-          onTap: () => tocar(onTap),
-          child: SizedBox(
-            height: colapsada ? 44 : 40,
-            child: Padding(padding: EdgeInsets.symmetric(horizontal: colapsada ? 0 : 10), child: contenido),
-          ),
-        ),
-      );
-      return Padding(
-        padding: EdgeInsets.symmetric(horizontal: colapsada ? 16 : 14, vertical: 1),
-        child: colapsada ? Tooltip(message: hayBadge ? '$etiqueta ($badge)' : etiqueta, child: boton) : boton,
-      );
-    }
-
-    Widget seccion(String titulo, {bool primera = false}) {
-      if (colapsada) {
-        return primera
-            ? const SizedBox(height: 8)
-            : Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                child: Center(child: Container(width: 28, height: 1, color: Colors.white.withOpacity(0.08))),
-              );
-      }
-      return Padding(
-        padding: EdgeInsets.fromLTRB(24, primera ? 10 : 18, 24, 6),
-        child: Text(
-          titulo,
-          style: const TextStyle(color: _PaletaContador.sidebarEtiqueta, fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 0.9),
-        ),
-      );
-    }
-
-    final logo = Container(
-      width: 34,
-      height: 34,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(color: _PaletaContador.sidebarAcento, borderRadius: BorderRadius.circular(9)),
-      child: const Text('e', style: TextStyle(color: _PaletaContador.sidebarFondo, fontWeight: FontWeight.w800, fontSize: 19, height: 1)),
-    );
-    final botonAlternar = Tooltip(
-      message: colapsada ? "Expandir menú" : "Colapsar menú",
-      child: Material(
-        color: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-          side: BorderSide(color: Colors.white.withOpacity(0.08)),
-        ),
-        child: InkWell(
-          customBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          onTap: alternar,
-          child: SizedBox(
-            width: 32,
-            height: 32,
-            child: Icon(
-              colapsada ? Icons.keyboard_double_arrow_right_rounded : Icons.keyboard_double_arrow_left_rounded,
-              size: 17,
-              color: _PaletaContador.sidebarEtiqueta,
-            ),
-          ),
-        ),
-      ),
-    );
-    final encabezado = colapsada
-        ? Column(children: [logo, const SizedBox(height: 8), botonAlternar])
-        : Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            child: Row(
-              children: [
-                logo,
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text("Equilibra", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16.5, letterSpacing: -0.2)),
-                      SizedBox(height: 1),
-                      Text("MODO CONTADOR",
-                          style: TextStyle(color: _PaletaContador.sidebarEtiqueta, fontWeight: FontWeight.w600, fontSize: 11, letterSpacing: 0.4)),
-                    ],
-                  ),
-                ),
-                botonAlternar,
-              ],
-            ),
-          );
-
-    // Cuenta (abajo): una sola fila con el contador; Mi perfil, Soporte y
-    // Cerrar sesión van en su menú en vez de ocupar tres filas fijas.
-    final avatar = avatarConLogo(
-      logoUrl: _miSocio?.logoUrl,
-      icono: Icons.badge_outlined,
-      radius: 16,
-      color: Colors.white,
-      fondo: _PaletaContador.sidebarAvatar,
-      nombre: _miSocio?.nombre ?? '',
-    );
-    PopupMenuItem<String> opcionCuenta(String valor, IconData icono, String texto, {Color color = Colors.white}) => PopupMenuItem<String>(
-          value: valor,
-          height: 42,
-          child: Row(
-            children: [
-              Icon(icono, size: 18, color: color),
-              const SizedBox(width: 12),
-              Text(texto, style: TextStyle(color: color, fontSize: 13.5, fontWeight: FontWeight.w500)),
-            ],
-          ),
-        );
-    final cuenta = PopupMenuButton<String>(
-      tooltip: "Cuenta",
-      color: _PaletaContador.sidebarTarjeta,
-      elevation: 8,
-      position: PopupMenuPosition.over,
-      offset: const Offset(0, -8),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.white.withOpacity(0.08)),
-      ),
-      onSelected: (opcion) => tocar(() {
-        switch (opcion) {
-          case 'perfil':
-            _abrirMiPerfil();
-          case 'soporte':
-            mostrarSoporteChat(context, contexto: 'usuario');
-          case 'salir':
-            _cerrarSesion();
+    return MenuLateral(
+      subtitulo: "MODO CONTADOR",
+      colapsada: superpuesta ? !_railAbierto : _sidebarColapsada,
+      onAlternar: () => setState(() {
+        if (superpuesta) {
+          _railAbierto = !_railAbierto;
+        } else {
+          _sidebarColapsada = !_sidebarColapsada;
         }
       }),
-      itemBuilder: (_) => [
-        opcionCuenta('perfil', Icons.account_circle_outlined, "Mi perfil"),
-        opcionCuenta('soporte', Icons.support_outlined, "Soporte"),
-        const PopupMenuDivider(height: 8),
-        opcionCuenta('salir', Icons.logout_rounded, "Cerrar sesión", color: _PaletaContador.sidebarSalir),
+      antesDeTocar: () {
+        if (superpuesta && _railAbierto) setState(() => _railAbierto = false);
+      },
+      // Buscar cliente: el mismo filtro que la lista de clientes, y lleva ahí.
+      pistaBuscador: "Buscar cliente…",
+      controladorBuscador: _busquedaSidebarCtrl,
+      onBuscar: (texto) {
+        _busquedaCtrl.text = texto;
+        if (texto.isNotEmpty && (superpuesta || _pestanaContador != 1)) irAPestana(1);
+      },
+      onBuscarEnviado: (_) {
+        if (superpuesta) setState(() => _railAbierto = false);
+      },
+      secciones: [
+        SeccionMenu("PRINCIPAL", [
+          EntradaMenu(icono: Icons.home_outlined, etiqueta: "Inicio", activo: activa(0), onTap: () => irAPestana(0)),
+          EntradaMenu(icono: Icons.groups_outlined, etiqueta: "Clientes", activo: activa(1), onTap: () => irAPestana(1)),
+          EntradaMenu(
+            icono: Icons.auto_awesome_outlined,
+            etiqueta: "Asistente Equilibra",
+            insignia: "IA",
+            destacada: true,
+            onTap: _abrirAsistenteContador,
+          ),
+        ]),
+        SeccionMenu("CONTABILIDAD", [
+          EntradaMenu(icono: Icons.account_tree_outlined, etiqueta: "Catálogo de cuentas", onTap: () => abrirCatalogoCuentas(context)),
+          EntradaMenu(
+            icono: Icons.menu_book_outlined,
+            etiqueta: "Asientos contables",
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AsientosContablesScreen())),
+          ),
+          EntradaMenu(icono: Icons.account_balance_outlined, etiqueta: "Bancos", onTap: () => abrirBancos(context)),
+        ]),
+        SeccionMenu("DOCUMENTOS", [
+          EntradaMenu(
+            icono: Icons.insert_chart_outlined,
+            etiqueta: "Reportes",
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ReportesContadorScreen(esContador: true))),
+          ),
+          EntradaMenu(
+            icono: Icons.verified_outlined,
+            etiqueta: "Certificaciones",
+            aviso: _pendientesCertificaciones,
+            onTap: () async {
+              await Navigator.push(context, MaterialPageRoute(builder: (context) => const DocumentosContadorScreen()));
+              _cargarPendientesCertificaciones();
+            },
+          ),
+        ]),
+        SeccionMenu("COMUNICACIÓN", [
+          EntradaMenu(
+            icono: Icons.chat_bubble_outline_rounded,
+            etiqueta: "Chats con clientes",
+            aviso: _noLeidosChat,
+            onTap: () async {
+              await Navigator.push(context, MaterialPageRoute(builder: (context) => const ChatsContadorScreen()));
+              _cargarNoLeidosChat();
+            },
+          ),
+        ]),
       ],
-      child: colapsada
-          ? SizedBox(height: 52, child: Center(child: avatar))
-          : Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              child: Row(
-                children: [
-                  avatar,
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _miSocio?.nombre ?? 'Contador',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
-                        ),
-                        Text(
-                          (_miSocio?.email ?? '').isNotEmpty ? _miSocio!.email : 'Contador',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: _PaletaContador.sidebarEtiqueta, fontSize: 11),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Icon(Icons.unfold_more_rounded, size: 18, color: _PaletaContador.sidebarEtiqueta),
-                ],
-              ),
-            ),
-    );
-
-    // Buscar cliente: el mismo filtro que la lista de clientes, y lleva ahí.
-    final buscador = colapsada
-        ? item(icono: Icons.search_rounded, etiqueta: "Buscar cliente", onTap: alternar)
-        : Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: SizedBox(
-              height: 38,
-              child: TextField(
-                controller: _busquedaSidebarCtrl,
-                onChanged: (texto) {
-                  _busquedaCtrl.text = texto;
-                  if (texto.isNotEmpty && (superpuesta || _pestanaContador != 1)) irAPestana(1);
-                },
-                onSubmitted: (_) {
-                  if (superpuesta) setState(() => _railAbierto = false);
-                },
-                textInputAction: TextInputAction.search,
-                style: const TextStyle(color: Colors.white, fontSize: 13),
-                cursorColor: _PaletaContador.sidebarAcento,
-                decoration: InputDecoration(
-                  isDense: true,
-                  filled: true,
-                  fillColor: _PaletaContador.sidebarCampo,
-                  hintText: "Buscar cliente…",
-                  hintStyle: const TextStyle(color: _PaletaContador.sidebarEtiqueta, fontSize: 13),
-                  prefixIcon: const Icon(Icons.search_rounded, size: 17, color: _PaletaContador.sidebarEtiqueta),
-                  prefixIconConstraints: const BoxConstraints(minWidth: 38, minHeight: 38),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.white.withOpacity(0.07)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: _PaletaContador.sidebarAcento),
-                  ),
-                ),
-              ),
-            ),
-          );
-
-    final contenido = SafeArea(
-      child: Column(
-        children: [
-          const SizedBox(height: 14),
-          encabezado,
-          const SizedBox(height: 14),
-          buscador,
-          // Con scroll propio: en ventanas bajas las entradas no caben.
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.only(top: 4, bottom: 8),
-              children: [
-                seccion("PRINCIPAL", primera: true),
-                item(icono: Icons.home_outlined, etiqueta: "Inicio", activo: _pestanaContador == 0, onTap: () => irAPestana(0)),
-                item(icono: Icons.groups_outlined, etiqueta: "Clientes", activo: _pestanaContador == 1, onTap: () => irAPestana(1)),
-                item(
-                  icono: Icons.auto_awesome_outlined,
-                  etiqueta: "Asistente Equilibra",
-                  colorIcono: colapsada ? _PaletaContador.sidebarAcento : null,
-                  onTap: _abrirAsistenteContador,
-                  extra: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: _PaletaContador.sidebarAcento),
-                    ),
-                    child: const Text("IA", style: TextStyle(color: _PaletaContador.sidebarAcento, fontSize: 10, fontWeight: FontWeight.w700)),
-                  ),
-                ),
-                seccion("CONTABILIDAD"),
-                item(icono: Icons.account_tree_outlined, etiqueta: "Catálogo de cuentas", onTap: () => abrirCatalogoCuentas(context)),
-                item(
-                  icono: Icons.menu_book_outlined,
-                  etiqueta: "Asientos contables",
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AsientosContablesScreen())),
-                ),
-                item(icono: Icons.account_balance_outlined, etiqueta: "Bancos", onTap: () => abrirBancos(context)),
-                seccion("DOCUMENTOS"),
-                item(
-                  icono: Icons.insert_chart_outlined,
-                  etiqueta: "Reportes",
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ReportesContadorScreen(esContador: true))),
-                ),
-                item(
-                  icono: Icons.verified_outlined,
-                  etiqueta: "Certificaciones",
-                  badge: _pendientesCertificaciones,
-                  onTap: () async {
-                    await Navigator.push(context, MaterialPageRoute(builder: (context) => const DocumentosContadorScreen()));
-                    _cargarPendientesCertificaciones();
-                  },
-                ),
-                seccion("COMUNICACIÓN"),
-                item(
-                  icono: Icons.chat_bubble_outline_rounded,
-                  etiqueta: "Chats con clientes",
-                  badge: _noLeidosChat,
-                  onTap: () async {
-                    await Navigator.push(context, MaterialPageRoute(builder: (context) => const ChatsContadorScreen()));
-                    _cargarNoLeidosChat();
-                  },
-                ),
-              ],
-            ),
-          ),
-          Container(
-            height: 1,
-            margin: EdgeInsets.symmetric(horizontal: colapsada ? 24 : 14),
-            color: Colors.white.withOpacity(0.07),
-          ),
-          cuenta,
-          const SizedBox(height: 4),
-        ],
-      ),
-    );
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOutCubic,
-      width: ancho,
-      color: _PaletaContador.sidebarFondo,
-      // El contenido se arma al ancho final y se recorta mientras la barra
-      // se abre o se cierra, en vez de apretarse (y desbordar) a medio camino.
-      child: ClipRect(
-        child: OverflowBox(
-          alignment: Alignment.topLeft,
-          minWidth: ancho,
-          maxWidth: ancho,
-          child: contenido,
-        ),
-      ),
+      // Cuenta (abajo): una sola fila; Mi perfil, Soporte y Cerrar sesión en su menú.
+      nombreCuenta: _miSocio?.nombre ?? 'Contador',
+      detalleCuenta: (_miSocio?.email ?? '').isNotEmpty ? _miSocio!.email : 'Contador',
+      logoCuenta: _miSocio?.logoUrl,
+      opcionesCuenta: [
+        OpcionCuenta(Icons.account_circle_outlined, "Mi perfil", _abrirMiPerfil),
+        OpcionCuenta(Icons.support_outlined, "Soporte", () => mostrarSoporteChat(context, contexto: 'usuario')),
+        OpcionCuenta(Icons.logout_rounded, "Cerrar sesión", _cerrarSesion, peligrosa: true),
+      ],
     );
   }
 }

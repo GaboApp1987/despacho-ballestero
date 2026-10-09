@@ -12,6 +12,7 @@ import 'login.dart';
 import 'widgets/bloqueo_salida_raiz.dart';
 import 'widgets/soporte_chat.dart';
 import 'widgets/asistente_ia_bar.dart';
+import 'widgets/menu_lateral.dart';
 import 'whatsapp_bandeja_screen.dart';
 import 'estadisticas_screen.dart';
 import 'crm_screen.dart';
@@ -432,179 +433,216 @@ class _DespachosScreenState extends State<DespachosScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return BloqueoSalidaRaiz(
-      child: Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ChipPerfil(color: AppColors.primary),
-            const SizedBox(height: 3),
-            const Text("Despachos"),
-          ],
-        ),
-        actions: [
-          IconButton(
-            tooltip: "Bandeja de WhatsApp",
-            icon: Badge(
-              isLabelVisible: _whatsappPendientes > 0,
-              label: Text('$_whatsappPendientes'),
-              child: const Icon(Icons.chat_outlined),
+  // Menú lateral (widgets/menu_lateral.dart): fijo en pantallas anchas
+  // (colapsable a íconos) y, en angostas, franja de íconos que se abre por
+  // encima del contenido. Las pantallas nuevas del panel se agregan acá.
+  bool _menuColapsado = false;
+  bool _menuAbierto = false;
+
+  Future<void> _cerrarSesion() async {
+    await ApiService.logout();
+    if (mounted) {
+      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const LoginScreen()), (route) => false);
+    }
+  }
+
+  Future<void> _abrirBandejaWhatsApp() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const WhatsAppBandejaScreen()));
+    _cargarPendientesWhatsApp();
+  }
+
+  void _abrirCrm() => Navigator.push(context, MaterialPageRoute(builder: (_) => const CrmScreen()));
+  void _abrirEstadisticas() => Navigator.push(context, MaterialPageRoute(builder: (_) => const EstadisticasScreen()));
+  void _abrirPlanes() => Navigator.push(context, MaterialPageRoute(builder: (_) => const PlanesScreen()));
+  void _abrirNegocios() => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const NegociosScreen(puedeCrear: false, puedeGestionarPlanes: true, esSuperusuario: true)),
+      );
+
+  Widget _menu({required bool superpuesto}) {
+    return MenuLateral(
+      subtitulo: "ADMINISTRADOR",
+      colapsada: superpuesto ? !_menuAbierto : _menuColapsado,
+      onAlternar: () => setState(() {
+        if (superpuesto) {
+          _menuAbierto = !_menuAbierto;
+        } else {
+          _menuColapsado = !_menuColapsado;
+        }
+      }),
+      antesDeTocar: () {
+        if (superpuesto && _menuAbierto) setState(() => _menuAbierto = false);
+      },
+      secciones: [
+        SeccionMenu("PLATAFORMA", [
+          EntradaMenu(icono: Icons.account_balance_outlined, etiqueta: "Despachos", activo: !superpuesto, onTap: _cargarDespachos),
+          EntradaMenu(icono: Icons.storefront_outlined, etiqueta: "Todos los negocios", onTap: _abrirNegocios),
+        ]),
+        SeccionMenu("CRECIMIENTO", [
+          EntradaMenu(icono: Icons.filter_alt_outlined, etiqueta: "Clientes potenciales", insignia: "CRM", onTap: _abrirCrm),
+          EntradaMenu(icono: Icons.chat_outlined, etiqueta: "Bandeja de WhatsApp", aviso: _whatsappPendientes, onTap: _abrirBandejaWhatsApp),
+          EntradaMenu(icono: Icons.insights_outlined, etiqueta: "Estadísticas del landing", onTap: _abrirEstadisticas),
+        ]),
+        SeccionMenu("CONFIGURACIÓN", [
+          EntradaMenu(icono: Icons.workspace_premium_outlined, etiqueta: "Planes de suscripción", onTap: _abrirPlanes),
+        ]),
+      ],
+      nombreCuenta: "Administrador",
+      detalleCuenta: "Dueño de la plataforma",
+      iconoCuenta: Icons.admin_panel_settings_outlined,
+      opcionesCuenta: [
+        OpcionCuenta(Icons.support_outlined, "Soporte", () => mostrarSoporteChat(context, contexto: 'usuario')),
+        OpcionCuenta(Icons.logout_rounded, "Cerrar sesión", _cerrarSesion, peligrosa: true),
+      ],
+    );
+  }
+
+  Widget _contenido({required bool conEncabezado}) {
+    return Column(
+      children: [
+        if (conEncabezado)
+          Container(
+            padding: const EdgeInsets.fromLTRB(24, 16, 16, 16),
+            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
+            child: Row(
+              children: [
+                Expanded(child: Text("Despachos", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textStrong))),
+                IconButton(tooltip: "Recargar", icon: const Icon(Icons.refresh), onPressed: _cargarDespachos),
+              ],
             ),
-            onPressed: () async {
-              await Navigator.push(context, MaterialPageRoute(builder: (_) => const WhatsAppBandejaScreen()));
-              _cargarPendientesWhatsApp();
+          ),
+        // Lo primero del panel: preguntarle a la IA qué hacer.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: AsistenteIABar(
+            saludo: "Panel de administrador",
+            secciones: const {
+              'whatsapp': 'Bandeja de WhatsApp: conversaciones de clientes nuevos y respuestas del equipo',
+              'crm': 'Clientes potenciales (CRM): embudo de prospectos por etapa y correos de seguimiento automáticos',
+              'estadisticas': 'Estadísticas del landing: visitas, registros y conversión',
+              'planes': 'Planes de suscripción: precios y límites',
+              'negocios': 'Negocios: todos los negocios de la plataforma',
             },
-          ),
-          IconButton(
-            icon: const Icon(Icons.filter_alt_outlined),
-            tooltip: "Clientes potenciales (CRM)",
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CrmScreen())),
-          ),
-          IconButton(
-            icon: const Icon(Icons.insights_outlined),
-            tooltip: "Estadísticas del landing",
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EstadisticasScreen())),
-          ),
-          IconButton(
-            icon: const Icon(Icons.workspace_premium_outlined),
-            tooltip: "Planes de suscripción",
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const PlanesScreen()),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.business_center_outlined),
-            tooltip: "Ver todos los negocios",
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const NegociosScreen(puedeCrear: false, puedeGestionarPlanes: true, esSuperusuario: true),
-              ),
-            ),
-          ),
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _cargarDespachos),
-          IconButton(
-            icon: const Icon(Icons.support_agent),
-            tooltip: "Soporte",
-            onPressed: () => mostrarSoporteChat(context, contexto: 'usuario'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: "Cerrar sesión",
-            onPressed: () async {
-              await ApiService.logout();
-              if (context.mounted) {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (context) => const LoginScreen()),
-                  (route) => false,
-                );
+            onNavegar: (clave) async {
+              switch (clave) {
+                case 'whatsapp':
+                  await _abrirBandejaWhatsApp();
+                case 'crm':
+                  _abrirCrm();
+                case 'estadisticas':
+                  _abrirEstadisticas();
+                case 'planes':
+                  _abrirPlanes();
+                case 'negocios':
+                  _abrirNegocios();
               }
             },
+            ejemplos: const [
+              "¿Cuántas personas se registraron esta semana?",
+              "Abrí el CRM",
+              "¿Cómo cambio el precio de un plan?",
+            ],
+            sugerencias: const [
+              (Icons.filter_alt_outlined, "Clientes potenciales"),
+              (Icons.chat_outlined, "Bandeja de WhatsApp"),
+              (Icons.insights_outlined, "Estadísticas"),
+            ],
           ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Lo primero del panel: preguntarle a la IA qué hacer.
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: AsistenteIABar(
-              saludo: "Panel de administrador",
-              secciones: const {
-                'whatsapp': 'Bandeja de WhatsApp: conversaciones de clientes nuevos y respuestas del equipo',
-                'crm': 'Clientes potenciales (CRM): embudo de prospectos por etapa y correos de seguimiento automáticos',
-                'estadisticas': 'Estadísticas del landing: visitas, registros y conversión',
-                'planes': 'Planes de suscripción: precios y límites',
-                'negocios': 'Negocios: todos los negocios de la plataforma',
-              },
-              onNavegar: (clave) async {
-                switch (clave) {
-                  case 'whatsapp':
-                    await Navigator.push(context, MaterialPageRoute(builder: (_) => const WhatsAppBandejaScreen()));
-                    _cargarPendientesWhatsApp();
-                  case 'crm':
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const CrmScreen()));
-                  case 'estadisticas':
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const EstadisticasScreen()));
-                  case 'planes':
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const PlanesScreen()));
-                  case 'negocios':
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const NegociosScreen(puedeCrear: false, puedeGestionarPlanes: true, esSuperusuario: true)));
-                }
-              },
-              ejemplos: const [
-                "¿Cuántas personas se registraron esta semana?",
-                "Abrí la bandeja de WhatsApp",
-                "¿Cómo cambio el precio de un plan?",
-              ],
-              sugerencias: const [
-                (Icons.chat_outlined, "Bandeja de WhatsApp"),
-                (Icons.insights_outlined, "Estadísticas"),
-                (Icons.workspace_premium_outlined, "Planes"),
-              ],
-            ),
-          ),
-          Expanded(
-            child: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _despachos.isEmpty
-              ? const Center(child: Text("Todavía no hay despachos registrados.", style: TextStyle(color: Colors.grey)))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _despachos.length,
-                  itemBuilder: (context, index) {
-                    final d = _despachos[index];
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      child: ListTile(
-                        leading: avatarConLogo(logoUrl: d.logoUrl, icono: Icons.account_balance, nombre: d.nombre),
-                        title: Text(d.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text(
-                          "${d.cedulaJuridica?.isNotEmpty == true ? 'Cédula: ${d.cedulaJuridica}' : 'Sin cédula registrada'}"
-                          "${d.emailActual?.isNotEmpty == true ? ' · ${d.emailActual}' : ''}",
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: Icon(Icons.payments_outlined, color: _colorEstadoSuscripcion(d.suscripcionEstado)),
-                              tooltip: "Cuota del despacho: ${_estadosSuscripcion[d.suscripcionEstado] ?? 'Sin registrar'}",
-                              onPressed: () => _gestionarSuscripcion(d),
+        ),
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _despachos.isEmpty
+                  ? const Center(child: Text("Todavía no hay despachos registrados.", style: TextStyle(color: Colors.grey)))
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _despachos.length,
+                      itemBuilder: (context, index) {
+                        final d = _despachos[index];
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          child: ListTile(
+                            leading: avatarConLogo(logoUrl: d.logoUrl, icono: Icons.account_balance, nombre: d.nombre),
+                            title: Text(d.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
+                            subtitle: Text(
+                              "${d.cedulaJuridica?.isNotEmpty == true ? 'Cédula: ${d.cedulaJuridica}' : 'Sin cédula registrada'}"
+                              "${d.emailActual?.isNotEmpty == true ? ' · ${d.emailActual}' : ''}",
                             ),
-                            PopupMenuButton<String>(
-                              tooltip: "Más opciones",
-                              onSelected: (accion) {
-                                if (accion == 'editar') _mostrarFormularioEditar(d);
-                                if (accion == 'eliminar') _confirmarEliminar(d);
-                              },
-                              itemBuilder: (context) => const [
-                                PopupMenuItem(value: 'editar', child: Text("Editar")),
-                                PopupMenuItem(value: 'eliminar', child: Text("Eliminar")),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: Icon(Icons.payments_outlined, color: _colorEstadoSuscripcion(d.suscripcionEstado)),
+                                  tooltip: "Cuota del despacho: ${_estadosSuscripcion[d.suscripcionEstado] ?? 'Sin registrar'}",
+                                  onPressed: () => _gestionarSuscripcion(d),
+                                ),
+                                PopupMenuButton<String>(
+                                  tooltip: "Más opciones",
+                                  onSelected: (accion) {
+                                    if (accion == 'editar') _mostrarFormularioEditar(d);
+                                    if (accion == 'eliminar') _confirmarEliminar(d);
+                                  },
+                                  itemBuilder: (context) => const [
+                                    PopupMenuItem(value: 'editar', child: Text("Editar")),
+                                    PopupMenuItem(value: 'eliminar', child: Text("Eliminar")),
+                                  ],
+                                ),
                               ],
                             ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
+                          ),
+                        );
+                      },
+                    ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final esAncho = MediaQuery.sizeOf(context).width >= 900;
+    return BloqueoSalidaRaiz(
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: esAncho
+            ? null
+            : AppBar(
+                title: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ChipPerfil(color: AppColors.primary),
+                    const SizedBox(height: 3),
+                    const Text("Despachos"),
+                  ],
                 ),
-          ),
-        ],
+                actions: [IconButton(tooltip: "Recargar", icon: const Icon(Icons.refresh), onPressed: _cargarDespachos)],
+              ),
+        body: esAncho
+            ? Row(children: [_menu(superpuesto: false), Expanded(child: _contenido(conEncabezado: true))])
+            : Stack(
+                children: [
+                  Padding(padding: const EdgeInsets.only(left: MenuLateral.anchoColapsado), child: _contenido(conEncabezado: false)),
+                  if (_menuAbierto)
+                    Positioned.fill(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _menuAbierto = false),
+                        child: const ColoredBox(color: Colors.black26),
+                      ),
+                    ),
+                  Positioned(top: 0, bottom: 0, left: 0, child: _menu(superpuesto: true)),
+                ],
+              ),
+        // Con el menú abierto encima del contenido, el botón tapaba la cuenta.
+        floatingActionButton: !esAncho && _menuAbierto
+            ? null
+            : FloatingActionButton.extended(
+                onPressed: _mostrarFormularioCrear,
+                icon: const Icon(Icons.add),
+                label: const Text("NUEVO DESPACHO"),
+              ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _mostrarFormularioCrear,
-        icon: const Icon(Icons.add),
-        label: const Text("NUEVO DESPACHO"),
-      ),
-    ),
     );
   }
 }
