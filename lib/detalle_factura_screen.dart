@@ -516,13 +516,21 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
                         const Divider(),
                         Text("RESUMEN DE CUENTA", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary)),
                         const SizedBox(height: 15),
-                        _filaFinanciera("Subtotal:", _fmt(factura.totalFactura - factura.totalIva), false),
+                        _filaFinanciera("Subtotal:", _fmt(factura.totalFactura - factura.totalIva - factura.montoServicio), false),
                         const SizedBox(height: 8),
                         _filaFinanciera("Impuesto (IVA):", _fmt(factura.totalIva), false),
+                        if (factura.montoServicio > 0) ...[
+                          const SizedBox(height: 8),
+                          _filaFinanciera("Servicio 10%:", _fmt(factura.montoServicio), false),
+                        ],
                         const SizedBox(height: 12),
                         const Divider(thickness: 1.5),
                         const SizedBox(height: 8),
                         _filaFinanciera(_notasCredito.isEmpty ? "TOTAL NETO:" : "Total Factura Original:", _fmt(factura.totalFactura), _notasCredito.isEmpty),
+                        if (factura.propina > 0) ...[
+                          const SizedBox(height: 6),
+                          _filaFinanciera("Propina (aparte):", _fmt(factura.propina), false),
+                        ],
                         if (_esUsd) ...[
                           const SizedBox(height: 4),
                           Align(

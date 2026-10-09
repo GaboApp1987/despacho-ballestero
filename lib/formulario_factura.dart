@@ -98,7 +98,21 @@ class FormularioFactura extends StatefulWidget {
   /// que el backend cierre la cuenta y libere la mesa.
   final List<({int productoId, int cantidad, double precio})>? lineasIniciales;
   final Map<String, dynamic>? camposExtra;
-  const FormularioFactura({super.key, required this.negocio, this.plantilla, this.lineasIniciales, this.camposExtra});
+  /// 10% de servicio de restaurante: se muestra como línea aparte (con un
+  /// interruptor por si el cliente no lo paga) y va como monto_servicio.
+  final double servicioPorcentaje;
+  /// Cobro de restaurante: campo de propina voluntaria. No suma en el total
+  /// ni va a Hacienda; solo se registra (propina) para repartirla.
+  final bool pedirPropina;
+  const FormularioFactura({
+    super.key,
+    required this.negocio,
+    this.plantilla,
+    this.lineasIniciales,
+    this.camposExtra,
+    this.servicioPorcentaje = 0,
+    this.pedirPropina = false,
+  });
 
   @override
   State<FormularioFactura> createState() => _FormularioFacturaState();
@@ -133,6 +147,8 @@ class _FormularioFacturaState extends State<FormularioFactura> {
   // Electrónico (venta a consumidor final, cliente opcional) -- ver
   // Factura.tipo_documento en el backend.
   String _tipoDocumento = '01';
+  late bool _cobrarServicio = widget.servicioPorcentaje > 0;
+  double _propina = 0;
   bool get _esTiquete => _tipoDocumento == '04';
 
   // Tiquete Interno (solo tiene sentido dentro de Tiquete): no es fiscal, no
@@ -364,7 +380,8 @@ class _FormularioFacturaState extends State<FormularioFactura> {
   // Un Tiquete Interno nunca lleva impuestos (ver Factura.es_interno en el
   // backend, que además rechaza cualquier IVA distinto de 0 en sus líneas).
   double get _totalIva => _esInterno ? 0 : _carrito.fold(0, (sum, item) => sum + item.montoIva);
-  double get _totalFactura => _totalSubtotal + _totalIva;
+  double get _montoServicio => _cobrarServicio ? redondear2(_totalSubtotal * widget.servicioPorcentaje / 100) : 0;
+  double get _totalFactura => _totalSubtotal + _totalIva + _montoServicio;
 
   Map<int, String> get _categoriasDisponibles {
     final mapa = <int, String>{};
@@ -902,6 +919,8 @@ class _FormularioFacturaState extends State<FormularioFactura> {
         'receptor_cedula': _clienteSeleccionado?.cedula,
         'total_iva': redondear2(_totalIva),
         'total_factura': redondear2(_totalFactura),
+        'monto_servicio': redondear2(_montoServicio),
+        if (widget.pedirPropina) 'propina': redondear2(_propina),
         'condicion_venta': _condicionVenta,
         'cobro_automatico': _condicionVenta == "02" ? _cobroAutomatico : true,
         'plazo_credito': plazoCredito,
@@ -978,6 +997,61 @@ class _FormularioFacturaState extends State<FormularioFactura> {
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  Widget _filaPropina() {
+    final base = _totalSubtotal;
+    Widget opcion(String texto, double monto) => Padding(
+          padding: const EdgeInsets.only(right: 6),
+          child: ChoiceChip(
+            label: Text(texto),
+            selected: (_propina - monto).abs() < 0.01,
+            onSelected: (_) => setState(() => _propina = monto),
+          ),
+        );
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Text("Propina", style: TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(width: 6),
+          Expanded(child: Text("(aparte, no va en el comprobante)", style: TextStyle(fontSize: 12, color: Colors.grey[600]))),
+          if (_propina > 0) Text(_fmt(_propina), style: const TextStyle(fontWeight: FontWeight.w600)),
+        ]),
+        const SizedBox(height: 6),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(children: [
+            opcion("Ninguna", 0),
+            opcion("5%", redondear2(base * 0.05)),
+            opcion("10%", redondear2(base * 0.10)),
+            ActionChip(
+              label: const Text("Otro monto"),
+              onPressed: () async {
+                final ctrl = TextEditingController(text: _propina > 0 ? _propina.toStringAsFixed(0) : '');
+                final monto = await showDialog<double>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text("Propina"),
+                    content: TextField(
+                      controller: ctrl,
+                      autofocus: true,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(prefixText: "₡ ", border: OutlineInputBorder()),
+                    ),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
+                      FilledButton(onPressed: () => Navigator.pop(ctx, double.tryParse(ctrl.text.replaceAll(',', '.')) ?? 0), child: const Text("Listo")),
+                    ],
+                  ),
+                );
+                if (monto != null) setState(() => _propina = monto < 0 ? 0 : monto);
+              },
+            ),
+          ]),
+        ),
+      ]),
+    );
   }
 
   @override
@@ -1455,6 +1529,16 @@ class _FormularioFacturaState extends State<FormularioFactura> {
               ),
               _filaResumen("Subtotal", _fmt(_totalSubtotal)),
               _filaResumen("IVA", _fmt(_totalIva)),
+              if (widget.servicioPorcentaje > 0)
+                Row(children: [
+                  SizedBox(
+                    height: 32,
+                    child: Switch(value: _cobrarServicio, onChanged: (v) => setState(() => _cobrarServicio = v)),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(child: Text("Servicio ${widget.servicioPorcentaje.toStringAsFixed(0)}%")),
+                  Text(_fmt(_montoServicio)),
+                ]),
               const Divider(),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1463,6 +1547,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                   Text(_fmt(_totalFactura), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: AppColors.primary)),
                 ],
               ),
+              if (widget.pedirPropina) _filaPropina(),
               if (_moneda == 'USD') ...[
                 const SizedBox(height: 4),
                 Align(

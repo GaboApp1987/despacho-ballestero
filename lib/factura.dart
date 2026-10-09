@@ -84,6 +84,10 @@ class Factura {
   final String? receptorCedula;
   final String? receptorCorreo;
   final double totalIva;
+  // 10% de servicio de restaurante (ya incluido en totalFactura).
+  final double montoServicio;
+  // Propina voluntaria: NO está en totalFactura (no es parte del comprobante).
+  final double propina;
   final double totalFactura;
   final bool pagada;
   final bool anulada;
@@ -135,6 +139,8 @@ class Factura {
     this.receptorCedula,
     this.receptorCorreo,
     required this.totalIva,
+    this.montoServicio = 0,
+    this.propina = 0,
     required this.totalFactura,
     required this.pagada,
     this.anulada = false,
@@ -171,6 +177,8 @@ class Factura {
       receptorCedula: json['receptor_cedula'],
       receptorCorreo: json['receptor_correo'],
       totalIva: double.tryParse(json['total_iva'].toString()) ?? 0.0,
+      montoServicio: double.tryParse('${json['monto_servicio'] ?? 0}') ?? 0.0,
+      propina: double.tryParse('${json['propina'] ?? 0}') ?? 0.0,
       totalFactura: double.tryParse(json['total_factura'].toString()) ?? 0.0,
       pagada: json['pagada'] ?? false,
       anulada: json['anulada'] ?? false,

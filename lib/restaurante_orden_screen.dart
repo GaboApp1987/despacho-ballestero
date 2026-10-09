@@ -271,53 +271,214 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
     }
   }
 
+  bool get _cobraServicio => _orden?['cobrar_servicio'] == true;
+
+  /// Lo que falta cobrar (sin anulados ni lo ya cobrado al dividir).
+  List<Map<String, dynamic>> get _porCobrar =>
+      _items.where((i) => i['estado'] != 'anulado' && i['factura'] == null && i['producto'] != null).toList();
+
+  double _precio(Map<String, dynamic> i) => double.tryParse('${i['precio_unitario']}') ?? 0;
+  double _ivaDe(Map<String, dynamic> i) => (i['producto_iva'] as num?)?.toDouble() ?? 0;
+
+  /// Total con IVA y servicio de una selección {item id: cantidad}.
+  double _totalDe(Map<int, int> seleccion) {
+    var subtotal = 0.0, iva = 0.0;
+    for (final i in _porCobrar) {
+      final cantidad = seleccion[i['id']] ?? 0;
+      subtotal += _precio(i) * cantidad;
+      iva += _precio(i) * cantidad * _ivaDe(i) / 100;
+    }
+    return subtotal + iva + (_cobraServicio ? subtotal * 0.10 : 0);
+  }
+
+  Map<int, int> get _todo => {for (final i in _porCobrar) i['id'] as int: i['cantidad'] as int};
+
+  /// Platos sin enviar: se agregan a la cuenta (o se descartan) antes de cobrar.
+  Future<bool> _resolverNuevos() async {
+    if (_nuevos.isEmpty) return true;
+    final agregar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Hay platos sin enviar"),
+        content: const Text("¿Los agrego a la cuenta antes de cobrar?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Descartarlos")),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Agregarlos")),
+        ],
+      ),
+    );
+    if (agregar == null) return false;
+    if (agregar) return _subirNuevos();
+    setState(_nuevos.clear);
+    return true;
+  }
+
   Future<void> _cobrar() async {
-    if (_nuevos.isNotEmpty) {
-      final agregar = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text("Hay platos sin enviar"),
-          content: const Text("¿Los agrego a la cuenta antes de cobrar?"),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Descartarlos")),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Agregarlos")),
-          ],
-        ),
-      );
-      if (agregar == null) return;
-      if (agregar) {
-        if (!await _subirNuevos()) return;
-      } else {
-        setState(_nuevos.clear);
-      }
-    }
-    // Mismo producto y precio = una sola línea en el tiquete.
-    final lineas = <String, ({int productoId, int cantidad, double precio})>{};
-    for (final i in _items) {
-      if (i['estado'] == 'anulado' || i['producto'] == null) continue;
-      final precio = double.tryParse('${i['precio_unitario']}') ?? 0;
-      final clave = "${i['producto']}|$precio";
-      final previa = lineas[clave];
-      lineas[clave] = (productoId: i['producto'] as int, cantidad: (previa?.cantidad ?? 0) + (i['cantidad'] as int), precio: precio);
-    }
-    if (lineas.isEmpty) {
-      _aviso("La cuenta no tiene platos.");
+    if (!await _resolverNuevos() || !mounted) return;
+    if (_porCobrar.isEmpty) {
+      _aviso("No hay nada pendiente de cobrar.");
       return;
     }
-    if (!mounted) return;
+    final opcion = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+            child: Row(children: [
+              Text("Cobrar", style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: AppColors.textStrong)),
+              const Spacer(),
+              Text(formatearColones(_totalDe(_todo), decimales: 0), style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.textStrong)),
+            ]),
+          ),
+          ListTile(
+            leading: const Icon(Icons.receipt_long_outlined),
+            title: Text("Cobrar todo", style: TextStyle(color: AppColors.textStrong)),
+            subtitle: const Text("Un solo tiquete"),
+            onTap: () => Navigator.pop(ctx, 'todo'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.call_split),
+            title: Text("Dividir por platos", style: TextStyle(color: AppColors.textStrong)),
+            subtitle: const Text("Cada quien paga lo suyo, con su propio tiquete"),
+            onTap: () => Navigator.pop(ctx, 'platos'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.groups_outlined),
+            title: Text("Partes iguales", style: TextStyle(color: AppColors.textStrong)),
+            subtitle: const Text("Calcula cuánto le toca a cada uno"),
+            onTap: () => Navigator.pop(ctx, 'iguales'),
+          ),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+    if (!mounted || opcion == null) return;
+    if (opcion == 'todo') return _emitir(_todo, parcial: false);
+    if (opcion == 'iguales') return _partesIguales();
+    final seleccion = await _elegirPlatos();
+    if (seleccion != null && seleccion.values.any((c) => c > 0)) {
+      final esTodo = _porCobrar.every((i) => (seleccion[i['id']] ?? 0) >= (i['cantidad'] as int));
+      await _emitir(seleccion, parcial: !esTodo);
+    }
+  }
+
+  Future<Map<int, int>?> _elegirPlatos() {
+    final seleccion = <int, int>{for (final i in _porCobrar) i['id'] as int: 0};
+    return showDialog<Map<int, int>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: const Text("¿Qué paga esta persona?"),
+          content: SizedBox(
+            width: 420,
+            child: ListView(shrinkWrap: true, children: [
+              for (final i in _porCobrar)
+                Row(children: [
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(i['nombre'], style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textStrong)),
+                      Text("${i['cantidad']} en la cuenta · ${formatearColones(_precio(i) * (1 + _ivaDe(i) / 100), decimales: 0)} c/u",
+                          style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                    ]),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.remove_circle_outline),
+                    onPressed: seleccion[i['id']]! > 0 ? () => setD(() => seleccion[i['id'] as int] = seleccion[i['id']]! - 1) : null,
+                  ),
+                  SizedBox(width: 22, child: Text("${seleccion[i['id']]}", textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w800))),
+                  IconButton(
+                    icon: const Icon(Icons.add_circle_outline),
+                    onPressed: seleccion[i['id']]! < (i['cantidad'] as int) ? () => setD(() => seleccion[i['id'] as int] = seleccion[i['id']]! + 1) : null,
+                  ),
+                ]),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
+            FilledButton(
+              onPressed: seleccion.values.any((c) => c > 0) ? () => Navigator.pop(ctx, seleccion) : null,
+              child: Text("Cobrar ${formatearColones(_totalDe(seleccion), decimales: 0)}"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _partesIguales() async {
+    var personas = (_orden?['personas'] as int? ?? 2).clamp(2, 30);
+    final total = _totalDe(_todo);
+    final cobrar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: const Text("Partes iguales"),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text("Total ${formatearColones(total, decimales: 0)}", style: TextStyle(color: AppColors.textMuted)),
+            const SizedBox(height: 12),
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              IconButton(icon: const Icon(Icons.remove_circle_outline), onPressed: personas > 2 ? () => setD(() => personas--) : null),
+              Text("$personas personas", style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              IconButton(icon: const Icon(Icons.add_circle_outline), onPressed: personas < 30 ? () => setD(() => personas++) : null),
+            ]),
+            const SizedBox(height: 8),
+            Text(formatearColones((total / personas).ceilToDouble(), decimales: 0),
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: AppColors.primary)),
+            Text("cada uno", style: TextStyle(color: AppColors.textMuted)),
+            const SizedBox(height: 10),
+            Text("Se emite un solo tiquete por el total; cada quien paga su parte como prefiera.",
+                textAlign: TextAlign.center, style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cerrar")),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Cobrar todo")),
+          ],
+        ),
+      ),
+    );
+    if (cobrar == true) await _emitir(_todo, parcial: false);
+  }
+
+  /// Abre el tiquete con los platos elegidos. `parcial`: al dividir, solo
+  /// esos platos se marcan cobrados y la cuenta sigue abierta.
+  Future<void> _emitir(Map<int, int> seleccion, {required bool parcial}) async {
+    // Mismo producto y precio = una sola línea en el tiquete.
+    final lineas = <String, ({int productoId, int cantidad, double precio})>{};
+    final itemsCobrados = <Map<String, dynamic>>[];
+    for (final i in _porCobrar) {
+      final cantidad = seleccion[i['id']] ?? 0;
+      if (cantidad <= 0) continue;
+      itemsCobrados.add({'id': i['id'], 'cantidad': cantidad});
+      final clave = "${i['producto']}|${_precio(i)}";
+      final previa = lineas[clave];
+      lineas[clave] = (productoId: i['producto'] as int, cantidad: (previa?.cantidad ?? 0) + cantidad, precio: _precio(i));
+    }
+    if (lineas.isEmpty) return;
     final cobrado = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (_) => FormularioFactura(
           negocio: widget.negocio,
           lineasIniciales: lineas.values.toList(),
-          camposExtra: {'orden_restaurante': widget.ordenId},
+          servicioPorcentaje: _cobraServicio ? 10 : 0,
+          pedirPropina: true,
+          camposExtra: {
+            'orden_restaurante': widget.ordenId,
+            if (parcial) 'orden_items': itemsCobrados,
+          },
         ),
       ),
     );
-    if (cobrado == true && mounted) {
+    if (cobrado != true || !mounted) return;
+    await _cargarOrden();
+    if (!mounted) return;
+    if (_orden?['estado'] != 'abierta') {
       _aviso("Cuenta cobrada. La mesa quedó libre.");
       Navigator.pop(context);
+    } else {
+      _aviso("Parte cobrada. Falta ${formatearColones(_totalDe(_todo), decimales: 0)}.");
     }
   }
 
@@ -522,7 +683,9 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
   }
 
   Widget _filaItem(Map<String, dynamic> i) {
-    final (texto, color) = _estados[i['estado']] ?? ('Sin enviar', AppColors.textMuted);
+    final (texto, color) = i['factura'] != null
+        ? ('Cobrado', const Color(0xFF16A34A))
+        : (_estados[i['estado']] ?? ('Sin enviar', AppColors.textMuted));
     final anulado = i['estado'] == 'anulado';
     final precio = double.tryParse('${i['precio_unitario']}') ?? 0;
     final iva = (i['producto_iva'] as num?)?.toDouble() ?? 0;
@@ -561,7 +724,7 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
         ),
         Text(formatearColones(anulado ? 0 : precio * (1 + iva / 100) * (i['cantidad'] as int), decimales: 0),
             style: TextStyle(color: AppColors.textStrong, fontWeight: FontWeight.w600)),
-        if (!anulado && i['estado'] != 'entregado')
+        if (!anulado && i['estado'] != 'entregado' && i['factura'] == null)
           SizedBox(
             width: 32,
             child: PopupMenuButton<String>(
@@ -587,7 +750,10 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
       porRonda.putIfAbsent(i['ronda'] as int? ?? 0, () => []).add(i);
     }
     final rondas = porRonda.keys.toList()..sort((a, b) => b.compareTo(a));
-    final total = ((o['total'] as num?)?.toDouble() ?? 0) + _totalNuevos;
+    final servicioNuevos = _cobraServicio ? _nuevos.fold(0.0, (s, b) => s + b.producto.precioUnitario * b.cantidad) * 0.10 : 0.0;
+    final servicio = (_cobraServicio ? _porCobrar.fold(0.0, (s, i) => s + _precio(i) * (i['cantidad'] as int)) * 0.10 : 0.0) + servicioNuevos;
+    final total = ((o['total'] as num?)?.toDouble() ?? 0) + _totalNuevos + servicio;
+    final pagado = (o['pagado'] as num?)?.toDouble() ?? 0;
     final porEnviar = _nuevos.fold(0, (s, b) => s + b.cantidad);
     return Column(children: [
       Expanded(
@@ -648,8 +814,16 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
         child: SafeArea(
           top: false,
           child: Column(mainAxisSize: MainAxisSize.min, children: [
+            if (servicio > 0 || pagado > 0)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Wrap(alignment: WrapAlignment.spaceBetween, spacing: 12, runSpacing: 2, children: [
+                  if (servicio > 0) Text("Incluye servicio 10%: ${formatearColones(servicio, decimales: 0)}", style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                  if (pagado > 0) Text("Ya cobrado: ${formatearColones(pagado, decimales: 0)}", style: const TextStyle(color: Color(0xFF16A34A), fontSize: 12, fontWeight: FontWeight.w600)),
+                ]),
+              ),
             Row(children: [
-              Text("Total", style: TextStyle(color: AppColors.textMuted)),
+              Text(pagado > 0 ? "Falta" : "Total", style: TextStyle(color: AppColors.textMuted)),
               const Spacer(),
               Text(formatearColones(total, decimales: 0), style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textStrong)),
             ]),

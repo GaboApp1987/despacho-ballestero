@@ -651,6 +651,9 @@ class _ConfigMesas extends StatefulWidget {
 
 class _ConfigMesasState extends State<_ConfigMesas> {
   List<Map<String, dynamic>>? _mesas;
+  bool? _cobrarServicio;
+  Map<String, dynamic>? _propinas;
+  int _diasPropinas = 1;
   List<Map<String, dynamic>> _estaciones = [];
   List<Map<String, dynamic>> _categorias = [];
 
@@ -658,6 +661,7 @@ class _ConfigMesasState extends State<_ConfigMesas> {
   void initState() {
     super.initState();
     _cargar();
+    _cargarPropinas();
   }
 
   void _aviso(String texto) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(texto)));
@@ -668,6 +672,7 @@ class _ConfigMesasState extends State<_ConfigMesas> {
         ApiService.get('/restaurante/mesas/?negocio=${widget.negocio.id}'),
         ApiService.get('/restaurante/estaciones/?negocio=${widget.negocio.id}'),
         ApiService.get('/categorias/?negocio=${widget.negocio.id}'),
+        ApiService.get('/restaurante/config/?negocio=${widget.negocio.id}'),
       ]);
       List<Map<String, dynamic>> lista(int i) =>
           rs[i].statusCode == 200 ? (json.decode(utf8.decode(rs[i].bodyBytes)) as List).cast<Map<String, dynamic>>() : [];
@@ -676,9 +681,69 @@ class _ConfigMesasState extends State<_ConfigMesas> {
           _mesas = lista(0);
           _estaciones = lista(1);
           _categorias = lista(2);
+          if (rs[3].statusCode == 200) _cobrarServicio = json.decode(utf8.decode(rs[3].bodyBytes))['cobrar_servicio'] == true;
         });
       }
     } catch (_) {}
+  }
+
+  Future<void> _cargarPropinas() async {
+    try {
+      final r = await ApiService.get('/restaurante/propinas/?negocio=${widget.negocio.id}&dias=$_diasPropinas');
+      if (r.statusCode == 200 && mounted) setState(() => _propinas = json.decode(utf8.decode(r.bodyBytes)));
+    } catch (_) {}
+  }
+
+  Widget _seccionPropinas() {
+    final p = _propinas;
+    final filas = ((p?['por_mesero'] as List?) ?? []).cast<Map<String, dynamic>>();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, spacing: 12, runSpacing: 8, children: [
+        Text("Propinas", style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textStrong)),
+        SegmentedButton<int>(
+          showSelectedIcon: false,
+          segments: const [
+            ButtonSegment(value: 1, label: Text("Hoy")),
+            ButtonSegment(value: 7, label: Text("7 días")),
+            ButtonSegment(value: 30, label: Text("30 días")),
+          ],
+          selected: {_diasPropinas},
+          onSelectionChanged: (s) {
+            setState(() => _diasPropinas = s.first);
+            _cargarPropinas();
+          },
+        ),
+      ]),
+      const SizedBox(height: 4),
+      Text("Lo que dejaron de propina voluntaria al cobrar, por mesero. No forma parte de las ventas ante Hacienda.",
+          style: TextStyle(color: AppColors.textMuted, fontSize: 12.5)),
+      const SizedBox(height: 8),
+      if (p == null)
+        const SizedBox.shrink()
+      else if (filas.isEmpty)
+        Text("Sin propinas en este periodo.", style: TextStyle(color: AppColors.textMuted))
+      else
+        Card(
+          color: AppColors.surface,
+          margin: EdgeInsets.zero,
+          child: Column(children: [
+            for (final f in filas)
+              ListTile(
+                dense: true,
+                leading: const Icon(Icons.person_outline),
+                title: Text(f['mesero'], style: TextStyle(color: AppColors.textStrong)),
+                subtitle: Text("${f['cobros']} ${f['cobros'] == 1 ? 'cobro' : 'cobros'}", style: TextStyle(color: AppColors.textMuted)),
+                trailing: Text(formatearColones(f['total'] ?? 0, decimales: 0), style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textStrong)),
+              ),
+            const Divider(height: 1),
+            ListTile(
+              dense: true,
+              title: Text("Total", style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textStrong)),
+              trailing: Text(formatearColones(p['total'] ?? 0, decimales: 0), style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.textStrong)),
+            ),
+          ]),
+        ),
+    ]);
   }
 
   Future<void> _editarEstacion([Map<String, dynamic>? estacion]) async {
@@ -868,6 +933,25 @@ class _ConfigMesasState extends State<_ConfigMesas> {
                   : "Abrí la pestaña Cocina en una tablet o compu de la cocina: los pedidos aparecen solos.",
           style: TextStyle(color: AppColors.textMuted, fontSize: 12.5),
         ),
+        const SizedBox(height: 14),
+        if (_cobrarServicio != null)
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _cobrarServicio!,
+            onChanged: (v) async {
+              setState(() => _cobrarServicio = v);
+              final r = await ApiService.patch('/restaurante/config/?negocio=${widget.negocio.id}', {'cobrar_servicio': v});
+              if (r.statusCode != 200 && mounted) {
+                setState(() => _cobrarServicio = !v);
+                _aviso("No se pudo guardar: ${ApiService.mensajeError(r)}");
+              }
+            },
+            title: Text("Cobrar 10% de servicio en las mesas", style: TextStyle(color: AppColors.textStrong)),
+            subtitle: Text("Va aparte en el tiquete (Otros cargos ante Hacienda). Nunca en pedidos para llevar.",
+                style: TextStyle(color: AppColors.textMuted, fontSize: 12.5)),
+          ),
+        const SizedBox(height: 16),
+        _seccionPropinas(),
         const SizedBox(height: 22),
         _seccionEstaciones(),
         const SizedBox(height: 22),
