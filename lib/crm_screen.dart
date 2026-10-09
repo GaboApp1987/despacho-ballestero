@@ -20,6 +20,7 @@ class CrmScreen extends StatefulWidget {
 
 const _etapas = [
   ('conversando', 'Conversó', Icons.forum_outlined),
+  ('seguimiento', 'En seguimiento', Icons.support_agent_outlined),
   ('registrado', 'Registrado', Icons.person_add_alt_outlined),
   ('en_prueba', 'En prueba', Icons.hourglass_top_rounded),
   ('pagando', 'Pagando', Icons.verified_outlined),
@@ -31,13 +32,14 @@ const _etapas = [
 /// en detalles -- franja de la columna, ícono, contador, punto de la
 /// tarjeta -- nunca como fondo grande.
 const _colorEtapa = {
-  'conversando': Color(0xFF8FA3BF), // gris azulado
+  'conversando': Color(0xFF9CA3AF), // gris neutro
+  'seguimiento': Color(0xFF38BDF8), // celeste
   'registrado': Color(0xFFA78BFA), // violeta
   'en_prueba': Color(0xFFF2B33D), // ámbar
   'pagando': Color(0xFF34C38F), // verde
   'perdido': Color(0xFFE5737A), // rojo suave
 };
-Color _colorDe(String? etapa) => _colorEtapa[etapa] ?? const Color(0xFF8FA3BF);
+Color _colorDe(String? etapa) => _colorEtapa[etapa] ?? const Color(0xFF9CA3AF);
 
 class _CrmScreenState extends State<CrmScreen> {
   List<Map<String, dynamic>> _prospectos = [];
@@ -277,6 +279,12 @@ class _CrmScreenState extends State<CrmScreen> {
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
+          // Con acción, Flutter lo deja fijo hasta cerrarlo: aquí se va solo.
+          persist: false,
+          duration: const Duration(seconds: 4),
+          behavior: SnackBarBehavior.floating,
+          width: MediaQuery.sizeOf(context).width >= 700 ? 420 : null,
+          showCloseIcon: true,
           content: Text("${nombre.isNotEmpty ? nombre : 'Prospecto'} → ${_tituloEtapa(etapa)}"),
           action: SnackBarAction(
             label: "Deshacer",
@@ -556,7 +564,7 @@ class _CrmScreenState extends State<CrmScreen> {
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.fromLTRB(16, 0, 4, 16),
-              children: [for (final (clave, titulo, icono) in _etapas) _columna(clave, titulo, icono, ancho: 280)],
+              children: [for (final (clave, titulo, icono) in _etapas) _columna(clave, titulo, icono, ancho: 260)],
             ),
           ),
         ],
