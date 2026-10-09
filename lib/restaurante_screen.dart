@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
 import 'formato.dart';
 import 'negocio.dart';
+import 'restaurante_insumos.dart';
 import 'restaurante_orden_screen.dart';
 import 'theme/app_theme.dart';
 import 'widgets/campana.dart';
@@ -67,6 +68,7 @@ class _RestauranteScreenState extends State<RestauranteScreen> with SingleTicker
     final pestanas = [
       (const Tab(icon: Icon(Icons.table_restaurant_outlined, size: 20), text: "Salón"), _Salon(negocio: widget.negocio)),
       if (_conPantallaCocina) (const Tab(icon: Icon(Icons.soup_kitchen_outlined, size: 20), text: "Cocina"), _Cocina(negocio: widget.negocio)),
+      if (!_esCajero) (const Tab(icon: Icon(Icons.kitchen_outlined, size: 20), text: "Insumos"), InsumosRecetas(negocio: widget.negocio)),
       if (!_esCajero)
         (
           const Tab(icon: Icon(Icons.tune, size: 20), text: "Mesas"),
