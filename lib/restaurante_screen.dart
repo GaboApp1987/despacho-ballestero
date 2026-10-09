@@ -427,6 +427,10 @@ class _Cocina extends StatefulWidget {
 
 class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
   List<Map<String, dynamic>>? _comandas;
+  // Las que ya salieron completas (últimos 15 min): ocultas tras un botón,
+  // por si hay que devolver algo a la cocina.
+  List<Map<String, dynamic>> _recientes = [];
+  bool _verRecientes = false;
   List<Map<String, dynamic>> _estaciones = [];
   int? _estacion; // null = todas
   bool _sonido = true;
@@ -490,6 +494,7 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
         _vistas = {...?_vistas, ...claves};
         setState(() {
           _comandas = comandas;
+          _recientes = ((datos['recientes'] as List?) ?? []).cast<Map<String, dynamic>>();
           _estaciones = estaciones;
           if (_estacion != null && !estaciones.any((e) => e['id'] == _estacion)) _estacion = null;
         });
@@ -501,7 +506,7 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
     if (ids.isEmpty) return;
     // Al instante en pantalla; el servidor confirma en la próxima consulta.
     setState(() {
-      for (final c in _comandas ?? []) {
+      for (final c in [...?_comandas, ..._recientes]) {
         for (final i in (c['items'] as List)) {
           if (ids.contains(i['id'])) {
             i['estado'] = estado;
@@ -585,50 +590,69 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
               ]),
             ),
             for (final i in items)
-              InkWell(
-                onTap: i['estado'] == 'anulado' ? null : () => _marcar([i['id'] as int], i['estado'] == 'listo' ? 'en_cocina' : 'listo'),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        i['estado'] == 'listo' ? Icons.check_circle : (i['estado'] == 'anulado' ? Icons.cancel_outlined : Icons.radio_button_unchecked),
-                        size: 22 * g,
-                        color: i['estado'] == 'listo' ? colorListo : (i['estado'] == 'anulado' ? const Color(0xFFDC2626) : AppColors.textMuted),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "${i['cantidad']} × ${i['nombre']}${i['estado'] == 'anulado' ? '  (ANULADO)' : ''}",
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15 * g,
-                                color: i['estado'] == 'anulado' ? const Color(0xFFDC2626) : AppColors.textStrong,
-                                decoration: i['estado'] == 'anulado' ? TextDecoration.lineThrough : null,
-                              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 5, 8, 5),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "${i['cantidad']} × ${i['nombre']}",
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15 * g,
+                              color: i['estado'] == 'anulado'
+                                  ? const Color(0xFFDC2626)
+                                  : (i['estado'] == 'listo' ? colorListo : AppColors.textStrong),
+                              decoration: i['estado'] == 'en_cocina' ? null : TextDecoration.lineThrough,
                             ),
-                            if ((i['nota'] ?? '').toString().isNotEmpty)
-                              Text("→ ${i['nota']}", style: TextStyle(color: const Color(0xFFB45309), fontWeight: FontWeight.w600, fontSize: 14 * g)),
-                          ],
-                        ),
+                          ),
+                          if ((i['nota'] ?? '').toString().isNotEmpty)
+                            Text("→ ${i['nota']}", style: TextStyle(color: const Color(0xFFB45309), fontWeight: FontWeight.w600, fontSize: 14 * g)),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 6),
+                    if (i['estado'] == 'anulado')
+                      Text("ANULADO", style: TextStyle(color: const Color(0xFFDC2626), fontWeight: FontWeight.w800, fontSize: 12 * g))
+                    else if (i['estado'] == 'listo')
+                      TextButton.icon(
+                        style: TextButton.styleFrom(foregroundColor: colorListo, visualDensity: VisualDensity.compact),
+                        onPressed: () => _marcar([i['id'] as int], 'en_cocina'),
+                        icon: Icon(Icons.check_circle, size: 18 * g),
+                        label: Text("Listo", style: TextStyle(fontSize: 13 * g, fontWeight: FontWeight.w700)),
+                      )
+                    else
+                      OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: colorListo,
+                          side: const BorderSide(color: colorListo),
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.symmetric(horizontal: 12 * g),
+                        ),
+                        onPressed: () => _marcar([i['id'] as int], 'listo'),
+                        child: Text("Listo", style: TextStyle(fontSize: 13 * g, fontWeight: FontWeight.w700)),
+                      ),
+                  ],
                 ),
               ),
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
               child: terminada
-                  ? const Text("Lista", textAlign: TextAlign.center, style: TextStyle(color: colorListo, fontWeight: FontWeight.w700))
+                  ? Text(
+                      items.any((i) => i['estado'] == 'listo') ? "Tocá \"Listo\" en un plato para devolverlo a la cocina" : "",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AppColors.textMuted, fontSize: 11.5 * g),
+                    )
                   : FilledButton.icon(
                       style: FilledButton.styleFrom(backgroundColor: colorListo, padding: EdgeInsets.symmetric(vertical: 12 * g)),
                       onPressed: () => _marcar(pendientes, 'listo'),
                       icon: const Icon(Icons.done_all, size: 18),
-                      label: Text("Todo listo", style: TextStyle(fontSize: 14 * g)),
+                      label: Text(pendientes.length == items.where((i) => i['estado'] != 'anulado').length ? "Todo listo" : "Lo que falta, listo",
+                          style: TextStyle(fontSize: 14 * g)),
                     ),
             ),
           ],
@@ -700,22 +724,42 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
     super.build(context);
     final comandas = _comandas;
     Widget cuerpo;
+    final botonRecientes = _recientes.isEmpty
+        ? const SizedBox.shrink()
+        : Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => setState(() => _verRecientes = !_verRecientes),
+              icon: Icon(_verRecientes ? Icons.expand_less : Icons.history),
+              label: Text(_verRecientes ? "Ocultar listas recientes" : "Listas recientes (${_recientes.length})"),
+            ),
+          );
+    final recientes = _verRecientes && _recientes.isNotEmpty
+        ? Opacity(opacity: 0.75, child: Wrap(spacing: 12, runSpacing: 12, children: [for (final c in _recientes) _comanda(c)]))
+        : const SizedBox.shrink();
     if (comandas == null) {
       cuerpo = const Center(child: CircularProgressIndicator());
     } else if (comandas.isEmpty) {
-      cuerpo = Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.soup_kitchen_outlined, size: 56, color: AppColors.textMuted),
-          const SizedBox(height: 10),
-          Text("No hay pedidos en cocina.", style: TextStyle(color: AppColors.textMuted)),
-          const SizedBox(height: 4),
-          Text("Se actualiza sola cada pocos segundos.", style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
-        ]),
-      );
+      cuerpo = ListView(padding: const EdgeInsets.all(16), children: [
+        const SizedBox(height: 40),
+        Icon(Icons.soup_kitchen_outlined, size: 56, color: AppColors.textMuted),
+        const SizedBox(height: 10),
+        Text("No hay pedidos en cocina.", textAlign: TextAlign.center, style: TextStyle(color: AppColors.textMuted)),
+        const SizedBox(height: 4),
+        Text("Se actualiza sola cada pocos segundos.", textAlign: TextAlign.center, style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+        const SizedBox(height: 24),
+        botonRecientes,
+        recientes,
+      ]);
     } else {
       cuerpo = SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: Wrap(spacing: 12, runSpacing: 12, children: [for (final c in comandas) _comanda(c)]),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Wrap(spacing: 12, runSpacing: 12, children: [for (final c in comandas) _comanda(c)]),
+          const SizedBox(height: 16),
+          botonRecientes,
+          recientes,
+        ]),
       );
     }
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [_barra(), Expanded(child: cuerpo)]);
