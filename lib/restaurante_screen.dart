@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_service.dart';
 import 'formato.dart';
 import 'negocio.dart';
 import 'restaurante_orden_screen.dart';
 import 'theme/app_theme.dart';
+import 'widgets/campana.dart';
 
 /// Módulo de restaurante: el salón (mesas con su cuenta abierta y pedidos
 /// para llevar), la pantalla de cocina y la configuración de mesas. Se
@@ -106,6 +108,9 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
   Map<String, dynamic>? _datos;
   Timer? _timer;
   bool _abriendo = false;
+  // Platos listos por orden en la consulta anterior: si sube, suena la
+  // campana y se avisa qué mesa tiene platos para llevar.
+  Map<int, int>? _listosAntes;
 
   @override
   bool get wantKeepAlive => true;
@@ -126,8 +131,40 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
   Future<void> _cargar() async {
     try {
       final r = await ApiService.get('/restaurante/salon/?negocio=${widget.negocio.id}');
-      if (r.statusCode == 200 && mounted) setState(() => _datos = json.decode(utf8.decode(r.bodyBytes)));
+      if (r.statusCode == 200 && mounted) {
+        final datos = json.decode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
+        _avisarListos(datos);
+        setState(() => _datos = datos);
+      }
     } catch (_) {}
+  }
+
+  void _avisarListos(Map<String, dynamic> datos) {
+    final ahora = <int, int>{};
+    final nombres = <int, String>{};
+    for (final m in (datos['mesas'] as List)) {
+      final o = m['orden'];
+      if (o != null) {
+        ahora[o['id'] as int] = (o['listos'] ?? 0) as int;
+        nombres[o['id'] as int] = m['nombre'];
+      }
+    }
+    for (final o in (datos['para_llevar'] as List)) {
+      ahora[o['id'] as int] = (o['listos'] ?? 0) as int;
+      nombres[o['id'] as int] = (o['nombre'] ?? '').toString().isEmpty ? 'Para llevar' : 'Llevar · ${o['nombre']}';
+    }
+    final antes = _listosAntes;
+    _listosAntes = ahora;
+    if (antes == null) return; // primera carga: no avisa lo que ya estaba
+    final nuevos = [for (final e in ahora.entries) if (e.value > (antes[e.key] ?? 0)) nombres[e.key]!];
+    if (nuevos.isEmpty) return;
+    Campana.sonar();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      behavior: SnackBarBehavior.floating,
+      width: MediaQuery.sizeOf(context).width >= 700 ? 420 : null,
+      backgroundColor: colorListo,
+      content: Text("Platos listos: ${nuevos.join(', ')}"),
+    ));
   }
 
   Future<void> _abrir({int? mesaId, int? ordenId, String nombre = ''}) async {
@@ -307,7 +344,9 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
 
 class _Cocina extends StatefulWidget {
   final Negocio negocio;
-  const _Cocina({required this.negocio});
+  /// Pantalla completa para la tablet de la cocina: letra más grande.
+  final bool grande;
+  const _Cocina({required this.negocio, this.grande = false});
 
   @override
   State<_Cocina> createState() => _CocinaState();
@@ -315,16 +354,43 @@ class _Cocina extends StatefulWidget {
 
 class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
   List<Map<String, dynamic>>? _comandas;
+  List<Map<String, dynamic>> _estaciones = [];
+  int? _estacion; // null = todas
+  bool _sonido = true;
+  Set<String>? _vistas; // comandas ya vistas (para sonar solo con las nuevas)
   Timer? _timer;
 
   @override
   bool get wantKeepAlive => true;
 
+  String get _clavePrefs => 'cocina_${widget.negocio.id}';
+
   @override
   void initState() {
     super.initState();
-    _cargar();
+    _iniciar();
+  }
+
+  Future<void> _iniciar() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _estacion = prefs.getInt('${_clavePrefs}_estacion');
+      _sonido = prefs.getBool('${_clavePrefs}_sonido') ?? true;
+    } catch (_) {}
+    await _cargar();
     _timer = Timer.periodic(const Duration(seconds: 5), (_) => _cargar());
+  }
+
+  Future<void> _guardarPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_estacion == null) {
+        await prefs.remove('${_clavePrefs}_estacion');
+      } else {
+        await prefs.setInt('${_clavePrefs}_estacion', _estacion!);
+      }
+      await prefs.setBool('${_clavePrefs}_sonido', _sonido);
+    } catch (_) {}
   }
 
   @override
@@ -335,9 +401,20 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
 
   Future<void> _cargar() async {
     try {
-      final r = await ApiService.get('/restaurante/cocina/?negocio=${widget.negocio.id}');
+      final filtro = _estacion == null ? '' : '&estacion=$_estacion';
+      final r = await ApiService.get('/restaurante/cocina/?negocio=${widget.negocio.id}$filtro');
       if (r.statusCode == 200 && mounted) {
-        setState(() => _comandas = ((json.decode(utf8.decode(r.bodyBytes))['comandas'] as List).cast<Map<String, dynamic>>()));
+        final datos = json.decode(utf8.decode(r.bodyBytes));
+        final comandas = (datos['comandas'] as List).cast<Map<String, dynamic>>();
+        final estaciones = ((datos['estaciones'] as List?) ?? []).cast<Map<String, dynamic>>();
+        final claves = {for (final c in comandas) "${c['orden']}-${c['ronda']}-${c['estacion']}"};
+        if (_vistas != null && _sonido && claves.difference(_vistas!).isNotEmpty) Campana.sonar();
+        _vistas = {...?_vistas, ...claves};
+        setState(() {
+          _comandas = comandas;
+          _estaciones = estaciones;
+          if (_estacion != null && !estaciones.any((e) => e['id'] == _estacion)) _estacion = null;
+        });
       }
     } catch (_) {}
   }
@@ -368,6 +445,7 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
   }
 
   Widget _comanda(Map<String, dynamic> c) {
+    final g = widget.grande ? 1.25 : 1.0;
     final items = (c['items'] as List).cast<Map<String, dynamic>>();
     final pendientes = items.where((i) => i['estado'] == 'en_cocina').map((i) => i['id'] as int).toList();
     final terminada = pendientes.isEmpty;
@@ -375,10 +453,11 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
     final donde = (c['mesa'] ?? '').toString().isNotEmpty
         ? c['mesa']
         : ((c['nombre'] ?? '').toString().isNotEmpty ? "Llevar · ${c['nombre']}" : "Para llevar");
+    final estacion = (c['estacion'] ?? '').toString();
     return Opacity(
       opacity: terminada ? 0.6 : 1,
       child: Container(
-        width: 270,
+        width: 270 * g,
         decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: color, width: 2)),
         clipBehavior: Clip.antiAlias,
         child: Column(
@@ -391,15 +470,18 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
               child: Row(children: [
                 Expanded(
                   child: Text("$donde", maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16 * g)),
                 ),
                 Text("#${c['numero']}${(c['ronda'] ?? 1) > 1 ? ' · R${c['ronda']}' : ''}",
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14 * g)),
               ]),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-              child: Text(minutosDesde(c['enviado_en']), style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+              child: Text(
+                [minutosDesde(c['enviado_en']), if (estacion.isNotEmpty && _estacion == null) estacion].join(' · '),
+                style: TextStyle(color: AppColors.textMuted, fontSize: 12 * g),
+              ),
             ),
             for (final i in items)
               InkWell(
@@ -411,7 +493,7 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
                     children: [
                       Icon(
                         i['estado'] == 'listo' ? Icons.check_circle : (i['estado'] == 'anulado' ? Icons.cancel_outlined : Icons.radio_button_unchecked),
-                        size: 22,
+                        size: 22 * g,
                         color: i['estado'] == 'listo' ? colorListo : (i['estado'] == 'anulado' ? const Color(0xFFDC2626) : AppColors.textMuted),
                       ),
                       const SizedBox(width: 8),
@@ -423,13 +505,13 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
                               "${i['cantidad']} × ${i['nombre']}${i['estado'] == 'anulado' ? '  (ANULADO)' : ''}",
                               style: TextStyle(
                                 fontWeight: FontWeight.w700,
-                                fontSize: 15,
+                                fontSize: 15 * g,
                                 color: i['estado'] == 'anulado' ? const Color(0xFFDC2626) : AppColors.textStrong,
                                 decoration: i['estado'] == 'anulado' ? TextDecoration.lineThrough : null,
                               ),
                             ),
                             if ((i['nota'] ?? '').toString().isNotEmpty)
-                              Text("→ ${i['nota']}", style: const TextStyle(color: Color(0xFFB45309), fontWeight: FontWeight.w600)),
+                              Text("→ ${i['nota']}", style: TextStyle(color: const Color(0xFFB45309), fontWeight: FontWeight.w600, fontSize: 14 * g)),
                           ],
                         ),
                       ),
@@ -442,10 +524,10 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
               child: terminada
                   ? const Text("Lista", textAlign: TextAlign.center, style: TextStyle(color: colorListo, fontWeight: FontWeight.w700))
                   : FilledButton.icon(
-                      style: FilledButton.styleFrom(backgroundColor: colorListo),
+                      style: FilledButton.styleFrom(backgroundColor: colorListo, padding: EdgeInsets.symmetric(vertical: 12 * g)),
                       onPressed: () => _marcar(pendientes, 'listo'),
                       icon: const Icon(Icons.done_all, size: 18),
-                      label: const Text("Todo listo"),
+                      label: Text("Todo listo", style: TextStyle(fontSize: 14 * g)),
                     ),
             ),
           ],
@@ -454,13 +536,73 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
     );
   }
 
+  Widget _barra() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 8, 0),
+      child: Row(children: [
+        if (_estaciones.isNotEmpty)
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(children: [
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ChoiceChip(
+                    label: const Text("Todas"),
+                    selected: _estacion == null,
+                    onSelected: (_) {
+                      setState(() => _estacion = null);
+                      _guardarPrefs();
+                      _cargar();
+                    },
+                  ),
+                ),
+                for (final e in _estaciones)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: ChoiceChip(
+                      label: Text(e['nombre']),
+                      selected: _estacion == e['id'],
+                      onSelected: (_) {
+                        setState(() => _estacion = e['id'] as int);
+                        _guardarPrefs();
+                        _cargar();
+                      },
+                    ),
+                  ),
+              ]),
+            ),
+          )
+        else
+          const Spacer(),
+        IconButton(
+          tooltip: _sonido ? "Silenciar" : "Activar sonido",
+          icon: Icon(_sonido ? Icons.notifications_active_outlined : Icons.notifications_off_outlined),
+          onPressed: () {
+            setState(() => _sonido = !_sonido);
+            _guardarPrefs();
+            if (_sonido) Campana.sonar();
+          },
+        ),
+        if (!widget.grande)
+          IconButton(
+            tooltip: "Pantalla completa",
+            icon: const Icon(Icons.fullscreen),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PantallaCocina(negocio: widget.negocio))),
+          ),
+      ]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
     final comandas = _comandas;
-    if (comandas == null) return const Center(child: CircularProgressIndicator());
-    if (comandas.isEmpty) {
-      return Center(
+    Widget cuerpo;
+    if (comandas == null) {
+      cuerpo = const Center(child: CircularProgressIndicator());
+    } else if (comandas.isEmpty) {
+      cuerpo = Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Icon(Icons.soup_kitchen_outlined, size: 56, color: AppColors.textMuted),
           const SizedBox(height: 10),
@@ -469,10 +611,28 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
           Text("Se actualiza sola cada pocos segundos.", style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
         ]),
       );
+    } else {
+      cuerpo = SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Wrap(spacing: 12, runSpacing: 12, children: [for (final c in comandas) _comanda(c)]),
+      );
     }
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Wrap(spacing: 12, runSpacing: 12, children: [for (final c in comandas) _comanda(c)]),
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [_barra(), Expanded(child: cuerpo)]);
+  }
+}
+
+/// La cocina a pantalla completa (sin el menú de la app), para dejarla
+/// abierta en la tablet o compu de la cocina.
+class PantallaCocina extends StatelessWidget {
+  final Negocio negocio;
+  const PantallaCocina({super.key, required this.negocio});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.surfaceSubtle,
+      appBar: AppBar(title: Text("Cocina · ${negocio.nombreComercial}"), toolbarHeight: 48),
+      body: _Cocina(negocio: negocio, grande: true),
     );
   }
 }
@@ -491,6 +651,8 @@ class _ConfigMesas extends StatefulWidget {
 
 class _ConfigMesasState extends State<_ConfigMesas> {
   List<Map<String, dynamic>>? _mesas;
+  List<Map<String, dynamic>> _estaciones = [];
+  List<Map<String, dynamic>> _categorias = [];
 
   @override
   void initState() {
@@ -502,11 +664,117 @@ class _ConfigMesasState extends State<_ConfigMesas> {
 
   Future<void> _cargar() async {
     try {
-      final r = await ApiService.get('/restaurante/mesas/?negocio=${widget.negocio.id}');
-      if (r.statusCode == 200 && mounted) {
-        setState(() => _mesas = (json.decode(utf8.decode(r.bodyBytes)) as List).cast<Map<String, dynamic>>());
+      final rs = await Future.wait([
+        ApiService.get('/restaurante/mesas/?negocio=${widget.negocio.id}'),
+        ApiService.get('/restaurante/estaciones/?negocio=${widget.negocio.id}'),
+        ApiService.get('/categorias/?negocio=${widget.negocio.id}'),
+      ]);
+      List<Map<String, dynamic>> lista(int i) =>
+          rs[i].statusCode == 200 ? (json.decode(utf8.decode(rs[i].bodyBytes)) as List).cast<Map<String, dynamic>>() : [];
+      if (mounted) {
+        setState(() {
+          _mesas = lista(0);
+          _estaciones = lista(1);
+          _categorias = lista(2);
+        });
       }
     } catch (_) {}
+  }
+
+  Future<void> _editarEstacion([Map<String, dynamic>? estacion]) async {
+    final nombre = TextEditingController(text: estacion?['nombre'] ?? (_estaciones.isEmpty ? 'Cocina' : 'Barra'));
+    final elegidas = <int>{...((estacion?['categorias'] as List?) ?? []).cast<int>()};
+    // Categorías que ya tiene otra estación (al guardar se pasan a esta).
+    final deOtra = <int, String>{
+      for (final e in _estaciones)
+        if (e['id'] != estacion?['id'])
+          for (final c in (e['categorias'] as List).cast<int>()) c: e['nombre'] as String,
+    };
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: Text(estacion == null ? "Nueva estación" : "Editar estación"),
+          content: SizedBox(
+            width: 420,
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              TextField(controller: nombre, autofocus: true, decoration: const InputDecoration(labelText: "Nombre", hintText: "Cocina, Barra, Parrilla...", border: OutlineInputBorder())),
+              const SizedBox(height: 14),
+              Text("¿Qué categorías prepara?", style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+              const SizedBox(height: 8),
+              if (_categorias.isEmpty)
+                Text("Todavía no hay categorías de productos. Crealas en Inventario.", style: TextStyle(color: AppColors.textMuted, fontSize: 12.5))
+              else
+                Wrap(spacing: 6, runSpacing: 6, children: [
+                  for (final c in _categorias)
+                    FilterChip(
+                      label: Text(deOtra.containsKey(c['id']) && !elegidas.contains(c['id']) ? "${c['nombre']} (${deOtra[c['id']]})" : c['nombre']),
+                      selected: elegidas.contains(c['id']),
+                      onSelected: (v) => setD(() => v ? elegidas.add(c['id'] as int) : elegidas.remove(c['id'])),
+                    ),
+                ]),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Guardar")),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || nombre.text.trim().isEmpty) return;
+    final datos = {
+      'negocio': widget.negocio.id,
+      'nombre': nombre.text.trim(),
+      'categorias': elegidas.toList(),
+      if (estacion == null) 'orden': _estaciones.length + 1,
+    };
+    final r = estacion == null
+        ? await ApiService.post('/restaurante/estaciones/', datos)
+        : await ApiService.patch('/restaurante/estaciones/${estacion['id']}/', datos);
+    if (r.statusCode >= 300 && mounted) _aviso("No se pudo guardar: ${ApiService.mensajeError(r)}");
+    _cargar();
+  }
+
+  Future<void> _borrarEstacion(Map<String, dynamic> estacion) async {
+    final r = await ApiService.delete('/restaurante/estaciones/${estacion['id']}/');
+    if (r.statusCode >= 300 && mounted) _aviso(ApiService.mensajeError(r));
+    _cargar();
+  }
+
+  Widget _seccionEstaciones() {
+    final nombresCat = {for (final c in _categorias) c['id']: c['nombre']};
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Expanded(child: Text("Estaciones", style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textStrong))),
+        OutlinedButton.icon(onPressed: () => _editarEstacion(), icon: const Icon(Icons.add, size: 18), label: const Text("Agregar estación")),
+      ]),
+      const SizedBox(height: 4),
+      Text(
+        _estaciones.isEmpty
+            ? "Todo va a una sola cocina. Si tenés barra u otra estación, agregalas: cada una recibe solo lo suyo, con su propia pantalla y su comanda."
+            : "Lo que no tenga categoría, o una categoría sin estación, va a ${_estaciones.first['nombre']}.",
+        style: TextStyle(color: AppColors.textMuted, fontSize: 12.5),
+      ),
+      const SizedBox(height: 8),
+      for (final e in _estaciones)
+        Card(
+          margin: const EdgeInsets.only(bottom: 8),
+          color: AppColors.surface,
+          child: ListTile(
+            leading: const Icon(Icons.soup_kitchen_outlined),
+            title: Text(e['nombre'], style: TextStyle(color: AppColors.textStrong)),
+            subtitle: Text(
+              (e['categorias'] as List).isEmpty ? "Sin categorías" : (e['categorias'] as List).map((id) => nombresCat[id] ?? '?').join(', '),
+              style: TextStyle(color: AppColors.textMuted),
+            ),
+            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(icon: const Icon(Icons.edit_outlined), tooltip: "Editar", onPressed: () => _editarEstacion(e)),
+              IconButton(icon: const Icon(Icons.delete_outline), tooltip: "Quitar", onPressed: () => _borrarEstacion(e)),
+            ]),
+          ),
+        ),
+    ]);
   }
 
   Future<void> _cambiarCocina(String cocina) async {
@@ -600,6 +868,8 @@ class _ConfigMesasState extends State<_ConfigMesas> {
                   : "Abrí la pestaña Cocina en una tablet o compu de la cocina: los pedidos aparecen solos.",
           style: TextStyle(color: AppColors.textMuted, fontSize: 12.5),
         ),
+        const SizedBox(height: 22),
+        _seccionEstaciones(),
         const SizedBox(height: 22),
         Row(children: [
           Expanded(child: Text("Mesas", style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textStrong))),

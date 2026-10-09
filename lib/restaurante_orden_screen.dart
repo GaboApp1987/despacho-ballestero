@@ -172,7 +172,10 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
         if (r.statusCode == 200) {
           _usarRespuesta(datos['orden']);
           _aviso("Enviado a cocina.");
-          if (datos['imprimir'] == true) await imprimirComanda(Map<String, dynamic>.from(datos['comanda']), widget.negocio.nombreComercial);
+          if (datos['imprimir'] == true) {
+            final comandas = ((datos['comandas'] as List?) ?? [datos['comanda']]).map((c) => Map<String, dynamic>.from(c)).toList();
+            await imprimirComandas(comandas, widget.negocio.nombreComercial);
+          }
         } else {
           _aviso(ApiService.mensajeError(r));
         }
@@ -735,29 +738,36 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
   }
 }
 
-/// Comanda para la impresora de tickets (80 mm): grande y sin precios.
-Future<void> imprimirComanda(Map<String, dynamic> c, String negocio) async {
+/// Comandas para la impresora de tickets (80 mm): grandes y sin precios,
+/// una página por estación (Cocina, Barra...) para cortarlas por separado.
+Future<void> imprimirComandas(List<Map<String, dynamic>> comandas, String negocio) async {
   final doc = pw.Document();
-  final donde = (c['mesa'] ?? '').toString().isNotEmpty ? c['mesa'] : "PARA LLEVAR ${(c['nombre'] ?? '').toString().toUpperCase()}";
-  final items = (c['items'] as List).cast<Map>();
-  doc.addPage(pw.Page(
-    pageFormat: const PdfPageFormat(80 * PdfPageFormat.mm, double.infinity, marginAll: 4 * PdfPageFormat.mm),
-    build: (_) => pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Text(negocio, style: const pw.TextStyle(fontSize: 9)),
-        pw.Text("$donde", style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
-        pw.Text("Orden #${c['numero']} · Ronda ${c['ronda']} · ${c['hora']}", style: const pw.TextStyle(fontSize: 11)),
-        if ((c['mesero'] ?? '').toString().isNotEmpty) pw.Text("Mesero: ${c['mesero']}", style: const pw.TextStyle(fontSize: 10)),
-        pw.Divider(),
-        for (final i in items) ...[
-          pw.Text("${i['cantidad']} x ${i['nombre']}", style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
-          if ((i['nota'] ?? '').toString().isNotEmpty) pw.Text("   -> ${i['nota']}", style: pw.TextStyle(fontSize: 13, fontStyle: pw.FontStyle.italic)),
-          pw.SizedBox(height: 4),
+  for (final c in comandas) {
+    final donde = (c['mesa'] ?? '').toString().isNotEmpty ? c['mesa'] : "PARA LLEVAR ${(c['nombre'] ?? '').toString().toUpperCase()}";
+    final estacion = (c['estacion'] ?? '').toString();
+    final items = (c['items'] as List).cast<Map>();
+    doc.addPage(pw.Page(
+      pageFormat: const PdfPageFormat(80 * PdfPageFormat.mm, double.infinity, marginAll: 4 * PdfPageFormat.mm),
+      build: (_) => pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Row(children: [
+            pw.Expanded(child: pw.Text(negocio, style: const pw.TextStyle(fontSize: 9))),
+            if (estacion.isNotEmpty) pw.Text(estacion.toUpperCase(), style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+          ]),
+          pw.Text("$donde", style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+          pw.Text("Orden #${c['numero']} · Ronda ${c['ronda']} · ${c['hora']}", style: const pw.TextStyle(fontSize: 11)),
+          if ((c['mesero'] ?? '').toString().isNotEmpty) pw.Text("Mesero: ${c['mesero']}", style: const pw.TextStyle(fontSize: 10)),
+          pw.Divider(),
+          for (final i in items) ...[
+            pw.Text("${i['cantidad']} x ${i['nombre']}", style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
+            if ((i['nota'] ?? '').toString().isNotEmpty) pw.Text("   -> ${i['nota']}", style: pw.TextStyle(fontSize: 13, fontStyle: pw.FontStyle.italic)),
+            pw.SizedBox(height: 4),
+          ],
+          pw.Divider(),
         ],
-        pw.Divider(),
-      ],
-    ),
-  ));
-  await Printing.layoutPdf(onLayout: (_) async => doc.save(), name: 'Comanda_${c['numero']}_${c['ronda']}');
+      ),
+    ));
+  }
+  await Printing.layoutPdf(onLayout: (_) async => doc.save(), name: 'Comanda_${comandas.first['numero']}_${comandas.first['ronda']}');
 }
