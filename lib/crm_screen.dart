@@ -26,6 +26,19 @@ const _etapas = [
   ('perdido', 'Perdido', Icons.do_not_disturb_on_outlined),
 ];
 
+/// Un color sobrio por etapa (tonos medios: se leen igual en tema claro y
+/// oscuro, y se distinguen también por claridad, no solo por tono). Se usa
+/// en detalles -- franja de la columna, ícono, contador, punto de la
+/// tarjeta -- nunca como fondo grande.
+const _colorEtapa = {
+  'conversando': Color(0xFF8FA3BF), // gris azulado
+  'registrado': Color(0xFFA78BFA), // violeta
+  'en_prueba': Color(0xFFF2B33D), // ámbar
+  'pagando': Color(0xFF34C38F), // verde
+  'perdido': Color(0xFFE5737A), // rojo suave
+};
+Color _colorDe(String? etapa) => _colorEtapa[etapa] ?? const Color(0xFF8FA3BF);
+
 class _CrmScreenState extends State<CrmScreen> {
   List<Map<String, dynamic>> _prospectos = [];
   Map<String, dynamic> _resumen = {};
@@ -98,11 +111,24 @@ class _CrmScreenState extends State<CrmScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(titulo, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.textMuted, fontSize: 12.5, fontWeight: FontWeight.w600)),
+          Text(
+            titulo,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: AppColors.textMuted, fontSize: 12.5, fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 6),
-          Text(valor, style: TextStyle(color: AppColors.textStrong, fontSize: 24, fontWeight: FontWeight.w800)),
+          Text(
+            valor,
+            style: TextStyle(color: AppColors.textStrong, fontSize: 24, fontWeight: FontWeight.w800),
+          ),
           if (detalle != null)
-            Text(detalle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.textMuted, fontSize: 11.5)),
+            Text(
+              detalle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: AppColors.textMuted, fontSize: 11.5),
+            ),
         ],
       ),
     );
@@ -128,21 +154,24 @@ class _CrmScreenState extends State<CrmScreen> {
   /// variables en Railway, ver crm.py).
   Widget _conexiones() {
     Widget conexion(String nombre, bool activa, String comoActivar) => Tooltip(
-          message: activa ? "$nombre: activo" : "$nombre: apagado. $comoActivar",
-          child: Chip(
-            avatar: Icon(activa ? Icons.check_circle : Icons.radio_button_unchecked, size: 16, color: activa ? Colors.green : AppColors.textMuted),
-            label: Text(nombre, style: TextStyle(fontSize: 12, color: activa ? AppColors.textStrong : AppColors.textMuted)),
-            visualDensity: VisualDensity.compact,
-            side: BorderSide(color: AppColors.border),
-            backgroundColor: AppColors.surface,
-          ),
-        );
+      message: activa ? "$nombre: activo" : "$nombre: apagado. $comoActivar",
+      child: Chip(
+        avatar: Icon(activa ? Icons.check_circle : Icons.radio_button_unchecked, size: 16, color: activa ? Colors.green : AppColors.textMuted),
+        label: Text(nombre, style: TextStyle(fontSize: 12, color: activa ? AppColors.textStrong : AppColors.textMuted)),
+        visualDensity: VisualDensity.compact,
+        side: BorderSide(color: AppColors.border),
+        backgroundColor: AppColors.surface,
+      ),
+    );
     return Wrap(
       spacing: 8,
       runSpacing: 6,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Text("Conexiones:", style: TextStyle(color: AppColors.textMuted, fontSize: 12.5, fontWeight: FontWeight.w600)),
+        Text(
+          "Conexiones:",
+          style: TextStyle(color: AppColors.textMuted, fontSize: 12.5, fontWeight: FontWeight.w600),
+        ),
         conexion("Correos de Gabriel", true, ""),
         conexion("WhatsApp", _resumen['whatsapp_activo'] == true, "Falta aprobar las plantillas en Meta (WHATSAPP_PLANTILLAS_CRM)."),
         conexion("Formularios de anuncios", _resumen['entrada_anuncios_activa'] == true, "Falta CRM_TOKEN_ENTRADA y conectar Zapier o Make."),
@@ -152,7 +181,9 @@ class _CrmScreenState extends State<CrmScreen> {
   }
 
   Future<void> _agregarProspecto() async {
-    final campos = {for (final k in ['nombre', 'correo', 'telefono', 'canal', 'notas']) k: TextEditingController()};
+    final campos = {
+      for (final k in ['nombre', 'correo', 'telefono', 'canal', 'notas']) k: TextEditingController(),
+    };
     final guardar = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -179,8 +210,7 @@ class _CrmScreenState extends State<CrmScreen> {
                     decoration: InputDecoration(labelText: etiqueta, border: const OutlineInputBorder(), isDense: true),
                   ),
                 ),
-              Text("No le salen correos automáticos: es para tu seguimiento a mano.",
-                  style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+              Text("No le salen correos automáticos: es para tu seguimiento a mano.", style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
             ],
           ),
         ),
@@ -205,7 +235,113 @@ class _CrmScreenState extends State<CrmScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(color: c.withOpacity(0.12), borderRadius: BorderRadius.circular(999)),
-      child: Text(texto, style: TextStyle(color: c, fontSize: 11, fontWeight: FontWeight.w600)),
+      child: Text(
+        texto,
+        style: TextStyle(color: c, fontSize: 11, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+
+  String _tituloEtapa(String clave) => _etapas.firstWhere((e) => e.$1 == clave, orElse: () => (clave, clave, Icons.circle)).$2;
+
+  /// Pasa la tarjeta a otra etapa (arrastrándola o con "Mover a…"): se ve
+  /// al instante, se guarda fijada a mano y ofrece deshacer.
+  Future<void> _moverA(Map<String, dynamic> p, String etapa, {bool deshaciendo = false}) async {
+    final anterior = p['etapa'] as String;
+    final anteriorFijada = p['etapa_fijada'] == true;
+    if (anterior == etapa && !deshaciendo) return;
+    void aplicar(String nueva, bool fijada) {
+      final porEtapa = (_resumen['por_etapa'] as Map?)?.cast<String, dynamic>();
+      if (porEtapa != null && p['etapa'] != nueva) {
+        porEtapa[p['etapa']] = ((porEtapa[p['etapa']] as num?) ?? 1) - 1;
+        porEtapa[nueva] = ((porEtapa[nueva] as num?) ?? 0) + 1;
+      }
+      p['etapa'] = nueva;
+      p['etapa_texto'] = _tituloEtapa(nueva);
+      p['etapa_fijada'] = fijada;
+    }
+
+    setState(() => aplicar(etapa, true));
+    try {
+      final r = await ApiService.patch('/crm/prospectos/${p['id']}/', {'etapa': etapa});
+      if (r.statusCode != 200) throw Exception(ApiService.mensajeError(r));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => aplicar(anterior, anteriorFijada));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo mover: $e")));
+      return;
+    }
+    if (!mounted || deshaciendo) return;
+    final nombre = (p['nombre'] ?? '').toString().trim();
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text("${nombre.isNotEmpty ? nombre : 'Prospecto'} → ${_tituloEtapa(etapa)}"),
+          action: SnackBarAction(
+            label: "Deshacer",
+            onPressed: () async {
+              if (anteriorFijada) {
+                await _moverA(p, anterior, deshaciendo: true);
+              } else {
+                // Estaba en automática: se devuelve a automática (el servidor la recalcula).
+                setState(() => aplicar(anterior, false));
+                final r = await ApiService.patch('/crm/prospectos/${p['id']}/', {'etapa': 'auto'});
+                if (r.statusCode == 200) _cargar();
+              }
+            },
+          ),
+        ),
+      );
+  }
+
+  Future<void> _menuMover(Map<String, dynamic> p) async {
+    final etapa = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  "Mover a…",
+                  style: TextStyle(color: AppColors.textStrong, fontWeight: FontWeight.w700, fontSize: 16),
+                ),
+              ),
+            ),
+            for (final (clave, titulo, icono) in _etapas)
+              ListTile(
+                leading: Icon(icono, color: _colorDe(clave)),
+                title: Text(titulo, style: TextStyle(color: AppColors.textStrong)),
+                trailing: clave == p['etapa'] ? Icon(Icons.check, color: AppColors.primary) : null,
+                onTap: () => Navigator.pop(ctx, clave),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (etapa != null) _moverA(p, etapa);
+  }
+
+  /// En el tablero de escritorio la tarjeta se arrastra a otra columna.
+  Widget _tarjetaArrastrable(Map<String, dynamic> p, double ancho) {
+    return Draggable<Map<String, dynamic>>(
+      data: p,
+      feedback: Material(
+        color: Colors.transparent,
+        elevation: 10,
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox(
+          width: ancho,
+          child: Transform.rotate(angle: -0.02, child: _tarjeta(p)),
+        ),
+      ),
+      childWhenDragging: Opacity(opacity: 0.3, child: _tarjeta(p)),
+      child: MouseRegion(cursor: SystemMouseCursors.grab, child: _tarjeta(p)),
     );
   }
 
@@ -220,16 +356,45 @@ class _CrmScreenState extends State<CrmScreen> {
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () => _abrirFicha(p['id'] as int),
+        // En celular (pestañas) no se arrastra entre columnas: "Mover a…".
+        onLongPress: () => _menuMover(p),
         child: Container(
           padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.border),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(nombre.isNotEmpty ? nombre : contacto,
-                  maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.textStrong, fontWeight: FontWeight.w700, fontSize: 14)),
+              Row(
+                children: [
+                  Tooltip(
+                    message: _tituloEtapa(p['etapa'] as String),
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(color: _colorDe(p['etapa'] as String?), shape: BoxShape.circle),
+                    ),
+                  ),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Text(
+                      nombre.isNotEmpty ? nombre : contacto,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: AppColors.textStrong, fontWeight: FontWeight.w700, fontSize: 14),
+                    ),
+                  ),
+                ],
+              ),
               if (nombre.isNotEmpty && contacto.isNotEmpty)
-                Text(contacto, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                Text(
+                  contacto,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                ),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 6,
@@ -238,8 +403,7 @@ class _CrmScreenState extends State<CrmScreen> {
                   _chip(p['origen_texto']?.toString() ?? ''),
                   if ((p['canal'] ?? '').toString().isNotEmpty) _chip(p['canal'].toString()),
                   if ((p['tipo_cuenta'] ?? '').toString().isNotEmpty) _chip(p['tipo_cuenta'].toString()),
-                  if (dias != null)
-                    _chip(dias == 0 ? "Vence hoy" : "Vence en $dias días", color: (dias as int) <= 2 ? Colors.orange : AppColors.primary),
+                  if (dias != null) _chip(dias == 0 ? "Vence hoy" : "Vence en $dias días", color: (dias as int) <= 2 ? Colors.orange : AppColors.primary),
                   if (p['no_contactar'] == true) _chip("No contactar", color: Colors.redAccent),
                   if (p['etapa_fijada'] == true) _chip("Etapa a mano"),
                 ],
@@ -247,7 +411,9 @@ class _CrmScreenState extends State<CrmScreen> {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  Expanded(child: Text(_haceCuanto(p['ultima_actividad_en'] ?? p['creado_en']), style: TextStyle(color: AppColors.textMuted, fontSize: 11.5))),
+                  Expanded(
+                    child: Text(_haceCuanto(p['ultima_actividad_en'] ?? p['creado_en']), style: TextStyle(color: AppColors.textMuted, fontSize: 11.5)),
+                  ),
                   if (seguimientos > 0) ...[
                     Icon(Icons.mail_outline, size: 14, color: AppColors.textMuted),
                     const SizedBox(width: 3),
@@ -267,38 +433,60 @@ class _CrmScreenState extends State<CrmScreen> {
     final contenido = lista.isEmpty
         ? Padding(
             padding: const EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: Text("Nadie en esta etapa", style: TextStyle(color: AppColors.textMuted, fontSize: 12.5))),
+            child: Center(
+              child: Text("Nadie en esta etapa", style: TextStyle(color: AppColors.textMuted, fontSize: 12.5)),
+            ),
           )
         : ListView.separated(
             padding: const EdgeInsets.only(bottom: 16),
             itemCount: lista.length,
             separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (_, i) => _tarjeta(lista[i]),
+            itemBuilder: (_, i) => ancho == null ? _tarjeta(lista[i]) : _tarjetaArrastrable(lista[i], ancho - 20),
           );
     if (ancho == null) return Padding(padding: const EdgeInsets.all(12), child: contenido);
-    return Container(
-      width: ancho,
-      margin: const EdgeInsets.only(right: 12),
-      padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
-      decoration: BoxDecoration(color: AppColors.surfaceSubtle, borderRadius: BorderRadius.circular(14)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
-            child: Row(
-              children: [
-                Icon(icono, size: 17, color: AppColors.textMuted),
-                const SizedBox(width: 6),
-                Text(titulo, style: TextStyle(color: AppColors.textStrong, fontWeight: FontWeight.w700)),
-                const SizedBox(width: 6),
-                _chip("${lista.length}"),
-              ],
-            ),
+    // Columna del tablero: recibe las tarjetas que se sueltan encima.
+    return DragTarget<Map<String, dynamic>>(
+      onWillAcceptWithDetails: (d) => d.data['etapa'] != etapa,
+      onAcceptWithDetails: (d) => _moverA(d.data, etapa),
+      builder: (context, candidatas, _) {
+        final color = _colorDe(etapa);
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: ancho,
+          margin: const EdgeInsets.only(right: 12),
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: candidatas.isNotEmpty ? color.withOpacity(0.10) : AppColors.surfaceSubtle,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: candidatas.isNotEmpty ? color : Colors.transparent, width: 1.5),
           ),
-          Expanded(child: contenido),
-        ],
-      ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Franja fina con el color de la etapa.
+              Container(height: 3, color: color),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+                child: Row(
+                  children: [
+                    Icon(icono, size: 17, color: color),
+                    const SizedBox(width: 6),
+                    Text(
+                      titulo,
+                      style: TextStyle(color: AppColors.textStrong, fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(width: 6),
+                    _chip("${lista.length}", color: color),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Padding(padding: const EdgeInsets.symmetric(horizontal: 10), child: contenido),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -312,7 +500,10 @@ class _CrmScreenState extends State<CrmScreen> {
       return;
     }
     final p = (json.decode(utf8.decode(r.bodyBytes)) as Map).cast<String, dynamic>();
-    final cambio = await showDialog<bool>(context: context, builder: (_) => _FichaProspecto(prospecto: p));
+    final cambio = await showDialog<bool>(
+      context: context,
+      builder: (_) => _FichaProspecto(prospecto: p),
+    );
     if (cambio == true) _cargar();
   }
 
@@ -350,7 +541,12 @@ class _CrmScreenState extends State<CrmScreen> {
     if (_cargando && _prospectos.isEmpty) {
       cuerpo = const Center(child: CircularProgressIndicator());
     } else if (_error != null) {
-      cuerpo = Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(_error!, textAlign: TextAlign.center)));
+      cuerpo = Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(_error!, textAlign: TextAlign.center),
+        ),
+      );
     } else if (ancho >= 1000) {
       cuerpo = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -375,7 +571,14 @@ class _CrmScreenState extends State<CrmScreen> {
               child: TabBar(
                 isScrollable: true,
                 tabAlignment: TabAlignment.start,
-                tabs: [for (final (clave, titulo, _) in _etapas) Tab(text: "$titulo (${_deEtapa(clave).length})")],
+                tabs: [
+                  for (final (clave, titulo, icono) in _etapas)
+                    Tab(
+                      icon: Icon(icono, size: 18, color: _colorDe(clave)),
+                      iconMargin: const EdgeInsets.only(bottom: 2),
+                      text: "$titulo (${_deEtapa(clave).length})",
+                    ),
+                ],
               ),
             ),
           ],
@@ -391,11 +594,7 @@ class _CrmScreenState extends State<CrmScreen> {
         actions: [IconButton(tooltip: "Recargar", icon: const Icon(Icons.refresh), onPressed: _cargar)],
       ),
       body: cuerpo,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _agregarProspecto,
-        icon: const Icon(Icons.person_add_alt_1),
-        label: const Text("Agregar prospecto"),
-      ),
+      floatingActionButton: FloatingActionButton.extended(onPressed: _agregarProspecto, icon: const Icon(Icons.person_add_alt_1), label: const Text("Agregar prospecto")),
     );
   }
 }
@@ -427,11 +626,7 @@ class _FichaProspectoState extends State<_FichaProspecto> {
   Future<void> _guardar() async {
     setState(() => _guardando = true);
     try {
-      final r = await ApiService.patch('/crm/prospectos/${p['id']}/', {
-        'notas': _notas.text,
-        'no_contactar': _noContactar,
-        'etapa': _etapa,
-      });
+      final r = await ApiService.patch('/crm/prospectos/${p['id']}/', {'notas': _notas.text, 'no_contactar': _noContactar, 'etapa': _etapa});
       if (r.statusCode != 200) throw Exception(ApiService.mensajeError(r));
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
@@ -454,8 +649,13 @@ class _FichaProspectoState extends State<_FichaProspecto> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 130, child: Text(etiqueta, style: TextStyle(color: AppColors.textMuted, fontSize: 13))),
-          Expanded(child: SelectableText(valor, style: TextStyle(color: AppColors.textStrong, fontSize: 13))),
+          SizedBox(
+            width: 130,
+            child: Text(etiqueta, style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+          ),
+          Expanded(
+            child: SelectableText(valor, style: TextStyle(color: AppColors.textStrong, fontSize: 13)),
+          ),
         ],
       ),
     );
@@ -478,8 +678,7 @@ class _FichaProspectoState extends State<_FichaProspecto> {
     return AlertDialog(
       // Mismo fondo que la pantalla: los textos usan AppColors (tema claro u oscuro).
       backgroundColor: AppColors.surface,
-      title: Text((p['nombre'] ?? '').toString().trim().isNotEmpty ? p['nombre'] : (correo.isNotEmpty ? correo : telefono),
-          style: TextStyle(color: AppColors.textStrong)),
+      title: Text((p['nombre'] ?? '').toString().trim().isNotEmpty ? p['nombre'] : (correo.isNotEmpty ? correo : telefono), style: TextStyle(color: AppColors.textStrong)),
       content: SizedBox(
         width: 560,
         child: SingleChildScrollView(
@@ -541,7 +740,10 @@ class _FichaProspectoState extends State<_FichaProspecto> {
                 subtitle: const Text("No le salen más correos automáticos."),
               ),
               const SizedBox(height: 8),
-              Text("Correos de Gabriel", style: TextStyle(color: AppColors.textStrong, fontWeight: FontWeight.w700)),
+              Text(
+                "Correos de Gabriel",
+                style: TextStyle(color: AppColors.textStrong, fontWeight: FontWeight.w700),
+              ),
               const SizedBox(height: 6),
               if (seguimientos.isEmpty)
                 Text("Todavía ninguno.", style: TextStyle(color: AppColors.textMuted, fontSize: 13))
@@ -553,14 +755,19 @@ class _FichaProspectoState extends State<_FichaProspecto> {
                   ),
               if (conversacion.isNotEmpty) ...[
                 const SizedBox(height: 14),
-                Text("Conversación", style: TextStyle(color: AppColors.textStrong, fontWeight: FontWeight.w700)),
+                Text(
+                  "Conversación",
+                  style: TextStyle(color: AppColors.textStrong, fontWeight: FontWeight.w700),
+                ),
                 const SizedBox(height: 6),
                 Container(
                   width: double.infinity,
                   constraints: const BoxConstraints(maxHeight: 220),
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(color: AppColors.surfaceSubtle, borderRadius: BorderRadius.circular(10)),
-                  child: SingleChildScrollView(child: SelectableText(conversacion, style: TextStyle(color: AppColors.textStrong, fontSize: 12.5))),
+                  child: SingleChildScrollView(
+                    child: SelectableText(conversacion, style: TextStyle(color: AppColors.textStrong, fontSize: 12.5)),
+                  ),
                 ),
               ],
             ],
