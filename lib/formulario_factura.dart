@@ -1050,6 +1050,13 @@ class _FormularioFacturaState extends State<FormularioFactura> {
             ),
           ]),
         ),
+        if (_propina > 0) ...[
+          const Divider(height: 18),
+          Row(children: [
+            const Expanded(child: Text("Total a cobrar con propina", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
+            Text(_fmt(_totalFactura + _propina), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.primary)),
+          ]),
+        ],
       ]),
     );
   }
