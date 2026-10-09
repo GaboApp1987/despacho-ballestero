@@ -14,6 +14,7 @@ import 'widgets/soporte_chat.dart';
 import 'widgets/asistente_ia_bar.dart';
 import 'whatsapp_bandeja_screen.dart';
 import 'estadisticas_screen.dart';
+import 'crm_screen.dart';
 import 'perfil_sesion.dart';
 
 /// Pantalla de nivel plataforma: solo la ve un superusuario (el dueño del programa).
@@ -460,6 +461,11 @@ class _DespachosScreenState extends State<DespachosScreen> {
             },
           ),
           IconButton(
+            icon: const Icon(Icons.filter_alt_outlined),
+            tooltip: "Clientes potenciales (CRM)",
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CrmScreen())),
+          ),
+          IconButton(
             icon: const Icon(Icons.insights_outlined),
             tooltip: "Estadísticas del landing",
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EstadisticasScreen())),
@@ -513,6 +519,7 @@ class _DespachosScreenState extends State<DespachosScreen> {
               saludo: "Panel de administrador",
               secciones: const {
                 'whatsapp': 'Bandeja de WhatsApp: conversaciones de clientes nuevos y respuestas del equipo',
+                'crm': 'Clientes potenciales (CRM): embudo de prospectos por etapa y correos de seguimiento automáticos',
                 'estadisticas': 'Estadísticas del landing: visitas, registros y conversión',
                 'planes': 'Planes de suscripción: precios y límites',
                 'negocios': 'Negocios: todos los negocios de la plataforma',
@@ -522,6 +529,8 @@ class _DespachosScreenState extends State<DespachosScreen> {
                   case 'whatsapp':
                     await Navigator.push(context, MaterialPageRoute(builder: (_) => const WhatsAppBandejaScreen()));
                     _cargarPendientesWhatsApp();
+                  case 'crm':
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const CrmScreen()));
                   case 'estadisticas':
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const EstadisticasScreen()));
                   case 'planes':
