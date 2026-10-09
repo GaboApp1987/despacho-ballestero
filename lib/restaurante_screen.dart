@@ -11,6 +11,7 @@ import 'formato.dart';
 import 'negocio.dart';
 import 'restaurante_insumos.dart';
 import 'restaurante_orden_screen.dart';
+import 'restaurante_plano.dart';
 import 'theme/app_theme.dart';
 import 'widgets/campana.dart';
 
@@ -133,6 +134,8 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
   Map<int, int>? _listosAntes;
   // Llamados y pedidos del menú QR ya vistos (para avisar solo lo nuevo).
   Set<String>? _avisosQrAntes;
+  // null = todavía no se escogió: plano si hay mesas ubicadas.
+  bool? _vistaPlano;
 
   @override
   bool get wantKeepAlive => true;
@@ -142,6 +145,99 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
     super.initState();
     _cargar();
     _timer = Timer.periodic(const Duration(seconds: 8), (_) => _cargar());
+    SharedPreferences.getInstance().then((p) {
+      final v = p.getBool('salon_plano_${widget.negocio.id}');
+      if (v != null && mounted) setState(() => _vistaPlano = v);
+    }).catchError((_) {});
+  }
+
+  void _cambiarVista(bool plano) {
+    setState(() => _vistaPlano = plano);
+    SharedPreferences.getInstance().then((p) => p.setBool('salon_plano_${widget.negocio.id}', plano)).catchError((_) => false);
+  }
+
+  /// Mesa dibujada en el plano, con el color de su estado.
+  Widget _mesaEnPlano(Map<String, dynamic> m, PiezaPlano p) {
+    final orden = m['orden'] as Map<String, dynamic>?;
+    final llamado = m['llamado'];
+    final listos = (orden?['listos'] ?? 0) as int;
+    final pedidoQr = (orden?['pedido_qr'] ?? 0) as int;
+    final color = llamado != null || pedidoQr > 0 || orden?['cuenta_pedida'] == true
+        ? colorCuenta
+        : (orden == null ? colorLibre : (listos > 0 ? colorListo : colorOcupada));
+    final circulo = p.forma == 'redonda' && p.ancho == p.alto;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        customBorder: circulo ? const CircleBorder() : RoundedRectangleBorder(borderRadius: BorderRadius.circular(p.forma == 'redonda' ? 999 : 8)),
+        onTap: () => _abrir(mesaId: m['id'], ordenId: orden?['id'] as int?, atender: llamado != null),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: orden == null && llamado == null ? 0.10 : 0.22),
+            shape: circulo ? BoxShape.circle : BoxShape.rectangle,
+            borderRadius: circulo ? null : BorderRadius.circular(p.forma == 'redonda' ? 999 : 8),
+            border: Border.all(color: color, width: orden == null && llamado == null ? 1.5 : 2.5),
+          ),
+          child: Center(
+            child: FittedBox(
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text(m['nombre'], style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.textStrong)),
+                  if (orden != null)
+                    Text(formatearColones(orden['total'] ?? 0, decimales: 0), style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                  if (llamado != null)
+                    Text(llamado['motivo'] == 'cuenta' ? "🧾 cuenta" : "🙋 llama", style: const TextStyle(fontSize: 11, color: colorCuenta, fontWeight: FontWeight.w700))
+                  else if (pedidoQr > 0)
+                    Text("QR: $pedidoQr", style: const TextStyle(fontSize: 11, color: colorCuenta, fontWeight: FontWeight.w700))
+                  else if (listos > 0)
+                    Text("✓ $listos listo${listos == 1 ? '' : 's'}", style: const TextStyle(fontSize: 11, color: colorListo, fontWeight: FontWeight.w700)),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _vistaDelPlano(Map<String, dynamic> d, List<Map<String, dynamic>> mesas) {
+    final plano = (d['plano'] as Map?) ?? {};
+    final columnas = (plano['columnas'] ?? 30) as int, filas = (plano['filas'] ?? 20) as int;
+    final porId = {for (final m in mesas) m['id'] as int: m};
+    final piezas = [
+      for (final m in mesas) PiezaPlano.mesa(m),
+      for (final e in ((plano['elementos'] as List?) ?? [])) PiezaPlano.elemento(Map<String, dynamic>.from(e)),
+    ];
+    final zonas = <String>[];
+    for (final p in piezas) {
+      if (p.ubicada && !zonas.contains(p.zona)) zonas.add(p.zona);
+    }
+    final sinUbicar = mesas.where((m) => m['x'] == null || m['y'] == null).toList();
+    return [
+      for (final z in zonas) ...[
+        if (zonas.length > 1) _titulo(nombreZona(z)) else const SizedBox(height: 12),
+        PlanoSalon(
+          columnas: columnas,
+          filas: filas,
+          piezas: piezas.where((p) => p.zona == z).toList(),
+          dibujarMesa: (p, celda) => _mesaEnPlano(porId[p.mesaId]!, p),
+        ),
+      ],
+      if (sinUbicar.isNotEmpty) ...[
+        _titulo("Sin ubicar en el plano"),
+        _grilla([
+          for (final m in sinUbicar)
+            _tarjetaMesa(
+              titulo: m['nombre'],
+              subtitulo: "${m['capacidad']} personas",
+              orden: m['orden'],
+              llamado: m['llamado'],
+              onTap: () => _abrir(mesaId: m['id'], ordenId: (m['orden'] as Map?)?['id'] as int?, atender: m['llamado'] != null),
+            ),
+        ]),
+      ],
+    ];
   }
 
   @override
@@ -367,22 +463,40 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
       zonas.putIfAbsent((m['zona'] ?? '').toString(), () => []).add(m);
     }
     final ocupadas = mesas.where((m) => m['orden'] != null).length;
+    final hayPlano = mesas.any((m) => m['x'] != null && m['y'] != null);
+    final verPlano = hayPlano && (_vistaPlano ?? true);
     return RefreshIndicator(
       onRefresh: _cargar,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          Row(children: [
-            Expanded(
-              child: Text("$ocupadas de ${mesas.length} mesas ocupadas", style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
-            ),
+          Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, runSpacing: 8, children: [
+            Text("$ocupadas de ${mesas.length} mesas ocupadas", style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+            Row(mainAxisSize: MainAxisSize.min, children: [
+            if (hayPlano)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: SegmentedButton<bool>(
+                  showSelectedIcon: false,
+                  style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                  segments: const [
+                    ButtonSegment(value: true, icon: Icon(Icons.map_outlined, size: 18), tooltip: "Plano"),
+                    ButtonSegment(value: false, icon: Icon(Icons.grid_view, size: 18), tooltip: "Cuadrícula"),
+                  ],
+                  selected: {verPlano},
+                  onSelectionChanged: (s) => _cambiarVista(s.first),
+                ),
+              ),
             FilledButton.tonalIcon(onPressed: _paraLlevar, icon: const Icon(Icons.takeout_dining_outlined, size: 18), label: const Text("Para llevar")),
+            ]),
           ]),
           if (mesas.isEmpty)
             Padding(
               padding: const EdgeInsets.all(32),
               child: Text("No hay mesas. Agregalas en la pestaña Mesas.", textAlign: TextAlign.center, style: TextStyle(color: AppColors.textMuted)),
             ),
+          if (verPlano) ..._vistaDelPlano(d, mesas),
+          if (!verPlano)
           for (final zona in zonas.entries) ...[
             if (zonas.length > 1 || zona.key.isNotEmpty) _titulo(zona.key.isEmpty ? "Sin zona" : zona.key) else const SizedBox(height: 12),
             _grilla([
@@ -1207,6 +1321,21 @@ class _ConfigMesasState extends State<_ConfigMesas> {
         const SizedBox(height: 22),
         _seccionEstaciones(),
         const SizedBox(height: 22),
+        Card(
+          margin: const EdgeInsets.only(bottom: 16),
+          color: AppColors.surface,
+          child: ListTile(
+            leading: Icon(Icons.map_outlined, color: AppColors.primary),
+            title: Text("Plano del restaurante", style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textStrong)),
+            subtitle: Text("Acomodá las mesas como están en el local y agregá paredes, maceteras, baños, barra...",
+                style: TextStyle(color: AppColors.textMuted, fontSize: 12.5)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () async {
+              await Navigator.push(context, MaterialPageRoute(builder: (_) => EditorPlano(negocio: widget.negocio)));
+              _cargar();
+            },
+          ),
+        ),
         Row(children: [
           Expanded(child: Text("Mesas", style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textStrong))),
           FilledButton.icon(onPressed: () => _editar(), icon: const Icon(Icons.add, size: 18), label: const Text("Agregar mesa")),
