@@ -545,6 +545,8 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
   // por si hay que devolver algo a la cocina.
   List<Map<String, dynamic>> _recientes = [];
   bool _verRecientes = false;
+  // Comandas en las que se pidió ver los platos que ya salieron.
+  final Set<String> _conListosVisibles = {};
   List<Map<String, dynamic>> _estaciones = [];
   int? _estacion; // null = todas
   bool _sonido = true;
@@ -632,6 +634,18 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
     try {
       await ApiService.post('/restaurante/cocina/', {'negocio': widget.negocio.id, 'items': ids, 'estado': estado});
     } catch (_) {}
+    if (estado == 'listo' && mounted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          persist: false,
+          duration: const Duration(seconds: 4),
+          behavior: SnackBarBehavior.floating,
+          width: MediaQuery.sizeOf(context).width >= 700 ? 380 : null,
+          content: Text(ids.length == 1 ? "Plato listo" : "${ids.length} platos listos"),
+          action: SnackBarAction(label: "Deshacer", onPressed: () => _marcar(ids, 'en_cocina')),
+        ));
+    }
     _cargar();
   }
 
@@ -662,6 +676,12 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
         ? c['mesa']
         : ((c['nombre'] ?? '').toString().isNotEmpty ? "Llevar · ${c['nombre']}" : "Para llevar");
     final estacion = (c['estacion'] ?? '').toString();
+    // Lo que ya salió no ocupa espacio: queda escondido tras "✓ N ya salieron"
+    // (salvo en las comandas ya terminadas, que se ven completas en Recientes).
+    final clave = "${c['orden']}-${c['ronda']}-${c['estacion']}";
+    final listos = items.where((i) => i['estado'] == 'listo').toList();
+    final verListos = terminada || _conListosVisibles.contains(clave);
+    final visibles = items.where((i) => i['estado'] != 'listo' || verListos).toList();
     return Opacity(
       opacity: terminada ? 0.6 : 1,
       child: Container(
@@ -703,7 +723,23 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
                   Text(estacion, style: TextStyle(color: AppColors.textMuted, fontSize: 12 * g)),
               ]),
             ),
-            for (final i in items)
+            if (listos.isNotEmpty && !terminada)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 0, 12, 0),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    style: TextButton.styleFrom(foregroundColor: colorListo, visualDensity: VisualDensity.compact),
+                    onPressed: () => setState(() => verListos ? _conListosVisibles.remove(clave) : _conListosVisibles.add(clave)),
+                    icon: Icon(verListos ? Icons.expand_less : Icons.check_circle_outline, size: 16 * g),
+                    label: Text(
+                      verListos ? "Ocultar los que ya salieron" : "✓ ${listos.fold<int>(0, (s, i) => s + (i['cantidad'] as int))} ya salieron",
+                      style: TextStyle(fontSize: 12.5 * g, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+              ),
+            for (final i in visibles)
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 5, 8, 5),
                 child: Row(
