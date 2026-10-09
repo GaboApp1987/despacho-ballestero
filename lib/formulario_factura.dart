@@ -93,7 +93,12 @@ class FormularioFactura extends StatefulWidget {
   /// condición) para revisarla y emitirla con la fecha de hoy -- nunca se
   /// emite sola.
   final Factura? plantilla;
-  const FormularioFactura({super.key, required this.negocio, this.plantilla});
+  /// Cobro de una mesa del restaurante: llega con los platos ya puestos
+  /// (como tiquete) y `camposExtra` (orden_restaurante) va en el POST para
+  /// que el backend cierre la cuenta y libere la mesa.
+  final List<({int productoId, int cantidad, double precio})>? lineasIniciales;
+  final Map<String, dynamic>? camposExtra;
+  const FormularioFactura({super.key, required this.negocio, this.plantilla, this.lineasIniciales, this.camposExtra});
 
   @override
   State<FormularioFactura> createState() => _FormularioFacturaState();
@@ -182,6 +187,20 @@ class _FormularioFacturaState extends State<FormularioFactura> {
   /// Llena el formulario con los datos de [p] (ver FormularioFactura.plantilla).
   /// Los precios se respetan en la moneda original de la factura: una de
   /// US$1500 se repite por US$1500 con el tipo de cambio de hoy.
+  void _aplicarLineasIniciales(List<({int productoId, int cantidad, double precio})> lineas) {
+    setState(() {
+      _tipoDocumento = '04';
+      _carrito.clear();
+      for (final l in lineas) {
+        final producto = _listaProductos.where((x) => x.id == l.productoId).firstOrNull;
+        if (producto == null) continue;
+        final linea = LineaFactura(producto: producto, cantidad: l.cantidad, impuesto: producto.impuesto, tipoCambio: _tipoCambioConversion);
+        linea.fijarPrecio(l.precio, 'CRC');
+        _carrito.add(linea);
+      }
+    });
+  }
+
   Future<void> _aplicarPlantilla(Factura p) async {
     final esDolares = p.moneda == 'USD';
     if (esDolares) {
@@ -308,6 +327,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
             _isLoading = false;
           });
           if (widget.plantilla != null) await _aplicarPlantilla(widget.plantilla!);
+          if (widget.lineasIniciales != null) _aplicarLineasIniciales(widget.lineasIniciales!);
         }
       } else {
         if (mounted) setState(() => _isLoading = false);
@@ -910,6 +930,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
           if (item.fechaEmisionDocExoneracion != null)
             'fecha_emision_doc_exoneracion': item.fechaEmisionDocExoneracion!.toIso8601String().split('T')[0],
         }).toList(),
+        ...?widget.camposExtra,
       };
 
       final response = await ApiService.post('/facturas/', body);

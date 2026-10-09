@@ -79,6 +79,8 @@ class Negocio {
   final String? suscripcionEstado;
   final bool suscripcionCobroAutomatico;
   final bool avisosPorCorreo;
+  // Módulo de restaurante (mesas y comandas) activado en Ajustes.
+  final bool restauranteActivo;
   final String regimen;
   final double? factorRtsRenta;
   final double? factorRtsIva13;
@@ -110,6 +112,7 @@ class Negocio {
     this.distrito,
     this.telefono,
     this.avisosPorCorreo = true,
+    this.restauranteActivo = false,
     this.regimen = 'tradicional',
     this.factorRtsRenta,
     this.factorRtsIva13,
@@ -156,6 +159,7 @@ class Negocio {
       distrito: json['distrito'],
       telefono: json['telefono'],
       avisosPorCorreo: json['avisos_por_correo'] ?? true,
+      restauranteActivo: json['restaurante_activo'] == true,
       regimen: json['regimen'] ?? 'tradicional',
       factorRtsRenta: double.tryParse(json['factor_rts_renta']?.toString() ?? ''),
       factorRtsIva13: double.tryParse(json['factor_rts_iva_13']?.toString() ?? ''),

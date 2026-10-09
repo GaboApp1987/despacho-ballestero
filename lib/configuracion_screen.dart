@@ -31,6 +31,8 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
   late TextEditingController _alanubeActividadController;
   late String _entornoSeleccionado;
   late bool _avisosPorCorreo;
+  late bool _restauranteActivo;
+  bool _guardandoRestaurante = false;
   late bool _aceptarComprasAutomatico;
   late String _regimen;
   late TextEditingController _factorRentaCtrl;
@@ -82,6 +84,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
     _pinController = TextEditingController(text: widget.negocio.pinLlave ?? '');
     _entornoSeleccionado = widget.negocio.entornoHacienda ?? 'STAGING';
     _avisosPorCorreo = widget.negocio.avisosPorCorreo;
+    _restauranteActivo = widget.negocio.restauranteActivo;
     _aceptarComprasAutomatico = widget.negocio.aceptarComprasAutomatico;
     _regimen = widget.negocio.regimen;
     String f(double? v) => v == null ? '' : v.toString();
@@ -542,6 +545,26 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
     }
   }
 
+  /// Se guarda al instante (no con "Guardar configuraciones"): así aparece
+  /// o desaparece la sección Restaurante del menú enseguida.
+  Future<void> _cambiarRestaurante(bool activo) async {
+    setState(() => _guardandoRestaurante = true);
+    try {
+      final r = await ApiService.patch('/restaurante/config/?negocio=${widget.negocio.id}', {'activo': activo});
+      if (r.statusCode != 200) throw Exception(ApiService.mensajeError(r));
+      setState(() => _restauranteActivo = activo);
+      widget.onGuardado?.call();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(activo ? "Listo: ya tenés la sección Restaurante en Ventas." : "Módulo de restaurante apagado."),
+        ));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo cambiar: $e")));
+    }
+    if (mounted) setState(() => _guardandoRestaurante = false);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -719,6 +742,15 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
                           "reconocidos y montos que cuadran. Si no, quedan por revisar como siempre.",
                         ),
                         secondary: const Icon(Icons.auto_mode_outlined),
+                      ),
+                      SwitchListTile(
+                        value: _restauranteActivo,
+                        onChanged: _guardandoRestaurante ? null : _cambiarRestaurante,
+                        title: const Text("Módulo de restaurante"),
+                        subtitle: const Text(
+                          "Mesas, comandas y pantalla de cocina. Aparece la sección Restaurante en el menú de Ventas.",
+                        ),
+                        secondary: const Icon(Icons.restaurant_outlined),
                       ),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
