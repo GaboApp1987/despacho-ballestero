@@ -346,6 +346,7 @@ class _DetalleCuentaClienteScreenState extends State<DetalleCuentaClienteScreen>
     final montoController = TextEditingController();
     final facturasPendientes = await _cargarFacturasPendientes();
     Factura? facturaSeleccionada;
+    var medioPago = '04';
 
     if (!mounted) return;
     showDialog(
@@ -366,6 +367,20 @@ class _DetalleCuentaClienteScreenState extends State<DetalleCuentaClienteScreen>
                   border: OutlineInputBorder(),
                 ),
                 autofocus: true,
+              ),
+              const SizedBox(height: 12),
+              // Para el cierre de caja: lo que entra en efectivo debe estar en la caja.
+              DropdownButtonFormField<String>(
+                initialValue: medioPago,
+                decoration: const InputDecoration(labelText: "¿Cómo pagó?", border: OutlineInputBorder()),
+                items: const [
+                  DropdownMenuItem(value: '01', child: Text("Efectivo")),
+                  DropdownMenuItem(value: '02', child: Text("Tarjeta")),
+                  DropdownMenuItem(value: '06', child: Text("SINPE Móvil")),
+                  DropdownMenuItem(value: '04', child: Text("Transferencia")),
+                  DropdownMenuItem(value: '03', child: Text("Cheque")),
+                ],
+                onChanged: (v) => setStateDialog(() => medioPago = v ?? medioPago),
               ),
               if (facturasPendientes.isNotEmpty) ...[
                 const SizedBox(height: 14),
@@ -396,7 +411,7 @@ class _DetalleCuentaClienteScreenState extends State<DetalleCuentaClienteScreen>
                 final String montoStr = montoController.text;
                 final facturaId = facturaSeleccionada?.id;
                 Navigator.pop(ctx);
-                _registrarAbono(montoStr, facturaId);
+                _registrarAbono(montoStr, facturaId, medioPago);
               },
               child: const Text("Guardar"),
             ),
@@ -406,7 +421,7 @@ class _DetalleCuentaClienteScreenState extends State<DetalleCuentaClienteScreen>
     );
   }
 
-  Future<void> _registrarAbono(String montoStr, [int? facturaId]) async {
+  Future<void> _registrarAbono(String montoStr, [int? facturaId, String medioPago = '04']) async {
     final double? monto = double.tryParse(montoStr.replaceAll(',', '.'));
     if (monto == null || monto <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -423,6 +438,7 @@ class _DetalleCuentaClienteScreenState extends State<DetalleCuentaClienteScreen>
         {
           'negocio': widget.negocioId,
           'monto': monto,
+          'medio_pago': medioPago,
           if (facturaId != null) 'factura': facturaId,
         },
       );

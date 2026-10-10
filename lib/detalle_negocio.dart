@@ -31,6 +31,7 @@ import 'impuestos_screen.dart';
 import 'reportes_screen.dart';
 import 'tarjeta_lealtad_screen.dart';
 import 'restaurante_screen.dart';
+import 'caja_screen.dart';
 import 'addons_screen.dart';
 import 'login.dart';
 import 'formato.dart';
@@ -258,6 +259,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     (id: 0, icono: Icons.receipt_long_outlined, titulo: "Facturas"),
     // Solo si el negocio activó el módulo de restaurante (ver _menuItemsVisibles).
     (id: 21, icono: Icons.restaurant_outlined, titulo: "Restaurante"),
+    (id: 22, icono: Icons.point_of_sale_outlined, titulo: "Caja"),
     // -- Compras (a la par de Facturas, a pedido del contador) --
     (id: 8, icono: Icons.shopping_cart_outlined, titulo: "Compras"),
     (id: 18, icono: Icons.trending_up, titulo: "Ingresos"),
@@ -296,7 +298,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
 
   static const Map<String, List<int>> _idsPorCategoria = {
     "Principal": [1, 2, 3],
-    "Ventas": [21, 0, 4, 15, 11, 16, 6, 19],
+    "Ventas": [21, 22, 0, 4, 15, 11, 16, 6, 19],
     "Compras": [8, 17, 13, 9],
     "Finanzas": [18, 20, 10, 7],
     "Administración": [14, 12, 5],
@@ -720,6 +722,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         return "Tarjeta de Lealtad";
       case 21:
         return "Restaurante";
+      case 22:
+        return "Caja";
       case 12:
         return "Add-ons";
       case 5:
@@ -991,6 +995,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         return TarjetaLealtadScreen(negocio: widget.negocio);
       case 21:
         return RestauranteScreen(negocio: _negocioConCuota, rolEmpleado: widget.rolEmpleado);
+      case 22:
+        return CajaScreen(negocio: widget.negocio, rolEmpleado: widget.rolEmpleado);
       case 12:
         return AddonsScreen(negocio: widget.negocio);
       case 13:

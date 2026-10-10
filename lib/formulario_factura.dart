@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'theme/app_theme.dart';
 
 import 'api_service.dart';
@@ -164,6 +165,16 @@ class _FormularioFacturaState extends State<FormularioFactura> {
 
   // Manejo de Crédito
   String _condicionVenta = "01"; // "01" = Contado, "02" = Crédito
+  // Medio de pago (códigos de Hacienda): lo usa el cierre de caja. Se
+  // recuerda el último que se usó en este negocio.
+  String _medioPago = '01';
+  static const _mediosPago = [
+    ('01', 'Efectivo', Icons.payments_outlined),
+    ('02', 'Tarjeta', Icons.credit_card),
+    ('06', 'SINPE Móvil', Icons.phone_iphone),
+    ('04', 'Transferencia', Icons.account_balance_outlined),
+    ('03', 'Cheque', Icons.receipt_outlined),
+  ];
   // Recordatorios de cobro para esta factura (solo a crédito; ver
   // CobroAutomaticoEnFormulario).
   bool _cobroAutomatico = true;
@@ -305,6 +316,10 @@ class _FormularioFacturaState extends State<FormularioFactura> {
   @override
   void initState() {
     super.initState();
+    SharedPreferences.getInstance().then((p) {
+      final m = p.getString('medio_pago_${widget.negocio.id}');
+      if (m != null && mounted && _mediosPago.any((x) => x.$1 == m)) setState(() => _medioPago = m);
+    }).catchError((_) {});
     _cargarDatosIniciales();
     _busquedaCtrl.addListener(() {
       setState(() => _busqueda = _busquedaCtrl.text.trim().toLowerCase());
@@ -922,6 +937,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
         'monto_servicio': redondear2(_montoServicio),
         if (widget.pedirPropina) 'propina': redondear2(_propina),
         'condicion_venta': _condicionVenta,
+        'medio_pago': _condicionVenta == "01" ? _medioPago : '04',
         'cobro_automatico': _condicionVenta == "02" ? _cobroAutomatico : true,
         'plazo_credito': plazoCredito,
         'moneda': _moneda,
@@ -1419,6 +1435,23 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                   ],
                 ],
               ),
+              if (_condicionVenta == "01") ...[
+                const SizedBox(height: 10),
+                Text("¿Cómo paga?", style: TextStyle(fontSize: 12.5, color: Colors.grey[600])),
+                const SizedBox(height: 6),
+                Wrap(spacing: 6, runSpacing: 6, children: [
+                  for (final m in _mediosPago)
+                    ChoiceChip(
+                      avatar: Icon(m.$3, size: 16),
+                      label: Text(m.$2),
+                      selected: _medioPago == m.$1,
+                      onSelected: (_) {
+                        setState(() => _medioPago = m.$1);
+                        SharedPreferences.getInstance().then((p) => p.setString('medio_pago_${widget.negocio.id}', m.$1)).catchError((_) => false);
+                      },
+                    ),
+                ]),
+              ],
               if (_condicionVenta == "02" && !_esInterno)
                 CobroAutomaticoEnFormulario(
                   negocioId: widget.negocio.id,
