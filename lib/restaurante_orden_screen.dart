@@ -11,6 +11,7 @@ import 'formulario_factura.dart';
 import 'negocio.dart';
 import 'producto.dart';
 import 'restaurante_screen.dart' show cronometro, colorEspera;
+import 'restaurante_tema.dart';
 import 'theme/app_theme.dart';
 
 /// Cuenta de una mesa (o pedido para llevar): menú a un lado y la orden al
@@ -454,7 +455,7 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
             ]),
             const SizedBox(height: 8),
             Text(formatearColones((total / personas).ceilToDouble(), decimales: 0),
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: AppColors.primary)),
+                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: colorResto)),
             Text("cada uno", style: TextStyle(color: AppColors.textMuted)),
             const SizedBox(height: 10),
             Text("Se emite un solo tiquete por el total; cada quien paga su parte como prefiera.",
@@ -605,7 +606,7 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: pedidos > 0 ? AppColors.primary : AppColors.border, width: pedidos > 0 ? 2 : 1),
+                                border: Border.all(color: pedidos > 0 ? colorResto : AppColors.border, width: pedidos > 0 ? 2 : 1),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -622,7 +623,7 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
                                     if (pedidos > 0)
                                       CircleAvatar(
                                         radius: 11,
-                                        backgroundColor: AppColors.primary,
+                                        backgroundColor: colorResto,
                                         child: Text("$pedidos", style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
                                       ),
                                   ]),
@@ -682,9 +683,9 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
       decoration: BoxDecoration(
-        color: AppColors.primary.withValues(alpha: 0.06),
+        color: colorResto.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
+        border: Border.all(color: colorResto.withValues(alpha: 0.35)),
       ),
       child: Row(children: [
         Expanded(
@@ -696,7 +697,7 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
                 if (nota != null) setState(() => b.nota = nota);
               },
               child: Text(b.nota.isEmpty ? "+ nota" : "→ ${b.nota}",
-                  style: TextStyle(color: b.nota.isEmpty ? AppColors.primary : const Color(0xFFB45309), fontSize: 12.5)),
+                  style: TextStyle(color: b.nota.isEmpty ? colorResto : const Color(0xFFB45309), fontSize: 12.5)),
             ),
           ]),
         ),
@@ -745,7 +746,7 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
               if (i['estado'] == 'listo') ...[
                 InkWell(
                   onTap: () => _accionItem(i, {'estado': 'entregado'}),
-                  child: Text("Marcar entregado", style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+                  child: const Text("Marcar entregado", style: TextStyle(color: colorResto, fontSize: 12, fontWeight: FontWeight.w600)),
                 ),
               ],
             ]),
@@ -807,13 +808,13 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
               if (o['cuenta_pedida'] == true)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(color: const Color(0xFFF59E0B).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
-                  child: const Text("Pidió la cuenta", style: TextStyle(color: Color(0xFFB45309), fontSize: 11.5, fontWeight: FontWeight.w700)),
+                  decoration: BoxDecoration(color: colorLlamado.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
+                  child: const Text("Pidió la cuenta", style: TextStyle(color: colorLlamado, fontSize: 11.5, fontWeight: FontWeight.w700)),
                 ),
             ]),
             if (_nuevos.isNotEmpty) ...[
               const SizedBox(height: 10),
-              Text("POR ENVIAR", style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: .6, color: AppColors.primary)),
+              const Text("POR ENVIAR", style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: .6, color: colorResto)),
               const SizedBox(height: 6),
               for (final b in _nuevos) _filaBorrador(b),
             ],
@@ -896,7 +897,7 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
+    return ConTemaResto(child: PopScope(
       canPop: _nuevos.isEmpty,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
@@ -941,7 +942,7 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
                 return _panelOrden(celular: true);
               }),
       ),
-    );
+    ));
   }
 }
 

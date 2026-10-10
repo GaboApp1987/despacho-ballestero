@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'api_service.dart';
 import 'negocio.dart';
+import 'restaurante_tema.dart';
 import 'theme/app_theme.dart';
 
 /// Plano del restaurante: una cuadrícula por zona con las mesas y lo demás
@@ -88,7 +89,7 @@ class PiezaPlano {
 Widget dibujoElemento(PiezaPlano p, double celda, {bool seleccionada = false}) {
   final e = estilosPlano[p.tipo]!;
   final texto = p.etiqueta.isNotEmpty ? p.etiqueta : (p.tipo == 'pared' || p.tipo == 'ventana' ? '' : e.nombre);
-  final borde = seleccionada ? Border.all(color: AppColors.primary, width: 2.5) : null;
+  final borde = seleccionada ? Border.all(color: colorResto, width: 2.5) : null;
   if (p.tipo == 'texto') {
     return Container(
       decoration: BoxDecoration(border: borde ?? Border.all(color: Colors.transparent)),
@@ -379,10 +380,10 @@ class _EditorPlanoState extends State<EditorPlano> {
     final redonda = m.forma == 'redonda';
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.primary.withValues(alpha: 0.12),
+        color: colorResto.withValues(alpha: 0.12),
         shape: redonda && m.ancho == m.alto ? BoxShape.circle : BoxShape.rectangle,
         borderRadius: redonda && m.ancho == m.alto ? null : BorderRadius.circular(redonda ? 999 : 8),
-        border: Border.all(color: seleccionada ? AppColors.primary : AppColors.primary.withValues(alpha: 0.6), width: seleccionada ? 3 : 1.5),
+        border: Border.all(color: seleccionada ? colorResto : colorResto.withValues(alpha: 0.6), width: seleccionada ? 3 : 1.5),
       ),
       alignment: Alignment.center,
       child: FittedBox(
@@ -507,7 +508,7 @@ class _EditorPlanoState extends State<EditorPlano> {
   Widget build(BuildContext context) {
     final zonas = _zonas;
     final sinUbicar = _deZona.where((p) => p.esMesa && !p.ubicada).toList();
-    return PopScope(
+    return ConTemaResto(child: PopScope(
       canPop: !_cambios,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
@@ -607,6 +608,6 @@ class _EditorPlanoState extends State<EditorPlano> {
                 Material(color: AppColors.surface, child: SafeArea(top: false, child: _barraSeleccion())),
               ]),
       ),
-    );
+    ));
   }
 }

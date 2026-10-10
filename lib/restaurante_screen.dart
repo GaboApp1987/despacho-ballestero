@@ -12,6 +12,7 @@ import 'negocio.dart';
 import 'restaurante_insumos.dart';
 import 'restaurante_orden_screen.dart';
 import 'restaurante_plano.dart';
+import 'restaurante_tema.dart';
 import 'theme/app_theme.dart';
 import 'widgets/campana.dart';
 
@@ -91,25 +92,42 @@ class _RestauranteScreenState extends State<RestauranteScreen> with SingleTicker
           _ConfigMesas(negocio: widget.negocio, cocina: _cocina, onCocina: (c) => setState(() => _cocina = c)),
         ),
     ];
-    return DefaultTabController(
+    return ConTemaResto(
+      child: DefaultTabController(
       key: ValueKey(pestanas.length),
       length: pestanas.length,
       child: Container(
         color: AppColors.surfaceSubtle,
         child: Column(
           children: [
+            // Franja del modo restaurante: se nota de un vistazo en qué módulo se está.
+            Container(
+              color: colorResto,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              child: Row(children: [
+                const Icon(Icons.restaurant, color: Colors.white, size: 16),
+                const SizedBox(width: 8),
+                const Text("Modo restaurante", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(widget.negocio.nombreComercial, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right,
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 12.5)),
+                ),
+              ]),
+            ),
             Material(
               color: AppColors.surface,
               child: TabBar(
                 tabs: [for (final p in pestanas) p.$1],
-                labelColor: AppColors.primary,
+                labelColor: colorResto,
                 unselectedLabelColor: AppColors.textMuted,
-                indicatorColor: AppColors.primary,
+                indicatorColor: colorResto,
               ),
             ),
             Expanded(child: TabBarView(physics: const NeverScrollableScrollPhysics(), children: [for (final p in pestanas) p.$2])),
           ],
         ),
+      ),
       ),
     );
   }
@@ -163,7 +181,7 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
     final listos = (orden?['listos'] ?? 0) as int;
     final pedidoQr = (orden?['pedido_qr'] ?? 0) as int;
     final color = llamado != null || pedidoQr > 0 || orden?['cuenta_pedida'] == true
-        ? colorCuenta
+        ? colorLlamado
         : (orden == null ? colorLibre : (listos > 0 ? colorListo : colorOcupada));
     final circulo = p.forma == 'redonda' && p.ancho == p.alto;
     return Material(
@@ -187,9 +205,9 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
                   if (orden != null)
                     Text(formatearColones(orden['total'] ?? 0, decimales: 0), style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
                   if (llamado != null)
-                    Text(llamado['motivo'] == 'cuenta' ? "🧾 cuenta" : "🙋 llama", style: const TextStyle(fontSize: 11, color: colorCuenta, fontWeight: FontWeight.w700))
+                    Text(llamado['motivo'] == 'cuenta' ? "🧾 cuenta" : "🙋 llama", style: const TextStyle(fontSize: 11, color: colorLlamado, fontWeight: FontWeight.w700))
                   else if (pedidoQr > 0)
-                    Text("QR: $pedidoQr", style: const TextStyle(fontSize: 11, color: colorCuenta, fontWeight: FontWeight.w700))
+                    Text("QR: $pedidoQr", style: const TextStyle(fontSize: 11, color: colorLlamado, fontWeight: FontWeight.w700))
                   else if (listos > 0)
                     Text("✓ $listos listo${listos == 1 ? '' : 's'}", style: const TextStyle(fontSize: 11, color: colorListo, fontWeight: FontWeight.w700)),
                 ]),
@@ -284,7 +302,7 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       behavior: SnackBarBehavior.floating,
       width: MediaQuery.sizeOf(context).width >= 700 ? 420 : null,
-      backgroundColor: colorCuenta,
+      backgroundColor: colorLlamado,
       content: Text(nuevos.join(' · ')),
     ));
   }
@@ -376,8 +394,8 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
     final cuenta = orden?['cuenta_pedida'] == true;
     final pedidoQr = (orden?['pedido_qr'] ?? 0) as int;
     final color = llamado != null || pedidoQr > 0
-        ? colorCuenta
-        : (orden == null ? colorLibre : (cuenta ? colorCuenta : (listos > 0 ? colorListo : colorOcupada)));
+        ? colorLlamado
+        : (orden == null ? colorLibre : (cuenta ? colorLlamado : (listos > 0 ? colorListo : colorOcupada)));
     return Material(
       color: AppColors.surface,
       borderRadius: BorderRadius.circular(14),
@@ -409,15 +427,15 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
               if (llamado != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 4),
-                  child: _chip(llamado['motivo'] == 'cuenta' ? "🧾 Pide la cuenta" : "🙋 Llama al mesero", colorCuenta),
+                  child: _chip(llamado['motivo'] == 'cuenta' ? "🧾 Pide la cuenta" : "🙋 Llama al mesero", colorLlamado),
                 ),
               if (orden != null) ...[
                 Text(formatearColones(orden['total'] ?? 0, decimales: 0),
                     style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textStrong)),
                 const SizedBox(height: 4),
                 Wrap(spacing: 4, runSpacing: 4, children: [
-                  if (pedidoQr > 0) _chip("Pedido QR: $pedidoQr", colorCuenta),
-                  if (cuenta && llamado == null) _chip("Pidió la cuenta", colorCuenta),
+                  if (pedidoQr > 0) _chip("Pedido QR: $pedidoQr", colorLlamado),
+                  if (cuenta && llamado == null) _chip("Pidió la cuenta", colorLlamado),
                   if (listos > 0) _chip("$listos listo${listos == 1 ? '' : 's'}", colorListo),
                   if ((orden['sin_enviar'] ?? 0) - pedidoQr > 0) _chip("${orden['sin_enviar'] - pedidoQr} sin enviar", AppColors.textMuted),
                 ]),
@@ -924,11 +942,11 @@ class PantallaCocina extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return ConTemaResto(child: Scaffold(
       backgroundColor: AppColors.surfaceSubtle,
       appBar: AppBar(title: Text("Cocina · ${negocio.nombreComercial}"), toolbarHeight: 48),
       body: _Cocina(negocio: negocio, grande: true),
-    );
+    ));
   }
 }
 
@@ -1361,7 +1379,7 @@ class _ConfigMesasState extends State<_ConfigMesas> {
           margin: const EdgeInsets.only(bottom: 16),
           color: AppColors.surface,
           child: ListTile(
-            leading: Icon(Icons.map_outlined, color: AppColors.primary),
+            leading: const Icon(Icons.map_outlined, color: colorResto),
             title: Text("Plano del restaurante", style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textStrong)),
             subtitle: Text("Acomodá las mesas como están en el local y agregá paredes, maceteras, baños, barra...",
                 style: TextStyle(color: AppColors.textMuted, fontSize: 12.5)),

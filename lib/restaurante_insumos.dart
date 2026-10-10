@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'api_service.dart';
 import 'formato.dart';
 import 'negocio.dart';
+import 'restaurante_tema.dart';
 import 'theme/app_theme.dart';
 
 /// Insumos (arroz, pollo, vasos...) y recetas de los productos: al vender se
@@ -342,12 +343,12 @@ class _InsumosRecetasState extends State<InsumosRecetas> {
                 PopupMenuButton<int>(
                   onSelected: (id) => setD(() => filas.add((insumo: id, ctrl: TextEditingController()))),
                   itemBuilder: (_) => [for (final i in libres) PopupMenuItem(value: i['id'] as int, child: Text(i['nombre']))],
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(Icons.add, color: AppColors.primary, size: 18),
-                      const SizedBox(width: 4),
-                      Text("Agregar insumo", style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600)),
+                      Icon(Icons.add, color: colorResto, size: 18),
+                      SizedBox(width: 4),
+                      Text("Agregar insumo", style: TextStyle(color: colorResto, fontWeight: FontWeight.w600)),
                     ]),
                   ),
                 ),
