@@ -505,7 +505,11 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
                   onSelectionChanged: (s) => _cambiarVista(s.first),
                 ),
               ),
-            FilledButton.tonalIcon(onPressed: _paraLlevar, icon: const Icon(Icons.takeout_dining_outlined, size: 18), label: const Text("Para llevar")),
+            FilledButton.tonalIcon(
+              onPressed: _paraLlevar,
+              icon: const Icon(Icons.add, size: 18),
+              label: Text(llevar.isEmpty ? "Para llevar" : "Para llevar (${llevar.length})"),
+            ),
             ]),
           ]),
           if (mesas.isEmpty)
@@ -513,6 +517,7 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
               padding: const EdgeInsets.all(32),
               child: Text("No hay mesas. Agregalas en la pestaña Mesas.", textAlign: TextAlign.center, style: TextStyle(color: AppColors.textMuted)),
             ),
+          if (llevar.isNotEmpty) _franjaParaLlevar(llevar),
           if (verPlano) ..._vistaDelPlano(d, mesas),
           if (!verPlano)
           for (final zona in zonas.entries) ...[
@@ -528,19 +533,80 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
                 ),
             ]),
           ],
-          if (llevar.isNotEmpty) ...[
-            _titulo("Para llevar"),
-            _grilla([
-              for (final o in llevar)
-                _tarjetaMesa(
-                  titulo: (o['nombre'] ?? '').toString().isEmpty ? "Para llevar" : o['nombre'],
-                  orden: o,
-                  onTap: () => _abrir(ordenId: o['id'] as int),
-                ),
-            ]),
-          ],
         ],
       ),
+    );
+  }
+
+  /// Pedidos para llevar arriba de todo, en una franja que se desliza de
+  /// lado: siempre a la vista sin empujar las mesas hacia abajo.
+  Widget _franjaParaLlevar(List<Map<String, dynamic>> llevar) {
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: BoxDecoration(
+        color: colorResto.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: colorResto.withValues(alpha: 0.45)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.takeout_dining, color: colorResto, size: 18),
+          const SizedBox(width: 6),
+          Text("Para llevar (${llevar.length})", style: const TextStyle(fontWeight: FontWeight.w800, color: colorResto)),
+          const SizedBox(width: 8),
+          if (llevar.length > 2)
+            Expanded(
+              child: Text("Deslizá para ver todos →", maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right,
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 11.5)),
+            ),
+        ]),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 86,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: llevar.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (_, i) {
+              final o = llevar[i];
+              final listos = (o['listos'] ?? 0) as int;
+              final color = listos > 0 ? colorListo : colorResto;
+              final nombre = (o['nombre'] ?? '').toString().isEmpty ? "Pedido #${o['numero']}" : o['nombre'];
+              return Material(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => _abrir(ordenId: o['id'] as int),
+                  child: Container(
+                    width: 190,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: color, width: 1.5)),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text("$nombre", maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.textStrong)),
+                      Text("#${o['numero']} · ${minutosDesde(o['abierta_en'])}", style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                      const Spacer(),
+                      Row(children: [
+                        Flexible(
+                          child: Text(formatearColones(o['total'] ?? 0, decimales: 0), maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textStrong)),
+                        ),
+                        const SizedBox(width: 6),
+                        if (listos > 0)
+                          Flexible(child: FittedBox(fit: BoxFit.scaleDown, child: _chip("✓ $listos listo${listos == 1 ? '' : 's'}", colorListo)))
+                        else if ((o['sin_enviar'] ?? 0) > 0)
+                          Flexible(child: FittedBox(fit: BoxFit.scaleDown, child: _chip("${o['sin_enviar']} sin enviar", AppColors.textMuted))),
+                      ]),
+                    ]),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ]),
     );
   }
 }
