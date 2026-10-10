@@ -475,10 +475,19 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
     final d = _datos;
     if (d == null) return const Center(child: CircularProgressIndicator());
     final mesas = (d['mesas'] as List).cast<Map<String, dynamic>>();
-    final llevar = (d['para_llevar'] as List).cast<Map<String, dynamic>>();
+    // Para llevar: primero los que tienen platos listos, después los más antiguos.
+    final llevar = (d['para_llevar'] as List).cast<Map<String, dynamic>>().toList()
+      ..sort((a, b) {
+        final u = _urgencia(a).compareTo(_urgencia(b));
+        return u != 0 ? u : '${a['abierta_en']}'.compareTo('${b['abierta_en']}');
+      });
+    // En la cuadrícula, lo que necesita atención va primero en cada zona.
     final zonas = <String, List<Map<String, dynamic>>>{};
     for (final m in mesas) {
       zonas.putIfAbsent((m['zona'] ?? '').toString(), () => []).add(m);
+    }
+    for (final lista in zonas.values) {
+      lista.sort((a, b) => _urgenciaMesa(a).compareTo(_urgenciaMesa(b)));
     }
     final ocupadas = mesas.where((m) => m['orden'] != null).length;
     final hayPlano = mesas.any((m) => m['x'] != null && m['y'] != null);
@@ -488,6 +497,7 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
+          _franjaAtender(mesas, llevar),
           Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, runSpacing: 8, children: [
             Text("$ocupadas de ${mesas.length} mesas ocupadas", style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
             Row(mainAxisSize: MainAxisSize.min, children: [
@@ -535,6 +545,87 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
           ],
         ],
       ),
+    );
+  }
+
+  /// 0 = pide atención (llama, pide la cuenta, pidió por QR), 1 = platos
+  /// listos para llevar a la mesa, 2 = ocupada sin pendientes, 3 = libre.
+  int _urgencia(Map<String, dynamic>? orden, {Map? llamado}) {
+    if (llamado != null) return 0;
+    if (orden == null) return 3;
+    if ((orden['pedido_qr'] ?? 0) > 0 || orden['cuenta_pedida'] == true) return 0;
+    if ((orden['listos'] ?? 0) > 0) return 1;
+    return 2;
+  }
+
+  int _urgenciaMesa(Map<String, dynamic> m) => _urgencia(m['orden'] as Map<String, dynamic>?, llamado: m['llamado'] as Map?);
+
+  /// Lo primero que se ve en el salón: las mesas y pedidos para llevar que
+  /// necesitan al mesero ya mismo. Desaparece cuando no hay nada pendiente.
+  Widget _franjaAtender(List<Map<String, dynamic>> mesas, List<Map<String, dynamic>> llevar) {
+    final pendientes = <({int urgencia, String texto, String detalle, Color color, VoidCallback alTocar})>[];
+    for (final m in mesas) {
+      final u = _urgenciaMesa(m);
+      if (u > 1) continue;
+      final orden = m['orden'] as Map<String, dynamic>?;
+      final llamado = m['llamado'] as Map?;
+      final detalle = llamado != null
+          ? (llamado['motivo'] == 'cuenta' ? "🧾 pide la cuenta" : "🙋 llama al mesero")
+          : (orden?['cuenta_pedida'] == true
+              ? "🧾 pidió la cuenta"
+              : ((orden?['pedido_qr'] ?? 0) > 0 ? "📱 pidió por QR" : "✓ ${orden?['listos']} listo${orden?['listos'] == 1 ? '' : 's'}"));
+      pendientes.add((
+        urgencia: u,
+        texto: m['nombre'],
+        detalle: detalle,
+        color: u == 0 ? colorLlamado : colorListo,
+        alTocar: () => _abrir(mesaId: m['id'], ordenId: orden?['id'] as int?, atender: llamado != null),
+      ));
+    }
+    for (final o in llevar) {
+      final u = _urgencia(o);
+      if (u > 1) continue;
+      final nombre = (o['nombre'] ?? '').toString().isEmpty ? "Pedido #${o['numero']}" : o['nombre'];
+      pendientes.add((
+        urgencia: u,
+        texto: "🥡 $nombre",
+        detalle: u == 0 ? "pidió la cuenta" : "✓ ${o['listos']} listo${o['listos'] == 1 ? '' : 's'} para entregar",
+        color: u == 0 ? colorLlamado : colorListo,
+        alTocar: () => _abrir(ordenId: o['id'] as int),
+      ));
+    }
+    if (pendientes.isEmpty) return const SizedBox.shrink();
+    pendientes.sort((a, b) => a.urgencia.compareTo(b.urgencia));
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: BoxDecoration(
+        color: colorLlamado.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: colorLlamado.withValues(alpha: 0.5), width: 1.5),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text("Atender ahora (${pendientes.length})", style: const TextStyle(fontWeight: FontWeight.w800, color: colorLlamado)),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final p in pendientes)
+            Material(
+              color: p.color,
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: p.alTocar,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                    Text(p.texto, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+                    Text(p.detalle, style: TextStyle(color: Colors.white.withValues(alpha: 0.92), fontSize: 12.5)),
+                  ]),
+                ),
+              ),
+            ),
+        ]),
+      ]),
     );
   }
 
