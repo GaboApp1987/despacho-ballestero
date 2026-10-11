@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import 'api_service.dart';
+import 'conciliacion_screen.dart';
 import 'cuenta_contable.dart';
 import 'formato.dart';
 import 'negocio.dart';
@@ -480,7 +481,20 @@ class _MovimientosCuentaScreenState extends State<_MovimientosCuentaScreen> {
   Widget build(BuildContext context) {
     final c = widget.cuenta;
     return Scaffold(
-      appBar: AppBar(title: Text("${c['banco']} · ${c['nombre']}")),
+      appBar: AppBar(title: Text("${c['banco']} · ${c['nombre']}"), actions: [
+        TextButton.icon(
+          onPressed: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => ConciliacionesScreen(negocioId: widget.negocioId, cuenta: c, catalogo: widget.catalogo)),
+            );
+            _cargar();
+          },
+          icon: const Icon(Icons.fact_check_outlined),
+          label: const Text("Conciliación"),
+        ),
+        const SizedBox(width: 8),
+      ]),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _formulario(),
         icon: const Icon(Icons.add),
@@ -551,6 +565,16 @@ Future<void> abrirBancos(BuildContext context) async {
   try {
     final res = ApiService.verificar(await ApiService.get('/negocios/'));
     final negocios = (json.decode(utf8.decode(res.bodyBytes)) as List).map((j) => Negocio.fromJson(j)).toList();
+    // Cuentas de cada cliente cuyo mes pasado no está conciliado y cerrado.
+    final sinConciliar = <int, int>{};
+    try {
+      final p = await ApiService.get('/conciliaciones-bancarias/pendientes-contador/');
+      if (p.statusCode == 200) {
+        for (final f in json.decode(utf8.decode(p.bodyBytes)) as List) {
+          if (f['al_dia'] != true) sinConciliar[f['negocio']] = (sinConciliar[f['negocio']] ?? 0) + 1;
+        }
+      }
+    } catch (_) {}
     if (!context.mounted) return;
     if (negocios.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Todavía no tenés clientes registrados.")));
@@ -563,7 +587,22 @@ Future<void> abrirBancos(BuildContext context) async {
             builder: (ctx) => SimpleDialog(
               title: const Text("¿De qué cliente son los bancos?"),
               children: negocios
-                  .map((n) => SimpleDialogOption(onPressed: () => Navigator.pop(ctx, n), child: Text("${n.nombreComercial}  ·  ${n.cedula}")))
+                  .map((n) => SimpleDialogOption(
+                        onPressed: () => Navigator.pop(ctx, n),
+                        child: Row(children: [
+                          Expanded(child: Text("${n.nombreComercial}  ·  ${n.cedula}")),
+                          if (sinConciliar[n.id] != null)
+                            Container(
+                              margin: const EdgeInsets.only(left: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(color: const Color(0xFFD97706).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+                              child: Text(
+                                sinConciliar[n.id] == 1 ? "1 cuenta sin conciliar" : "${sinConciliar[n.id]} cuentas sin conciliar",
+                                style: const TextStyle(fontSize: 11.5, color: Color(0xFFB45309), fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                        ]),
+                      ))
                   .toList(),
             ),
           );
