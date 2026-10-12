@@ -10,6 +10,7 @@ import 'api_service.dart';
 import 'formato.dart';
 import 'negocio.dart';
 import 'restaurante_insumos.dart';
+import 'restaurante_variaciones.dart';
 import 'restaurante_orden_screen.dart';
 import 'restaurante_plano.dart';
 import 'restaurante_tema.dart';
@@ -85,6 +86,8 @@ class _RestauranteScreenState extends State<RestauranteScreen> with SingleTicker
     final pestanas = [
       (const Tab(icon: Icon(Icons.table_restaurant_outlined, size: 20), text: "Salón"), _Salon(negocio: widget.negocio)),
       if (_conPantallaCocina) (const Tab(icon: Icon(Icons.soup_kitchen_outlined, size: 20), text: "Cocina"), _Cocina(negocio: widget.negocio)),
+      if (!_esCajero)
+        (const Tab(icon: Icon(Icons.playlist_add_check, size: 20), text: "Variaciones"), VariacionesPlatos(negocio: widget.negocio)),
       if (!_esCajero) (const Tab(icon: Icon(Icons.kitchen_outlined, size: 20), text: "Insumos"), InsumosRecetas(negocio: widget.negocio)),
       if (!_esCajero)
         (
@@ -935,6 +938,10 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
                               decoration: i['estado'] == 'en_cocina' ? null : TextDecoration.lineThrough,
                             ),
                           ),
+                          // Tamaño y adicionales: en negrita, es lo que más se equivoca.
+                          if ((i['variaciones'] ?? '').toString().isNotEmpty)
+                            Text("${i['variaciones']}",
+                                style: TextStyle(color: AppColors.textStrong, fontWeight: FontWeight.w800, fontSize: 14 * g)),
                           if ((i['nota'] ?? '').toString().isNotEmpty)
                             Text("→ ${i['nota']}", style: TextStyle(color: const Color(0xFFB45309), fontWeight: FontWeight.w600, fontSize: 14 * g)),
                         ],

@@ -12,6 +12,7 @@ import 'negocio.dart';
 import 'producto.dart';
 import 'restaurante_screen.dart' show cronometro, colorEspera;
 import 'restaurante_tema.dart';
+import 'restaurante_variaciones.dart';
 import 'theme/app_theme.dart';
 
 /// Cuenta de una mesa (o pedido para llevar): menú a un lado y la orden al
@@ -31,7 +32,14 @@ class _Borrador {
   final Producto producto;
   int cantidad;
   String nota;
-  _Borrador(this.producto, {this.nota = ''}) : cantidad = 1;
+  // Variaciones elegidas (ids de las opciones), su texto y lo que suman (sin IVA).
+  List<int> opciones;
+  String textoVariaciones;
+  double extra;
+  _Borrador(this.producto, {this.nota = '', this.opciones = const [], this.textoVariaciones = '', this.extra = 0, this.cantidad = 1});
+
+  bool igualA(Producto p, String n, List<int> ops) =>
+      producto.id == p.id && nota == n && opciones.length == ops.length && opciones.toSet().containsAll(ops);
 }
 
 const _estados = {
@@ -46,6 +54,8 @@ double _conIva(Producto p, double precio) => precio * (1 + (p.impuesto?.porcenta
 class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
   Map<String, dynamic>? _orden;
   List<Producto> _productos = [];
+  // Variaciones de cada plato: {producto_id: grupos} (ver restaurante_variaciones.dart).
+  Map<String, dynamic> _variaciones = {};
   final List<_Borrador> _nuevos = [];
   String _busqueda = '';
   int? _categoria;
@@ -97,10 +107,17 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
 
   Future<void> _cargarTodo() async {
     try {
-      final r = await ApiService.get('/productos/?negocio=${widget.negocio.id}');
+      final rs = await Future.wait([
+        ApiService.get('/productos/?negocio=${widget.negocio.id}'),
+        ApiService.get('/restaurante/variaciones/?negocio=${widget.negocio.id}'),
+      ]);
+      final r = rs[0];
       if (r.statusCode == 200) {
         _productos = (json.decode(utf8.decode(r.bodyBytes)) as List).map((j) => Producto.fromJson(j)).toList()
           ..sort((a, b) => a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()));
+      }
+      if (rs[1].statusCode == 200) {
+        _variaciones = (json.decode(utf8.decode(rs[1].bodyBytes))['productos'] as Map).cast<String, dynamic>();
       }
     } catch (_) {}
     await _cargarOrden();
@@ -126,18 +143,47 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
 
   List<Map<String, dynamic>> get _items => ((_orden?['items'] as List?) ?? []).cast<Map<String, dynamic>>();
 
-  double get _totalNuevos => _nuevos.fold(0.0, (s, b) => s + _conIva(b.producto, b.producto.precioUnitario) * b.cantidad);
+  double get _totalNuevos => _nuevos.fold(0.0, (s, b) => s + _conIva(b.producto, b.producto.precioUnitario + b.extra) * b.cantidad);
+
+  List _gruposDe(Producto p) => (_variaciones['${p.id}']?['grupos'] as List?) ?? [];
 
   // ---------------------------------------------------------- Borrador
 
-  void _agregar(Producto p, {String nota = ''}) {
+  void _agregar(Producto p, {String nota = '', SeleccionVariaciones? seleccion}) {
     setState(() {
-      final igual = _nuevos.where((b) => b.producto.id == p.id && b.nota == nota).firstOrNull;
+      final ops = seleccion?.opciones ?? const <int>[];
+      final n = seleccion?.nota ?? nota;
+      final igual = _nuevos.where((b) => b.igualA(p, n, ops)).firstOrNull;
       if (igual != null) {
-        igual.cantidad++;
+        igual.cantidad += seleccion?.cantidad ?? 1;
       } else {
-        _nuevos.add(_Borrador(p, nota: nota));
+        _nuevos.add(_Borrador(p, nota: n, opciones: ops, textoVariaciones: seleccion?.texto ?? '',
+            extra: seleccion?.extra ?? 0, cantidad: seleccion?.cantidad ?? 1));
       }
+    });
+  }
+
+  /// Tocar un plato: si tiene variaciones (tamaño, adicionales) primero se
+  /// eligen; si no, entra directo.
+  Future<void> _tocarPlato(Producto p) async {
+    final grupos = _gruposDe(p);
+    if (grupos.isEmpty) return _agregar(p);
+    final seleccion = await elegirVariaciones(context,
+        plato: p.nombre, precioBase: p.precioUnitario, iva: p.impuesto?.porcentaje ?? 0, grupos: grupos);
+    if (seleccion != null) _agregar(p, seleccion: seleccion);
+  }
+
+  Future<void> _cambiarVariaciones(_Borrador b) async {
+    final seleccion = await elegirVariaciones(context,
+        plato: b.producto.nombre, precioBase: b.producto.precioUnitario, iva: b.producto.impuesto?.porcentaje ?? 0,
+        grupos: _gruposDe(b.producto), inicial: b.opciones, nota: b.nota, cantidad: b.cantidad, textoBoton: "Listo");
+    if (seleccion == null) return;
+    setState(() {
+      b.opciones = seleccion.opciones;
+      b.textoVariaciones = seleccion.texto;
+      b.extra = seleccion.extra;
+      b.nota = seleccion.nota;
+      b.cantidad = seleccion.cantidad;
     });
   }
 
@@ -172,6 +218,7 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
   }
 
   Future<void> _agregarConNota(Producto p) async {
+    if (_gruposDe(p).isNotEmpty) return _tocarPlato(p); // la hoja ya pide la nota
     final nota = await _pedirNota(p.nombre);
     if (nota != null) _agregar(p, nota: nota);
   }
@@ -181,7 +228,9 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
   Future<bool> _subirNuevos() async {
     if (_nuevos.isEmpty) return true;
     final r = await ApiService.post('/restaurante/ordenes/${widget.ordenId}/agregar/', {
-      'items': [for (final b in _nuevos) {'producto': b.producto.id, 'cantidad': b.cantidad, 'nota': b.nota}],
+      'items': [
+        for (final b in _nuevos) {'producto': b.producto.id, 'cantidad': b.cantidad, 'nota': b.nota, 'opciones': b.opciones}
+      ],
     });
     if (r.statusCode != 201) {
       _aviso("No se pudieron agregar: ${ApiService.mensajeError(r)}");
@@ -474,16 +523,22 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
   /// Abre el tiquete con los platos elegidos. `parcial`: al dividir, solo
   /// esos platos se marcan cobrados y la cuenta sigue abierta.
   Future<void> _emitir(Map<int, int> seleccion, {required bool parcial}) async {
-    // Mismo producto y precio = una sola línea en el tiquete.
-    final lineas = <String, ({int productoId, int cantidad, double precio})>{};
+    // Mismo producto, precio y variaciones = una sola línea en el tiquete.
+    final lineas = <String, ({int productoId, int cantidad, double precio, String descripcion})>{};
     final itemsCobrados = <Map<String, dynamic>>[];
     for (final i in _porCobrar) {
       final cantidad = seleccion[i['id']] ?? 0;
       if (cantidad <= 0) continue;
       itemsCobrados.add({'id': i['id'], 'cantidad': cantidad});
-      final clave = "${i['producto']}|${_precio(i)}";
+      final descripcion = (i['variaciones_texto'] ?? '').toString().isEmpty ? '' : (i['descripcion'] ?? '').toString();
+      final clave = "${i['producto']}|${_precio(i)}|$descripcion";
       final previa = lineas[clave];
-      lineas[clave] = (productoId: i['producto'] as int, cantidad: (previa?.cantidad ?? 0) + cantidad, precio: _precio(i));
+      lineas[clave] = (
+        productoId: i['producto'] as int,
+        cantidad: (previa?.cantidad ?? 0) + cantidad,
+        precio: _precio(i),
+        descripcion: descripcion,
+      );
     }
     if (lineas.isEmpty) return;
     final cobrado = await Navigator.push<bool>(
@@ -596,7 +651,10 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
                           borderRadius: BorderRadius.circular(12),
                           child: InkWell(
                             borderRadius: BorderRadius.circular(12),
-                            onTap: () => refrescar(() => _agregar(p)),
+                            onTap: () async {
+                              await _tocarPlato(p);
+                              refrescar(() {});
+                            },
                             onLongPress: () async {
                               await _agregarConNota(p);
                               setLocal(() {});
@@ -691,6 +749,12 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(b.producto.nombre, style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textStrong)),
+            if (_gruposDe(b.producto).isNotEmpty)
+              InkWell(
+                onTap: () => _cambiarVariaciones(b),
+                child: Text(b.textoVariaciones.isEmpty ? "Elegir opciones" : b.textoVariaciones,
+                    style: const TextStyle(color: colorResto, fontSize: 12.5, fontWeight: FontWeight.w600)),
+              ),
             InkWell(
               onTap: () async {
                 final nota = await _pedirNota(b.producto.nombre, inicial: b.nota);
@@ -734,6 +798,8 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
                   decoration: anulado ? TextDecoration.lineThrough : null,
                   fontWeight: FontWeight.w600,
                 )),
+            if ((i['variaciones_texto'] ?? '').toString().isNotEmpty)
+              Text("${i['variaciones_texto']}", style: TextStyle(color: AppColors.textStrong, fontSize: 12.5, fontWeight: FontWeight.w600)),
             if ((i['nota'] ?? '').toString().isNotEmpty)
               Text("→ ${i['nota']}", style: const TextStyle(color: Color(0xFFB45309), fontSize: 12.5)),
             const SizedBox(height: 3),
@@ -969,6 +1035,8 @@ Future<void> imprimirComandas(List<Map<String, dynamic>> comandas, String negoci
           pw.Divider(),
           for (final i in items) ...[
             pw.Text("${i['cantidad']} x ${i['nombre']}", style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
+            if ((i['variaciones'] ?? '').toString().isNotEmpty)
+              pw.Text("   ${i['variaciones']}", style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
             if ((i['nota'] ?? '').toString().isNotEmpty) pw.Text("   -> ${i['nota']}", style: pw.TextStyle(fontSize: 13, fontStyle: pw.FontStyle.italic)),
             pw.SizedBox(height: 4),
           ],

@@ -41,6 +41,9 @@ class LineaFactura {
   String numeroDocExoneracion;
   String nombreInstitucionExoneracion;
   DateTime? fechaEmisionDocExoneracion;
+  // Texto de la línea en el comprobante si no es el nombre del producto:
+  // un plato con sus variaciones, "Hamburguesa (Grande, + Tocineta)".
+  String descripcion;
 
   LineaFactura({
     required this.producto,
@@ -54,6 +57,7 @@ class LineaFactura {
     this.numeroDocExoneracion = '',
     this.nombreInstitucionExoneracion = '',
     this.fechaEmisionDocExoneracion,
+    this.descripcion = '',
   })  : precioBase = producto.precioUnitario,
         monedaPrecio = producto.monedaPrecio;
 
@@ -97,7 +101,7 @@ class FormularioFactura extends StatefulWidget {
   /// Cobro de una mesa del restaurante: llega con los platos ya puestos
   /// (como tiquete) y `camposExtra` (orden_restaurante) va en el POST para
   /// que el backend cierre la cuenta y libere la mesa.
-  final List<({int productoId, int cantidad, double precio})>? lineasIniciales;
+  final List<({int productoId, int cantidad, double precio, String descripcion})>? lineasIniciales;
   final Map<String, dynamic>? camposExtra;
   /// 10% de servicio de restaurante: se muestra como línea aparte (con un
   /// interruptor por si el cliente no lo paga) y va como monto_servicio.
@@ -214,14 +218,17 @@ class _FormularioFacturaState extends State<FormularioFactura> {
   /// Llena el formulario con los datos de [p] (ver FormularioFactura.plantilla).
   /// Los precios se respetan en la moneda original de la factura: una de
   /// US$1500 se repite por US$1500 con el tipo de cambio de hoy.
-  void _aplicarLineasIniciales(List<({int productoId, int cantidad, double precio})> lineas) {
+  void _aplicarLineasIniciales(List<({int productoId, int cantidad, double precio, String descripcion})> lineas) {
     setState(() {
       _tipoDocumento = '04';
       _carrito.clear();
       for (final l in lineas) {
         final producto = _listaProductos.where((x) => x.id == l.productoId).firstOrNull;
         if (producto == null) continue;
-        final linea = LineaFactura(producto: producto, cantidad: l.cantidad, impuesto: producto.impuesto, tipoCambio: _tipoCambioConversion);
+        final linea = LineaFactura(
+          producto: producto, cantidad: l.cantidad, impuesto: producto.impuesto, tipoCambio: _tipoCambioConversion,
+          descripcion: l.descripcion,
+        );
         linea.fijarPrecio(l.precio, 'CRC');
         _carrito.add(linea);
       }
@@ -948,6 +955,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
         },
         'detalles': _carrito.map((item) => {
           'producto': item.producto.id,
+          if (item.descripcion.isNotEmpty) 'descripcion': item.descripcion,
           'cantidad': item.cantidad,
           'precio_unitario': redondear2(item.precioUnitario),
           // Tiquete Interno nunca lleva IVA -- el backend también lo exige
@@ -1632,7 +1640,8 @@ class _FormularioFacturaState extends State<FormularioFactura> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(item.producto.nombre, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+              Text(item.descripcion.isNotEmpty ? item.descripcion : item.producto.nombre,
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
               const SizedBox(height: 2),
               Text(
                 _esInterno
