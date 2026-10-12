@@ -786,6 +786,15 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
   /// AppBar (un botón y dos pastillas con su propio fondo cada una), lo que
   /// se sentía desordenado; ahora se leen como un solo bloque de "datos del
   /// período actual".
+  Widget _botonTemaAppBar() => ValueListenableBuilder<bool>(
+        valueListenable: themeController,
+        builder: (context, esOscuro, _) => IconButton(
+          icon: Icon(esOscuro ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
+          tooltip: esOscuro ? "Cambiar a modo claro" : "Cambiar a modo oscuro",
+          onPressed: themeController.alternar,
+        ),
+      );
+
   Widget _grupoDatosAppBar() {
     final segmentos = <Widget>[
       _segmentoDatosAppBar(
@@ -1065,8 +1074,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _avatarNegocio(diametro: 34, iconoSize: 16),
-            const SizedBox(width: 10),
+            // En celular el logo ya está en el botón de la cuenta (a la derecha).
+            if (!esMovil) ...[_avatarNegocio(diametro: 34, iconoSize: 16), const SizedBox(width: 10)],
             Flexible(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1104,7 +1113,23 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
             ),
           ],
         ),
-        bottom: esMovil ? null : PreferredSize(preferredSize: const Size.fromHeight(56), child: _buildPillTabsBar()),
+        // En celular la cápsula de datos (período, tipo de cambio, cupo) y el
+        // tema van en una franja debajo: en el AppBar no cabían y se
+        // montaban encima de "Volver" y el menú.
+        bottom: esMovil
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(44),
+                child: Container(
+                  height: 44,
+                  alignment: Alignment.centerLeft,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(children: [_botonTemaAppBar(), _grupoDatosAppBar()]),
+                  ),
+                ),
+              )
+            : PreferredSize(preferredSize: const Size.fromHeight(56), child: _buildPillTabsBar()),
         actions: [
           // Antes esto eran hasta 7 elementos sueltos (refresh, tema, 2
           // pastillas condicionales, periodo, soporte, chat) mas la cuenta
@@ -1126,15 +1151,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                ValueListenableBuilder<bool>(
-                  valueListenable: themeController,
-                  builder: (context, esOscuro, _) => IconButton(
-                    icon: Icon(esOscuro ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
-                    tooltip: esOscuro ? "Cambiar a modo claro" : "Cambiar a modo oscuro",
-                    onPressed: themeController.alternar,
-                  ),
-                ),
-                _grupoDatosAppBar(),
+                if (!esMovil) ...[_botonTemaAppBar(), _grupoDatosAppBar()],
                 _menuComunicacionAppBar(),
                 _menuCuentaAppBar(),
               ],
