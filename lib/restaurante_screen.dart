@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
 import 'formato.dart';
 import 'negocio.dart';
+import 'recorridos.dart';
 import 'restaurante_insumos.dart';
 import 'restaurante_variaciones.dart';
 import 'restaurante_orden_screen.dart';
@@ -16,6 +17,7 @@ import 'restaurante_plano.dart';
 import 'restaurante_tema.dart';
 import 'theme/app_theme.dart';
 import 'widgets/campana.dart';
+import 'widgets/recorrido_guiado.dart';
 
 /// Módulo de restaurante: el salón (mesas con su cuenta abierta y pedidos
 /// para llevar), la pantalla de cocina y la configuración de mesas. Se
@@ -78,6 +80,9 @@ class _RestauranteScreenState extends State<RestauranteScreen> with SingleTicker
       if (r.statusCode == 200) _cocina = (json.decode(utf8.decode(r.bodyBytes))['cocina'] ?? 'pantalla') as String;
     } catch (_) {}
     if (mounted) setState(() => _cargado = true);
+    if (mounted) {
+      ofrecerRecorrido(context, clave: GuiaRestaurante.clave, titulo: "funciona el modo restaurante", iniciar: () => GuiaRestaurante.mostrar(context));
+    }
   }
 
   @override
@@ -116,9 +121,19 @@ class _RestauranteScreenState extends State<RestauranteScreen> with SingleTicker
                   child: Text(widget.negocio.nombreComercial, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right,
                       style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 12.5)),
                 ),
+                const SizedBox(width: 6),
+                Tooltip(
+                  message: "¿Cómo funciona? Ver el recorrido",
+                  child: InkWell(
+                    onTap: () => GuiaRestaurante.mostrar(context),
+                    borderRadius: BorderRadius.circular(12),
+                    child: const Padding(padding: EdgeInsets.all(2), child: Icon(Icons.help_outline, color: Colors.white, size: 18)),
+                  ),
+                ),
               ]),
             ),
             Material(
+              key: GuiaRestaurante.pestanas,
               color: AppColors.surface,
               child: TabBar(
                 tabs: [for (final p in pestanas) p.$1],
@@ -456,6 +471,10 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
         child: Text(texto, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700)),
       );
 
+  /// La primera zona lleva la marca del recorrido guiado (una sola: es un GlobalKey).
+  Widget _grillaMarcada(bool marcar, List<Widget> hijos) =>
+      marcar ? KeyedSubtree(key: GuiaRestaurante.mesas, child: _grilla(hijos)) : _grilla(hijos);
+
   Widget _grilla(List<Widget> hijos) => GridView.extent(
         maxCrossAxisExtent: 190,
         mainAxisSpacing: 10,
@@ -519,6 +538,7 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
                 ),
               ),
             FilledButton.tonalIcon(
+              key: GuiaRestaurante.paraLlevar,
               onPressed: _paraLlevar,
               icon: const Icon(Icons.add, size: 18),
               label: Text(llevar.isEmpty ? "Para llevar" : "Para llevar (${llevar.length})"),
@@ -531,11 +551,15 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
               child: Text("No hay mesas. Agregalas en la pestaña Mesas.", textAlign: TextAlign.center, style: TextStyle(color: AppColors.textMuted)),
             ),
           if (llevar.isNotEmpty) _franjaParaLlevar(llevar),
-          if (verPlano) ..._vistaDelPlano(d, mesas),
+          if (verPlano)
+            KeyedSubtree(
+              key: GuiaRestaurante.mesas,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: _vistaDelPlano(d, mesas)),
+            ),
           if (!verPlano)
           for (final zona in zonas.entries) ...[
             if (zonas.length > 1 || zona.key.isNotEmpty) _titulo(zona.key.isEmpty ? "Sin zona" : zona.key) else const SizedBox(height: 12),
-            _grilla([
+            _grillaMarcada(zona.key == zonas.keys.first, [
               for (final m in zona.value)
                 _tarjetaMesa(
                   titulo: m['nombre'],

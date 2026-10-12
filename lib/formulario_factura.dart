@@ -14,6 +14,8 @@ import 'historial_precio_cliente.dart';
 import 'actividad_economica.dart';
 import 'factura.dart';
 import 'widgets/automatizacion_factura.dart';
+import 'recorridos.dart';
+import 'widgets/recorrido_guiado.dart';
 
 // Modelo temporal para los items del carrito
 class LineaFactura {
@@ -364,6 +366,11 @@ class _FormularioFacturaState extends State<FormularioFactura> {
             _actividades = actividadesData.map((j) => ActividadEconomica.fromJson(j)).toList();
             _isLoading = false;
           });
+          // La primera vez: "¿Te muestro cómo se hace una factura?" (no al
+          // cobrar una mesa ni al repetir una factura).
+          if (widget.lineasIniciales == null && widget.plantilla == null) {
+            ofrecerRecorrido(context, clave: GuiaFactura.clave, titulo: "se hace una factura", iniciar: () => GuiaFactura.mostrar(context));
+          }
           if (widget.plantilla != null) await _aplicarPlantilla(widget.plantilla!);
           if (widget.lineasIniciales != null) _aplicarLineasIniciales(widget.lineasIniciales!);
         }
@@ -1095,6 +1102,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
             : (_esInterno ? "Nuevo Tiquete Interno" : (_esTiquete ? "Nuevo Tiquete" : "Nueva Factura"))),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
+        actions: [BotonGuia(iniciar: () => GuiaFactura.mostrar(context))],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -1113,6 +1121,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                         child: Center(child: Text("No se encontraron productos", style: TextStyle(color: Colors.grey))),
                       )
                     : GridView.builder(
+                        key: GuiaFactura.catalogo,
                         shrinkWrap: !expandirGrid,
                         physics: expandirGrid ? null : const NeverScrollableScrollPhysics(),
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -1133,6 +1142,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
                       child: TextField(
+                        key: GuiaFactura.buscar,
                         controller: _busquedaCtrl,
                         decoration: InputDecoration(
                           hintText: "Buscar producto por nombre...",
@@ -1351,6 +1361,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
               const Text("Tu Factura", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
               SegmentedButton<String>(
+                key: GuiaFactura.tipo,
                 segments: const [
                   ButtonSegment(value: '01', label: Text("Factura"), icon: Icon(Icons.receipt_long_outlined)),
                   ButtonSegment(value: '04', label: Text("Tiquete"), icon: Icon(Icons.confirmation_number_outlined)),
@@ -1378,6 +1389,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
               ],
               const SizedBox(height: 12),
               DropdownButtonFormField<Cliente>(
+                key: GuiaFactura.cliente,
                 value: _clienteSeleccionado,
                 decoration: InputDecoration(
                   labelText: _esTiquete ? "Cliente (opcional)" : "Cliente *",
@@ -1406,6 +1418,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<String>(
+                      key: GuiaFactura.condicion,
                       value: _condicionVenta,
                       decoration: InputDecoration(
                         labelText: "Condición",
@@ -1447,7 +1460,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                 const SizedBox(height: 10),
                 Text("¿Cómo paga?", style: TextStyle(fontSize: 12.5, color: Colors.grey[600])),
                 const SizedBox(height: 6),
-                Wrap(spacing: 6, runSpacing: 6, children: [
+                Wrap(key: GuiaFactura.medioPago, spacing: 6, runSpacing: 6, children: [
                   for (final m in _mediosPago)
                     ChoiceChip(
                       avatar: Icon(m.$3, size: 16),
@@ -1611,6 +1624,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
+                  key: GuiaFactura.emitir,
                   onPressed: (_carrito.isEmpty || (!_esTiquete && _clienteSeleccionado == null) || _isSaving)
                       ? null
                       : _guardarFactura,

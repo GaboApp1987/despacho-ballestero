@@ -15,6 +15,8 @@ import 'negocio.dart';
 import 'formato.dart';
 import 'widgets/campo_cedula_hacienda.dart';
 import 'widgets/selector_ubicacion_cr.dart';
+import 'recorridos.dart';
+import 'widgets/recorrido_guiado.dart';
 
 /// Registra una Nota de Débito que el proveedor emitió sobre `compra` (le
 /// cobró de más) -- compartido entre la lista de Compras y la pantalla de
@@ -160,6 +162,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
   String _filtroHacienda = 'todas';
   List<Proveedor> _proveedores = [];
   List<dynamic> _correosPendientes = [];
+  bool _guiaOfrecida = false;
   bool _modoSeleccion = false;
   final Set<int> _comprasSeleccionadas = {};
 
@@ -203,6 +206,10 @@ class _ComprasScreenState extends State<ComprasScreen> {
           _cargando = false;
         });
         _consultarMensajesEnviados();
+        if (!_guiaOfrecida) {
+          _guiaOfrecida = true;
+          ofrecerRecorrido(context, clave: GuiaCompras.clave, titulo: "se registran las compras", iniciar: _mostrarGuia);
+        }
       } else {
         setState(() => _cargando = false);
       }
@@ -734,11 +741,13 @@ class _ComprasScreenState extends State<ComprasScreen> {
                     onPressed: () => setState(() => _modoSeleccion = true),
                   ),
                   IconButton(
+                    key: GuiaCompras.importarVarios,
                     icon: const Icon(Icons.upload_file),
                     tooltip: "Importar varios XML de facturas",
                     onPressed: _importarVariosXml,
                   ),
                   IconButton(icon: const Icon(Icons.refresh), onPressed: _cargarDatos),
+                  BotonGuia(iniciar: _mostrarGuia),
                 ],
           bottom: TabBar(
             indicatorColor: AppColors.primary,
@@ -790,6 +799,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
                 ),
                 const SizedBox(height: 10),
                 FloatingActionButton.extended(
+                  key: GuiaCompras.nueva,
                   heroTag: 'fab_compras',
                   onPressed: _abrirNuevaCompra,
                   icon: const Icon(Icons.add_shopping_cart),
@@ -804,8 +814,11 @@ class _ComprasScreenState extends State<ComprasScreen> {
     );
   }
 
+  void _mostrarGuia() => GuiaCompras.mostrar(context, cedulaNegocio: widget.negocio.cedula);
+
   Widget _buildCorreosPendientes() {
     return Container(
+      key: GuiaCompras.porRevisar,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.amber.withOpacity(0.12),

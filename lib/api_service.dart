@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'perfil_sesion.dart';
 import 'cliente_en_vivo.dart';
 import 'widgets/asistente_flotante.dart';
+import 'widgets/recorrido_guiado.dart';
 
 class ApiService {
   // AUDITORIA.md hallazgo B3 -- el token/refresh_token vivían en
@@ -46,6 +47,7 @@ class ApiService {
   static Future<void> logout() async {
     PerfilSesion.limpiar();
     AsistenteFlotante.limpiar();
+    Recorridos.olvidar();
     await _almacenSeguro.delete(key: 'token');
     await _almacenSeguro.delete(key: 'refresh_token');
   }

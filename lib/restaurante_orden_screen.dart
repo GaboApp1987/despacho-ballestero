@@ -12,7 +12,9 @@ import 'negocio.dart';
 import 'producto.dart';
 import 'restaurante_screen.dart' show cronometro, colorEspera;
 import 'restaurante_tema.dart';
+import 'recorridos.dart';
 import 'restaurante_variaciones.dart';
+import 'widgets/recorrido_guiado.dart';
 import 'theme/app_theme.dart';
 
 /// Cuenta de una mesa (o pedido para llevar): menú a un lado y la orden al
@@ -121,6 +123,9 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
       }
     } catch (_) {}
     await _cargarOrden();
+    if (mounted) {
+      ofrecerRecorrido(context, clave: GuiaOrden.clave, titulo: "se atiende una mesa", iniciar: () => GuiaOrden.mostrar(context));
+    }
   }
 
   Future<void> _cargarOrden() async {
@@ -603,6 +608,7 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
           child: TextField(
+            key: GuiaOrden.menu,
             decoration: InputDecoration(
               hintText: "Buscar plato o bebida...",
               prefixIcon: const Icon(Icons.search, size: 20),
@@ -931,13 +937,15 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
             if (celular) ...[
               SizedBox(
                 width: double.infinity,
-                child: OutlinedButton.icon(onPressed: _abrirMenuCelular, icon: const Icon(Icons.add), label: const Text("Agregar platos")),
+                child: OutlinedButton.icon(
+                    key: GuiaOrden.agregarPlatos, onPressed: _abrirMenuCelular, icon: const Icon(Icons.add), label: const Text("Agregar platos")),
               ),
               const SizedBox(height: 8),
             ],
             Row(children: [
               Expanded(
                 child: FilledButton.icon(
+                  key: GuiaOrden.enviar,
                   onPressed: porEnviar == 0 || _enviando ? null : _enviarCocina,
                   icon: _enviando
                       ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
@@ -948,6 +956,7 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: FilledButton.icon(
+                  key: GuiaOrden.cobrar,
                   style: FilledButton.styleFrom(backgroundColor: const Color(0xFF16A34A)),
                   onPressed: _items.isEmpty && _nuevos.isEmpty ? null : _cobrar,
                   icon: const Icon(Icons.point_of_sale, size: 18),
@@ -978,6 +987,7 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
         appBar: AppBar(
           title: Text(_titulo),
           actions: [
+            BotonGuia(iniciar: () => GuiaOrden.mostrar(context)),
             if (_orden != null)
               PopupMenuButton<String>(
                 onSelected: (v) {

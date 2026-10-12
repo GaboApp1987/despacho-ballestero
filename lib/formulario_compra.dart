@@ -8,6 +8,8 @@ import 'api_service.dart';
 import 'compra_model.dart';
 import 'impuesto.dart';
 import 'negocio.dart';
+import 'recorridos.dart';
+import 'widgets/recorrido_guiado.dart';
 import 'producto.dart';
 import 'formato.dart';
 import 'widgets/campo_cedula_hacienda.dart';
@@ -432,6 +434,7 @@ class _FormularioCompraState extends State<FormularioCompra> {
             _listaImpuestos = impuestosData.map((j) => Impuesto.fromJson(j)).toList();
             _isLoading = false;
           });
+          ofrecerRecorrido(context, clave: GuiaCompra.clave, titulo: "se registra una compra", iniciar: () => GuiaCompra.mostrar(context));
           if (widget.datosPrecarga != null) {
             await _aplicarDatosParseados(widget.datosPrecarga!);
           }
@@ -650,6 +653,7 @@ class _FormularioCompraState extends State<FormularioCompra> {
         title: const Text("Ingreso de Mercadería"),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
+        actions: [BotonGuia(iniciar: () => GuiaCompra.mostrar(context))],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -666,6 +670,7 @@ class _FormularioCompraState extends State<FormularioCompra> {
                   children: [
                     Expanded(
                       child: DropdownButtonFormField<Proveedor>(
+                        key: GuiaCompra.proveedor,
                         value: _proveedorSeleccionado,
                         decoration: const InputDecoration(
                           labelText: "Proveedor",
@@ -715,6 +720,7 @@ class _FormularioCompraState extends State<FormularioCompra> {
                 ),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
+                  key: GuiaCompra.condicion,
                   value: _condicionCompra,
                   decoration: InputDecoration(
                     labelText: "Condición",
@@ -778,6 +784,7 @@ class _FormularioCompraState extends State<FormularioCompra> {
                 ],
                 const SizedBox(height: 10),
                 OutlinedButton.icon(
+                  key: GuiaCompra.adjuntar,
                   onPressed: _procesandoXml ? null : _elegirComprobante,
                   icon: _procesandoXml
                       ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
@@ -874,6 +881,7 @@ class _FormularioCompraState extends State<FormularioCompra> {
           ),
           if (_claveHacienda != null)
             CheckboxListTile(
+              key: GuiaCompra.aceptar,
               value: _aceptarEnHacienda,
               onChanged: _isSaving ? null : (v) => setState(() => _aceptarEnHacienda = v ?? true),
               title: const Text("Aceptar ante Hacienda al confirmar"),
@@ -884,6 +892,7 @@ class _FormularioCompraState extends State<FormularioCompra> {
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: ElevatedButton(
+              key: GuiaCompra.confirmar,
               onPressed: _isSaving ? null : _guardarCompra,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
