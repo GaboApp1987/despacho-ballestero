@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import 'api_service.dart';
 import 'conciliacion_screen.dart';
+import 'recorridos.dart';
+import 'widgets/recorrido_guiado.dart';
 import 'cuenta_contable.dart';
 import 'formato.dart';
 import 'negocio.dart';
@@ -52,6 +54,7 @@ class _BancosScreenState extends State<BancosScreen> {
       if (r[1].statusCode == 200) {
         _catalogo = (json.decode(utf8.decode(r[1].bodyBytes)) as List).map((j) => CuentaContable.fromJson(j)).toList();
       }
+      if (mounted) ofrecerRecorrido(context, clave: GuiaBancos.clave, titulo: "funcionan los bancos", iniciar: () => GuiaBancos.mostrar(context));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudieron cargar los bancos: ${ApiService.textoError(e)}")));
     }
@@ -231,14 +234,16 @@ class _BancosScreenState extends State<BancosScreen> {
   @override
   Widget build(BuildContext context) {
     final acciones = [
-      IconButton(tooltip: "Traslado entre cuentas", icon: const Icon(Icons.swap_horiz), onPressed: _cargando ? null : _traslado),
+      IconButton(key: GuiaBancos.traslado, tooltip: "Traslado entre cuentas", icon: const Icon(Icons.swap_horiz), onPressed: _cargando ? null : _traslado),
       IconButton(tooltip: "Actualizar", icon: const Icon(Icons.refresh), onPressed: _cargar),
+      BotonGuia(iniciar: () => GuiaBancos.mostrar(context)),
     ];
     return Scaffold(
       appBar: widget.embebido
           ? null
           : AppBar(title: Text("Bancos · ${widget.negocioNombre}"), actions: acciones),
       floatingActionButton: FloatingActionButton.extended(
+        key: GuiaBancos.nueva,
         onPressed: _nuevaCuenta,
         icon: const Icon(Icons.add),
         label: const Text("Nueva cuenta"),
@@ -266,6 +271,7 @@ class _BancosScreenState extends State<BancosScreen> {
                       ]),
                     ..._cuentas
                       .map((c) => Card(
+                            key: identical(c, _cuentas.first) ? GuiaBancos.cuenta : null,
                             margin: const EdgeInsets.only(bottom: 10),
                             child: ListTile(
                               leading: CircleAvatar(

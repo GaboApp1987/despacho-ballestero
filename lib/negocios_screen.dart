@@ -25,6 +25,8 @@ import 'widgets/menu_lateral.dart';
 import 'widgets/campo_cedula_hacienda.dart';
 import 'perfil_sesion.dart';
 import 'widgets/asistente_flotante.dart';
+import 'recorridos.dart';
+import 'widgets/recorrido_guiado.dart';
 
 /// Paleta "Blanco & Cobalto" -- solo para cuando esta pantalla la ve un
 /// CONTADOR viendo su propia cartera (widget.puedeCrear), a propósito
@@ -517,6 +519,9 @@ class _NegociosScreenState extends State<NegociosScreen> {
               ..sort((a, b) => a.nombreComercial.toLowerCase().compareTo(b.nombreComercial.toLowerCase()));
             _isLoading = false;
           });
+          if (widget.puedeCrear) {
+            ofrecerRecorrido(context, clave: GuiaPanelContador.clave, titulo: "funciona tu panel", iniciar: () => GuiaPanelContador.mostrar(context));
+          }
         }
       } else {
         throw Exception("Error del servidor: ${response.statusCode}");
@@ -1083,6 +1088,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
             ? [
                 _accionAppBarClara(icono: Icons.auto_awesome, tooltip: "Asistente Equilibra", onPressed: _abrirAsistenteContador),
                 _accionAppBarClara(icono: Icons.refresh_rounded, tooltip: "Recargar", onPressed: _recargarTodo),
+                BotonGuia(iniciar: () => GuiaPanelContador.mostrar(context), color: _PaletaContador.textoFuerte),
                 const SizedBox(width: 4),
               ]
             : [
@@ -1216,6 +1222,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
       // tapaba "Cerrar sesión".
       floatingActionButton: widget.puedeCrear && !(esContador && !esAncho && _railAbierto)
           ? FloatingActionButton.extended(
+              key: esContador ? GuiaPanelContador.nuevo : null,
               onPressed: _mostrarFormularioCrear,
               icon: const Icon(Icons.add),
               label: const Text("NUEVO NEGOCIO"),
@@ -1281,6 +1288,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
                       ),
                       const Spacer(),
                       _accionAppBarClara(icono: Icons.refresh_rounded, tooltip: "Recargar", onPressed: _recargarTodo),
+                      BotonGuia(iniciar: () => GuiaPanelContador.mostrar(context), color: _PaletaContador.textoFuerte),
                     ],
                   ),
                 ),
@@ -1299,6 +1307,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
                     child: AsistenteIABar(
+                      key: GuiaPanelContador.asistente,
                       saludo: _miSocio != null ? "Hola, ${_miSocio!.nombre}" : null,
                       secciones: _seccionesAsistenteContador,
                       onNavegar: _irDesdeAsistenteContador,
@@ -1475,6 +1484,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
                     (context, index) {
                       final n = _negociosFiltrados[index];
                       return Card(
+                        key: index == 0 && esContador ? GuiaPanelContador.cliente : null,
                         margin: const EdgeInsets.only(bottom: 10),
                         color: esContador ? _PaletaContador.superficie : null,
                         elevation: esContador ? 0 : null,
@@ -1575,6 +1585,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
     bool activa(int pestana) => !superpuesta && _pestanaContador == pestana;
 
     return MenuLateral(
+      key: GuiaPanelContador.menu,
       subtitulo: "MODO CONTADOR",
       colapsada: superpuesta ? !_railAbierto : _sidebarColapsada,
       onAlternar: () => setState(() {

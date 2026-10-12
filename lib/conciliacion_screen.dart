@@ -8,6 +8,8 @@ import 'conciliacion_util.dart';
 import 'cuenta_contable.dart';
 import 'formato.dart';
 import 'perfil_sesion.dart';
+import 'recorridos.dart';
+import 'widgets/recorrido_guiado.dart';
 import 'theme/app_theme.dart';
 
 /// Conciliación bancaria de una cuenta, mes a mes: el estado de cuenta del
@@ -296,6 +298,9 @@ class _ConciliacionDetalleScreenState extends State<_ConciliacionDetalleScreen> 
       if (mounted) _aviso(context, "No se pudo cargar la conciliación: $e");
     }
     if (mounted) setState(() => _cargando = false);
+    if (mounted && _editable) {
+      ofrecerRecorrido(context, clave: GuiaConciliacion.clave, titulo: "se concilia un mes", iniciar: () => GuiaConciliacion.mostrar(context));
+    }
   }
 
   /// Corre una acción contra el backend y recarga; devuelve la respuesta.
@@ -560,9 +565,18 @@ class _ConciliacionDetalleScreenState extends State<_ConciliacionDetalleScreen> 
         title: Text(titulo),
         actions: [
           if (_editable) ...[
-            IconButton(tooltip: "Cargar estado de cuenta (Excel o CSV)", icon: const Icon(Icons.upload_file), onPressed: _trabajando ? null : _cargarEstadoDeCuenta),
-            IconButton(tooltip: "Emparejar automático", icon: const Icon(Icons.auto_fix_high), onPressed: _trabajando ? null : _emparejarAuto),
+            IconButton(
+                key: GuiaConciliacion.cargar,
+                tooltip: "Cargar estado de cuenta (Excel o CSV)",
+                icon: const Icon(Icons.upload_file),
+                onPressed: _trabajando ? null : _cargarEstadoDeCuenta),
+            IconButton(
+                key: GuiaConciliacion.emparejar,
+                tooltip: "Emparejar automático",
+                icon: const Icon(Icons.auto_fix_high),
+                onPressed: _trabajando ? null : _emparejarAuto),
           ],
+          BotonGuia(iniciar: () => GuiaConciliacion.mostrar(context)),
           if (_esContador && _datos != null)
             PopupMenuButton<String>(
               onSelected: (v) {
@@ -615,6 +629,7 @@ class _ConciliacionDetalleScreenState extends State<_ConciliacionDetalleScreen> 
           ),
           const SizedBox(width: 12),
           ElevatedButton.icon(
+            key: GuiaConciliacion.cerrar,
             onPressed: cuadra && !_trabajando ? _cerrar : null,
             icon: const Icon(Icons.lock_outline, size: 18),
             label: const Text("Cerrar mes"),
@@ -658,7 +673,7 @@ class _ConciliacionDetalleScreenState extends State<_ConciliacionDetalleScreen> 
           ]),
         );
     final pagos = double.tryParse(r['pagos_pendientes']?.toString() ?? '') ?? 0;
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    return Column(key: GuiaConciliacion.resumen, crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
         Expanded(
           child: Text("Del ${_fechaCorta(_datos!['fecha_inicio'])} al ${_fechaCorta(_datos!['fecha_fin'])}",
@@ -712,7 +727,8 @@ class _ConciliacionDetalleScreenState extends State<_ConciliacionDetalleScreen> 
     ]);
   }
 
-  Widget _titulo(String texto, String ayuda) => Padding(
+  Widget _titulo(String texto, String ayuda, {Key? key}) => Padding(
+        key: key,
         padding: const EdgeInsets.only(bottom: 8),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(texto, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
@@ -725,6 +741,7 @@ class _ConciliacionDetalleScreenState extends State<_ConciliacionDetalleScreen> 
     final sueltas = lineas.where((l) => l['movimiento'] == null).length;
     return [
       _titulo(
+        key: GuiaConciliacion.banco,
         "Estado de cuenta del banco (${lineas.length})",
         lineas.isEmpty ? "Cargá el Excel o CSV que descargás del banco." : "$sueltas sin emparejar · ${lineas.length - sueltas} emparejadas",
       ),

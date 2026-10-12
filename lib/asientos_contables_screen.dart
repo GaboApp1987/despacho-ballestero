@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
+import 'recorridos.dart';
+import 'widgets/recorrido_guiado.dart';
 
 import 'api_service.dart';
 import 'asiento_contable.dart';
@@ -46,6 +48,9 @@ class _AsientosContablesScreenState extends State<AsientosContablesScreen> {
       }
     } catch (_) {}
     if (mounted) setState(() => _cargandoNegocios = false);
+    if (mounted && _negocios.isNotEmpty) {
+      ofrecerRecorrido(context, clave: GuiaAsientos.clave, titulo: "funcionan los asientos", iniciar: () => GuiaAsientos.mostrar(context));
+    }
   }
 
   @override
@@ -58,6 +63,7 @@ class _AsientosContablesScreenState extends State<AsientosContablesScreen> {
         iconTheme: const IconThemeData(color: TemaContador.textoFuerte),
         backgroundColor: TemaContador.fondo,
         elevation: 0,
+        actions: [BotonGuia(iniciar: () => GuiaAsientos.mostrar(context), color: TemaContador.textoFuerte)],
       ),
       body: _cargandoNegocios
           ? const Center(child: CircularProgressIndicator())
@@ -78,6 +84,7 @@ class _AsientosContablesScreenState extends State<AsientosContablesScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: DropdownButtonFormField<Negocio>(
+                              key: GuiaAsientos.cliente,
                               initialValue: _negocioSeleccionado,
                               decoration: InputDecoration(
                                 labelText: "Cliente / negocio",
@@ -301,6 +308,7 @@ class _LibroDiarioState extends State<_LibroDiario> {
           ),
           const SizedBox(height: 10),
           FloatingActionButton.extended(
+            key: GuiaAsientos.estados,
             heroTag: 'estados-financieros',
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => EstadosFinancierosScreen(negocioId: widget.negocio.id, negocioNombre: widget.negocio.nombreComercial))),
             backgroundColor: TemaContador.textoFuerte,
@@ -310,6 +318,7 @@ class _LibroDiarioState extends State<_LibroDiario> {
           ),
           const SizedBox(height: 10),
           FloatingActionButton.extended(
+            key: GuiaAsientos.generar,
             heroTag: 'generar-automaticos',
             onPressed: _generarAutomaticos,
             backgroundColor: TemaContador.textoFuerte,
@@ -319,6 +328,7 @@ class _LibroDiarioState extends State<_LibroDiario> {
           ),
           const SizedBox(height: 10),
           FloatingActionButton.extended(
+            key: GuiaAsientos.nuevo,
             heroTag: 'nuevo-asiento',
             onPressed: _nuevoAsiento,
             backgroundColor: TemaContador.acento,

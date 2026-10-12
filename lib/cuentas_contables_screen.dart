@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
+import 'recorridos.dart';
+import 'widgets/recorrido_guiado.dart';
 
 import 'package:file_picker/file_picker.dart';
 
@@ -86,6 +88,7 @@ class _CuentasContablesScreenState extends State<CuentasContablesScreen> {
       }
     } catch (_) {}
     if (mounted) setState(() => _cargando = false);
+    if (mounted) ofrecerRecorrido(context, clave: GuiaCatalogo.clave, titulo: "funciona el catálogo", iniciar: () => GuiaCatalogo.mostrar(context));
   }
 
   Future<void> _sembrarCatalogo() async {
@@ -267,6 +270,7 @@ class _CuentasContablesScreenState extends State<CuentasContablesScreen> {
       });
 
   Widget _menuAcciones() => PopupMenuButton<String>(
+        key: GuiaCatalogo.acciones,
         icon: _procesando
             ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
             : const Icon(Icons.more_vert, color: TemaContador.textoFuerte),
@@ -341,9 +345,10 @@ class _CuentasContablesScreenState extends State<CuentasContablesScreen> {
         iconTheme: const IconThemeData(color: TemaContador.textoFuerte),
         backgroundColor: TemaContador.fondo,
         elevation: 0,
-        actions: [_menuAcciones()],
+        actions: [BotonGuia(iniciar: () => GuiaCatalogo.mostrar(context), color: TemaContador.textoFuerte), _menuAcciones()],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        key: GuiaCatalogo.nueva,
         onPressed: () => _abrirFormulario(),
         backgroundColor: TemaContador.acento,
         foregroundColor: Colors.white,
@@ -362,6 +367,7 @@ class _CuentasContablesScreenState extends State<CuentasContablesScreen> {
                       Text("${widget.negocioNombre} todavía no tiene catálogo de cuentas.", style: const TextStyle(color: Colors.grey), textAlign: TextAlign.center),
                       const SizedBox(height: 16),
                       ElevatedButton.icon(
+                        key: GuiaCatalogo.estandar,
                         onPressed: _sembrando ? null : _sembrarCatalogo,
                         style: ElevatedButton.styleFrom(backgroundColor: TemaContador.acento, foregroundColor: Colors.white, disabledBackgroundColor: TemaContador.acento.withOpacity(0.5), disabledForegroundColor: Colors.white),
                         icon: _sembrando ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.playlist_add_check),
@@ -369,6 +375,7 @@ class _CuentasContablesScreenState extends State<CuentasContablesScreen> {
                       ),
                       const SizedBox(height: 8),
                       Wrap(
+                        key: GuiaCatalogo.copiar,
                         spacing: 8,
                         alignment: WrapAlignment.center,
                         children: [
@@ -385,6 +392,7 @@ class _CuentasContablesScreenState extends State<CuentasContablesScreen> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                       child: TextField(
+                        key: GuiaCatalogo.buscar,
                         controller: _busquedaCtrl,
                         style: const TextStyle(color: TemaContador.textoFuerte),
                         onChanged: (v) => setState(() => _busqueda = v),

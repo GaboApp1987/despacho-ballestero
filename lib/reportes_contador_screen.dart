@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
+import 'recorridos.dart';
+import 'widgets/recorrido_guiado.dart';
 
 import 'api_service.dart';
 import 'export_service.dart';
@@ -91,6 +93,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
       // Si falla, el selector simplemente queda vacío.
     }
     if (mounted) setState(() => _cargandoNegocios = false);
+    if (mounted) ofrecerRecorrido(context, clave: GuiaReportes.clave, titulo: "funcionan los reportes", iniciar: () => GuiaReportes.mostrar(context));
   }
 
   /// Los botones de exportar llamaban a ExportService directo en el
@@ -296,6 +299,9 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
           "Reportes",
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: widget.esContador ? TemaContador.textoFuerte : Colors.white),
         ),
+        actions: [
+          BotonGuia(iniciar: () => GuiaReportes.mostrar(context), color: widget.esContador ? TemaContador.textoFuerte : Colors.white),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -431,7 +437,8 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
     return _periodoTexto;
   }
 
-  Widget _paso(int numero, String titulo, {Widget? extra}) => Padding(
+  Widget _paso(int numero, String titulo, {Widget? extra, Key? key}) => Padding(
+        key: key,
         padding: const EdgeInsets.only(bottom: 10),
         child: Row(
           children: [
@@ -547,7 +554,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 1. Tipo de reporte
-          _paso(1, "¿Qué reporte querés?"),
+          _paso(1, "¿Qué reporte querés?", key: GuiaReportes.tipo),
           LayoutBuilder(builder: (context, c) {
             final columnas = c.maxWidth >= 760 ? 4 : 2;
             final ancho = (c.maxWidth - 10 * (columnas - 1)) / columnas;
@@ -563,6 +570,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
           _paso(
             2,
             "¿De qué clientes?",
+            key: GuiaReportes.clientes,
             extra: _negocios.length > 1
                 ? _chip(todos ? "Todos ✓" : "Todos", todos, () => setState(() {
                       if (todos) {
@@ -619,7 +627,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
           const SizedBox(height: 22),
 
           // 3. Período
-          _paso(3, _esRenta ? "¿Qué periodo fiscal?" : "¿Qué período?"),
+          _paso(3, _esRenta ? "¿Qué periodo fiscal?" : "¿Qué período?", key: GuiaReportes.periodo),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -664,6 +672,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
+                key: GuiaReportes.generar,
                 onPressed: (_generando || _negociosSeleccionados.isEmpty) ? null : _generarReporte,
                 icon: _generando
                     ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))

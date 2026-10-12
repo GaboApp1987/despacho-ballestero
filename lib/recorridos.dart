@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'restaurante_tema.dart';
+import 'theme/app_theme.dart';
 import 'widgets/recorrido_guiado.dart';
 
 /// Los recorridos guiados de la app (ver widgets/recorrido_guiado.dart).
@@ -380,6 +381,231 @@ class GuiaNotas {
           objetivo: estados,
           titulo: "Estado en Hacienda",
           texto: "Revisá si Hacienda ya aceptó tus notas de crédito.",
+        ),
+      ]);
+}
+
+
+// ---------------------------------------------------------------- Contador
+
+/// Panel del contador (negocios_screen.dart).
+class GuiaPanelContador {
+  static const clave = 'panel_contador';
+  static final asistente = GlobalKey(debugLabel: 'guia_panel_asistente');
+  static final cliente = GlobalKey(debugLabel: 'guia_panel_cliente');
+  static final menu = GlobalKey(debugLabel: 'guia_panel_menu');
+  static final nuevo = GlobalKey(debugLabel: 'guia_panel_nuevo');
+
+  static void mostrar(BuildContext context) => mostrarRecorrido(context, clave: clave, color: TemaContador.acento, pasos: [
+        const PasoRecorrido(
+          titulo: "Tu panel de contador",
+          texto: "Desde aquí manejás a todos tus clientes: entrás a cada negocio, llevás su contabilidad y sacás sus reportes.",
+        ),
+        PasoRecorrido(
+          objetivo: asistente,
+          titulo: "Preguntale a la IA",
+          texto: "Escribí lo que necesitás, como \"el IVA de septiembre de Soda Mora\", y te lleva a donde es o te lo arma.",
+        ),
+        PasoRecorrido(
+          objetivo: cliente,
+          titulo: "Tus clientes",
+          texto: "Tocá un cliente para entrar a su negocio: facturas, compras, bancos y declaraciones. Arriba siempre ves con qué perfil estás trabajando.",
+        ),
+        PasoRecorrido(
+          objetivo: menu,
+          titulo: "El menú",
+          texto: "Contabilidad (catálogo, asientos y bancos), reportes, certificaciones y chats con tus clientes. Con el buscador encontrás cualquier cliente.",
+        ),
+        PasoRecorrido(
+          objetivo: nuevo,
+          titulo: "Nuevo negocio",
+          texto: "Registrá un cliente nuevo con su cédula y sus datos de Hacienda.",
+        ),
+      ]);
+}
+
+/// Bancos de un cliente (bancos_screen.dart).
+class GuiaBancos {
+  static const clave = 'bancos';
+  static final nueva = GlobalKey(debugLabel: 'guia_bancos_nueva');
+  static final cuenta = GlobalKey(debugLabel: 'guia_bancos_cuenta');
+  static final traslado = GlobalKey(debugLabel: 'guia_bancos_traslado');
+
+  static void mostrar(BuildContext context) => mostrarRecorrido(context, clave: clave, pasos: [
+        const PasoRecorrido(
+          titulo: "Bancos",
+          texto: "Las cuentas bancarias del negocio (y la caja, si maneja efectivo). Cada movimiento genera su asiento contable solo.",
+        ),
+        PasoRecorrido(
+          objetivo: nueva,
+          titulo: "Nueva cuenta",
+          texto: "Banco, moneda y saldo inicial. Se le crea su propia cuenta contable para que el mayor de cada banco salga aparte.",
+        ),
+        PasoRecorrido(
+          objetivo: cuenta,
+          titulo: "Movimientos y conciliación",
+          texto: "Tocá una cuenta para registrar depósitos, cheques o comisiones. Adentro, arriba a la derecha, está Conciliación para cuadrarla con el estado de cuenta.",
+        ),
+        PasoRecorrido(
+          objetivo: traslado,
+          titulo: "Traslados",
+          texto: "Para pasar plata entre cuentas propias, también entre colones y dólares.",
+        ),
+      ]);
+}
+
+/// Conciliación bancaria de un mes (conciliacion_screen.dart).
+class GuiaConciliacion {
+  static const clave = 'conciliacion';
+  static final cargar = GlobalKey(debugLabel: 'guia_conc_cargar');
+  static final emparejar = GlobalKey(debugLabel: 'guia_conc_emparejar');
+  static final resumen = GlobalKey(debugLabel: 'guia_conc_resumen');
+  static final banco = GlobalKey(debugLabel: 'guia_conc_banco');
+  static final cerrar = GlobalKey(debugLabel: 'guia_conc_cerrar');
+
+  static void mostrar(BuildContext context) => mostrarRecorrido(context, clave: clave, color: TemaContador.acento, pasos: [
+        const PasoRecorrido(
+          titulo: "Conciliar el mes",
+          texto: "Se compara el estado de cuenta del banco con lo registrado en libros. Cuando cuadran, cerrás el mes y queda bloqueado.",
+        ),
+        PasoRecorrido(
+          objetivo: cargar,
+          titulo: "Cargá el estado de cuenta",
+          texto: "El Excel o CSV que bajás del banco. Lo que coincide con libros (mismo monto, hasta 5 días de diferencia) se empareja solo.",
+        ),
+        PasoRecorrido(
+          objetivo: emparejar,
+          titulo: "Emparejar automático",
+          texto: "Vuelve a buscar coincidencias, por ejemplo después de registrar algo que faltaba.",
+        ),
+        PasoRecorrido(
+          objetivo: resumen,
+          titulo: "¿Cuadra?",
+          texto: "El banco ajustado (con depósitos en tránsito y pagos pendientes) contra los libros ajustados. La diferencia tiene que quedar en cero.",
+        ),
+        PasoRecorrido(
+          objetivo: banco,
+          titulo: "Lo que falta",
+          texto: "En cada línea sin emparejar, con ⋮: emparejala a mano o registrala en libros (comisiones, intereses) con su asiento.",
+        ),
+        PasoRecorrido(
+          objetivo: cerrar,
+          titulo: "Cerrar el mes",
+          texto: "Se activa cuando cuadra. Los movimientos de ese mes quedan bloqueados para todos; si hace falta corregir, se reabre.",
+        ),
+      ]);
+}
+
+/// Catálogo de cuentas de un cliente (cuentas_contables_screen.dart).
+class GuiaCatalogo {
+  static const clave = 'catalogo';
+  static final estandar = GlobalKey(debugLabel: 'guia_cat_estandar');
+  static final copiar = GlobalKey(debugLabel: 'guia_cat_copiar');
+  static final buscar = GlobalKey(debugLabel: 'guia_cat_buscar');
+  static final nueva = GlobalKey(debugLabel: 'guia_cat_nueva');
+  static final acciones = GlobalKey(debugLabel: 'guia_cat_acciones');
+
+  static void mostrar(BuildContext context) => mostrarRecorrido(context, clave: clave, color: TemaContador.acento, pasos: [
+        const PasoRecorrido(
+          titulo: "Catálogo de cuentas",
+          texto: "Cada cliente tiene el suyo. Las ventas, compras y bancos generan sus asientos contra estas cuentas.",
+        ),
+        PasoRecorrido(
+          objetivo: estandar,
+          titulo: "Arrancá rápido",
+          texto: "Cargá el catálogo estándar de Costa Rica con un toque y después ajustalo.",
+        ),
+        PasoRecorrido(
+          objetivo: copiar,
+          titulo: "O copialo",
+          texto: "Desde tu plantilla, desde otro cliente o desde un Excel.",
+        ),
+        PasoRecorrido(
+          objetivo: buscar,
+          titulo: "Buscar",
+          texto: "Por código, nombre o tipo. Tocá una cuenta para editarla.",
+        ),
+        PasoRecorrido(
+          objetivo: nueva,
+          titulo: "Nueva cuenta",
+          texto: "Agregá subcuentas de detalle (las que reciben movimientos) debajo de su cuenta madre.",
+        ),
+        PasoRecorrido(
+          objetivo: acciones,
+          titulo: "Más acciones",
+          texto: "Guardá este catálogo como tu plantilla para los próximos clientes, copialo de otro o exportalo a Excel.",
+        ),
+      ]);
+}
+
+/// Asientos contables (asientos_contables_screen.dart).
+class GuiaAsientos {
+  static const clave = 'asientos';
+  static final cliente = GlobalKey(debugLabel: 'guia_asi_cliente');
+  static final generar = GlobalKey(debugLabel: 'guia_asi_generar');
+  static final nuevo = GlobalKey(debugLabel: 'guia_asi_nuevo');
+  static final estados = GlobalKey(debugLabel: 'guia_asi_estados');
+
+  static void mostrar(BuildContext context) => mostrarRecorrido(context, clave: clave, color: TemaContador.acento, pasos: [
+        const PasoRecorrido(
+          titulo: "Asientos contables",
+          texto: "La contabilidad de cada cliente. La mayoría de los asientos salen solos de sus ventas, compras y bancos.",
+        ),
+        PasoRecorrido(
+          objetivo: cliente,
+          titulo: "Elegí el cliente",
+          texto: "Todo lo de abajo es del negocio que elegís aquí.",
+        ),
+        PasoRecorrido(
+          objetivo: generar,
+          titulo: "Generar automáticos",
+          texto: "Crea los asientos de las facturas, compras y gastos que todavía no los tienen.",
+        ),
+        PasoRecorrido(
+          objetivo: nuevo,
+          titulo: "Asiento manual",
+          texto: "Para ajustes, depreciaciones o cierres: líneas al debe y al haber, que tienen que cuadrar.",
+        ),
+        PasoRecorrido(
+          objetivo: estados,
+          titulo: "Estados financieros",
+          texto: "El balance general y el estado de resultados del cliente, listos para exportar.",
+        ),
+      ]);
+}
+
+/// Centro de reportes (reportes_contador_screen.dart).
+class GuiaReportes {
+  static const clave = 'reportes';
+  static final tipo = GlobalKey(debugLabel: 'guia_rep_tipo');
+  static final clientes = GlobalKey(debugLabel: 'guia_rep_clientes');
+  static final periodo = GlobalKey(debugLabel: 'guia_rep_periodo');
+  static final generar = GlobalKey(debugLabel: 'guia_rep_generar');
+
+  static void mostrar(BuildContext context) => mostrarRecorrido(context, clave: clave, color: TemaContador.acento, pasos: [
+        const PasoRecorrido(
+          titulo: "Centro de reportes",
+          texto: "Ventas, compras, IVA y renta de uno o varios clientes a la vez, para la declaración o para mandarlos en PDF o Excel.",
+        ),
+        PasoRecorrido(
+          objetivo: tipo,
+          titulo: "1. El reporte",
+          texto: "Elegí qué querés ver: ventas, compras, el resumen para la declaración de IVA (D-104) o la renta.",
+        ),
+        PasoRecorrido(
+          objetivo: clientes,
+          titulo: "2. Los clientes",
+          texto: "Uno, varios o todos: con varios ves el resultado de cada uno.",
+        ),
+        PasoRecorrido(
+          objetivo: periodo,
+          titulo: "3. El período",
+          texto: "Este mes, el pasado, el trimestre, el año o las fechas que querás.",
+        ),
+        PasoRecorrido(
+          objetivo: generar,
+          titulo: "Generar",
+          texto: "Lo ves aquí mismo y desde el resultado lo exportás a PDF o Excel.",
         ),
       ]);
 }

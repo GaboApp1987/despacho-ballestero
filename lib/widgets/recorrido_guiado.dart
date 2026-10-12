@@ -68,9 +68,21 @@ Future<void> ofrecerRecorrido(BuildContext context, {required String clave, requ
   if (!Recorridos._ofrecidos.add(clave)) return;
   final vistos = await Recorridos.vistos();
   if (vistos.contains(clave) || vistos.contains('*') || !context.mounted) return;
-  // Que termine de dibujarse la pantalla antes de ofrecerlo.
-  await Future.delayed(const Duration(milliseconds: 700));
-  if (!context.mounted) return;
+  // Que termine de dibujarse la pantalla y que esté al frente: si algo la
+  // tapa (el asistente de IA que se abre al entrar, un diálogo), se espera
+  // a que lo cierren -- si no, el recorrido iluminaría cosas tapadas.
+  await Future.delayed(const Duration(milliseconds: 1200));
+  for (var i = 0; i < 300; i++) {
+    if (!context.mounted) return;
+    if (ModalRoute.of(context)?.isCurrent ?? true) {
+      await Future.delayed(const Duration(milliseconds: 600));
+      if (!context.mounted) return;
+      if (ModalRoute.of(context)?.isCurrent ?? true) break;
+    } else {
+      await Future.delayed(const Duration(seconds: 1));
+    }
+  }
+  if (!context.mounted || !(ModalRoute.of(context)?.isCurrent ?? true)) return;
   final messenger = ScaffoldMessenger.maybeOf(context);
   if (messenger == null) return;
   var acepto = false;
