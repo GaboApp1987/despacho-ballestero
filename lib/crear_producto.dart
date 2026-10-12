@@ -252,7 +252,7 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo guardar la presentación: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('No se pudo guardar la presentación: ${ApiService.textoError(e)}'), backgroundColor: Colors.red),
         );
       }
     }
@@ -269,7 +269,7 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo eliminar: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('No se pudo eliminar: ${ApiService.textoError(e)}'), backgroundColor: Colors.red),
         );
       }
     }
@@ -324,7 +324,7 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
     } catch (e) {
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
       }
     }
   }
@@ -386,7 +386,7 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error al guardar: $e"), backgroundColor: Colors.red),
+          SnackBar(content: Text("Error al guardar: ${ApiService.textoError(e)}"), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -795,7 +795,7 @@ class _DialogoBuscarImagenState extends State<_DialogoBuscarImagen> {
         if (_resultados.isEmpty) _error = "No se encontraron imágenes para \"$q\".";
       });
     } catch (e) {
-      if (mounted) setState(() => _error = "Error: $e");
+      if (mounted) setState(() => _error = "Error: ${ApiService.textoError(e)}");
     } finally {
       if (mounted) setState(() => _buscando = false);
     }

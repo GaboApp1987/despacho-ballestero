@@ -47,7 +47,7 @@ class _TarjetaD105State extends State<TarjetaD105> {
           '/facturas/declaracion-d105/?negocio=${widget.negocioId}&anio=$_anio&trimestre=$_trimestre'));
       if (mounted) setState(() => _datos = json.decode(utf8.decode(res.bodyBytes)));
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) setState(() => _error = ApiService.textoError(e));
     } finally {
       if (mounted) setState(() => _cargando = false);
     }

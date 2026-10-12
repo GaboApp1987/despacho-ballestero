@@ -178,19 +178,119 @@ class ApiService {
 
   /// Texto legible del error que devolvió el backend: "detail"/"error" o
   /// el primer error de campo de DRF ({"campo": ["mensaje"]}).
+  /// El motivo de un error del servidor en palabras para el usuario: el
+  /// "detail" que manda el backend, o el primer error de un campo con su
+  /// nombre legible ("Número de factura: ..." y no
+  /// "numero_factura_proveedor: ..."); nunca el JSON ni el HTML crudo.
   static String mensajeError(http.Response r) {
     try {
-      final data = json.decode(utf8.decode(r.bodyBytes));
-      if (data is Map) {
-        final directo = data['detail'] ?? data['error'];
-        if (directo != null) return directo.toString();
-        for (final entrada in data.entries) {
-          final v = entrada.value;
-          return "${entrada.key}: ${v is List && v.isNotEmpty ? v.first : v}";
-        }
-      }
+      final mensaje = _mensajeDe(json.decode(utf8.decode(r.bodyBytes, allowMalformed: true)));
+      if (mensaje != null && mensaje.trim().isNotEmpty) return mensaje;
     } catch (_) {}
-    return "Error del servidor (HTTP ${r.statusCode})";
+    return _mensajePorCodigo(r.statusCode);
+  }
+
+  static String _mensajePorCodigo(int codigo) {
+    if (codigo == 401) return "Tu sesión venció. Volvé a iniciar sesión.";
+    if (codigo == 403) return "No tenés permiso para hacer esto.";
+    if (codigo == 404) return "No se encontró (puede que ya se haya borrado). Recargá la pantalla.";
+    if (codigo == 409) return "Ya existe o cambió mientras tanto. Recargá e intentá de nuevo.";
+    if (codigo == 413) return "El archivo es demasiado grande.";
+    if (codigo == 429) return "Demasiados intentos seguidos. Esperá un momento y probá de nuevo.";
+    if (codigo == 502 || codigo == 503 || codigo == 504) {
+      return "El servidor se está actualizando o no responde. Probá de nuevo en un minuto.";
+    }
+    if (codigo >= 500) return "Hubo un error en el servidor. Intentá de nuevo; si sigue pasando, escribinos a soporte.";
+    if (codigo == 400) return "Revisá los datos e intentá de nuevo.";
+    return "No se pudo completar (código $codigo). Intentá de nuevo.";
+  }
+
+  static String? _mensajeDe(dynamic data, [String? campo]) {
+    if (data == null) return null;
+    if (data is String) {
+      final texto = data.trim();
+      if (texto.isEmpty) return null;
+      return campo == null ? texto : "${_nombreCampo(campo)}: $texto";
+    }
+    if (data is List) {
+      for (final v in data) {
+        final m = _mensajeDe(v, campo);
+        if (m != null) return m;
+      }
+      return null;
+    }
+    if (data is Map) {
+      for (final clave in const ['detail', 'error', 'mensaje', 'message', 'non_field_errors']) {
+        final m = _mensajeDe(data[clave]);
+        if (m != null) return m;
+      }
+      for (final entrada in data.entries) {
+        if (const {'code', 'codigo', 'status', 'messages', 'tipo_documento'}.contains(entrada.key)) continue;
+        final m = _mensajeDe(entrada.value, int.tryParse(entrada.key.toString()) != null ? campo : entrada.key.toString());
+        if (m != null) return m;
+      }
+      return null;
+    }
+    return data is num || data is bool ? null : data.toString();
+  }
+
+  static const _nombresCampo = {
+    'numero_factura_proveedor': 'Número de factura',
+    'cedula': 'Cédula',
+    'cedula_juridica': 'Cédula',
+    'codigo_cabys': 'Código CABYS',
+    'correo': 'Correo',
+    'telefono': 'Teléfono',
+    'precio_unitario': 'Precio',
+    'precio_costo': 'Costo',
+    'detalles_compra': 'Líneas de la compra',
+    'detalles': 'Líneas',
+    'total_compra': 'Total',
+    'fecha_compra': 'Fecha',
+    'tipo_cambio': 'Tipo de cambio',
+    'contrapartida': 'Contrapartida',
+    'negocio': 'Negocio',
+    'password': 'Contraseña',
+    'username': 'Usuario',
+  };
+
+  static String _nombreCampo(String campo) {
+    final conocido = _nombresCampo[campo];
+    if (conocido != null) return conocido;
+    const acentos = {
+      'numero': 'número', 'codigo': 'código', 'cedula': 'cédula', 'telefono': 'teléfono', 'direccion': 'dirección',
+      'descripcion': 'descripción', 'razon': 'razón', 'credito': 'crédito', 'debito': 'débito', 'categoria': 'categoría',
+      'electronico': 'electrónico', 'actividad': 'actividad', 'contrasena': 'contraseña', 'periodo': 'período',
+    };
+    final palabras = campo.split('_').where((p) => p.isNotEmpty).map((p) => acentos[p] ?? p).toList();
+    if (palabras.isEmpty) return campo;
+    final texto = palabras.join(' ');
+    return texto[0].toUpperCase() + texto.substring(1);
+  }
+
+  /// Un error atrapado (`catch (e)`) en palabras para el usuario: sin
+  /// "Exception:", sin "ClientException ... uri=..." ni errores internos de
+  /// Dart, y si alguien metió el cuerpo crudo del servidor, su "detail".
+  static String textoError(Object? e) {
+    final t = (e ?? '').toString();
+    if (t.contains('TimeoutException')) return "El servidor tardó demasiado en responder. Revisá tu conexión e intentá de nuevo.";
+    if (t.contains('SocketException') || t.contains('ClientException') || t.contains('Failed to fetch') ||
+        t.contains('XMLHttpRequest') || t.contains('Connection refused') || t.contains('HandshakeException')) {
+      return "No hay conexión con el servidor. Revisá tu internet e intentá de nuevo.";
+    }
+    if (e is Error || t.startsWith('Instance of ') || t.contains('is not a subtype of') || t.contains('NoSuchMethodError') || t.contains('Null check operator') ||
+        t.contains('RangeError') || t.contains('FormatException') || t.contains("type 'Null'")) {
+      return "Algo salió mal al procesar la respuesta. Intentá de nuevo; si sigue pasando, escribinos a soporte.";
+    }
+    var limpio = t.replaceFirst(RegExp(r'^(Exception|Bad state|StateError)\s*:\s*'), '').trim();
+    if (limpio.startsWith('{') || limpio.startsWith('[')) {
+      try {
+        final m = _mensajeDe(json.decode(limpio));
+        if (m != null) return m;
+      } catch (_) {}
+    }
+    if (limpio.startsWith('<')) return _mensajePorCodigo(500);
+    return limpio.isEmpty ? "Algo salió mal. Intentá de nuevo." : limpio;
   }
 
   /// Lanza una excepción con el mensaje del backend si la respuesta no es

@@ -461,10 +461,10 @@ class _FlujoCajaFormScreenState extends State<FlujoCajaFormScreen> {
         if (descargarWord) await descargarDocumento(context, 'flujos-caja-proyectados', _flujo.id!, 'word', 'flujo_caja_proyectado');
         if (mounted) Navigator.pop(context, true);
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
     } finally {
       if (mounted) setState(() => _guardando = false);
     }

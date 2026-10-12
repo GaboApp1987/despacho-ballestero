@@ -238,7 +238,7 @@ class _SolicitudPublicaScreenState extends State<SolicitudPublicaScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo enviar: ${_detalleError(response.bodyBytes)}")));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo enviar: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo enviar: ${ApiService.textoError(e)}")));
     }
     if (mounted) setState(() => _enviando = false);
   }

@@ -594,13 +594,13 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
         _mensajes.add(_ChatMensaje('assistant', propuesta.esTiquete ? '¡Listo! Tiquete emitido y enviado a Hacienda.' : '¡Listo! Factura creada y enviada a Hacienda.'));
         setState(() {});
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
       setState(() => mensaje.estadoPropuesta = 'pendiente');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo crear la factura: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
+          SnackBar(content: Text('No se pudo crear la factura: ${ApiService.textoError(e)}'), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
         );
       }
     } finally {
@@ -632,13 +632,13 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
         _mensajes.add(_ChatMensaje('assistant', '¡Listo! Producto "${propuesta.nombre}" agregado al catálogo.'));
         setState(() {});
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
       setState(() => mensaje.estadoPropuestaProducto = 'pendiente');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo crear el producto: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
+          SnackBar(content: Text('No se pudo crear el producto: ${ApiService.textoError(e)}'), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
         );
       }
     } finally {
@@ -716,7 +716,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo enviar: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('No se pudo enviar: ${ApiService.textoError(e)}'), backgroundColor: Colors.red),
         );
       }
     }
@@ -910,13 +910,13 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
           _mensajes.add(_ChatMensaje('assistant', exito));
         });
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
       setState(() => mensaje.estadoAccion = 'pendiente');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo completar: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
+          SnackBar(content: Text('No se pudo completar: ${ApiService.textoError(e)}'), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
         );
       }
     } finally {
@@ -1062,7 +1062,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo generar el documento: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
+          SnackBar(content: Text('No se pudo generar el documento: ${ApiService.textoError(e)}'), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
         );
       }
     } finally {

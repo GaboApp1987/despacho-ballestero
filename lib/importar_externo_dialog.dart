@@ -199,7 +199,7 @@ Future<void> _subirYProcesar({
   } catch (e) {
     if (context.mounted) {
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
     }
   }
 }
@@ -244,7 +244,7 @@ Future<void> importarProductosMasivo({
     }
     jobId = json.decode(utf8.decode(response.bodyBytes))['job_id'];
   } catch (e) {
-    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
     return;
   }
 

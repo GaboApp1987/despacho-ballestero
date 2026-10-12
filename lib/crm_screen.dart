@@ -72,7 +72,7 @@ class _CrmScreenState extends State<CrmScreen> {
         _resumen = (datos['resumen'] as Map?)?.cast<String, dynamic>() ?? {};
       });
     } catch (e) {
-      if (mounted) setState(() => _error = "No se pudo cargar el CRM: $e");
+      if (mounted) setState(() => _error = "No se pudo cargar el CRM: ${ApiService.textoError(e)}");
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
@@ -228,7 +228,7 @@ class _CrmScreenState extends State<CrmScreen> {
       if (r.statusCode != 201) throw Exception(ApiService.mensajeError(r));
       _cargar();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo agregar: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo agregar: ${ApiService.textoError(e)}")));
     }
   }
 
@@ -270,7 +270,7 @@ class _CrmScreenState extends State<CrmScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => aplicar(anterior, anteriorFijada));
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo mover: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo mover: ${ApiService.textoError(e)}")));
       return;
     }
     if (!mounted || deshaciendo) return;
@@ -638,7 +638,7 @@ class _FichaProspectoState extends State<_FichaProspecto> {
       if (r.statusCode != 200) throw Exception(ApiService.mensajeError(r));
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo guardar: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo guardar: ${ApiService.textoError(e)}")));
     } finally {
       if (mounted) setState(() => _guardando = false);
     }

@@ -162,11 +162,11 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
           );
         }
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
       }
     } finally {
       if (mounted) setState(() => _guardandoDatosCpa = false);
@@ -186,11 +186,11 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
           );
         }
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
       }
     } finally {
       if (mounted) setState(() => _guardandoPlantilla = false);
@@ -219,11 +219,11 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
         final data = json.decode(utf8.decode(response.bodyBytes));
         setState(() => _plantillaCertificacionCtrl.text = data['plantilla'] ?? '');
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
       }
     } finally {
       if (mounted) setState(() => _cargandoPlantillaDefault = false);
@@ -360,7 +360,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${ApiService.textoError(e)}")));
       }
     } finally {
       if (mounted) setState(() => _generandoMembreteIA = false);
@@ -408,7 +408,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${ApiService.textoError(e)}")));
       }
     } finally {
       if (mounted) setState(() => _cambiandoPassword = false);
@@ -427,7 +427,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${ApiService.textoError(e)}")));
       }
     } finally {
       if (mounted) setState(() => _whatsappCargando = false);
@@ -463,7 +463,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("WhatsApp desvinculado de esta cuenta.")));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo desvincular: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo desvincular: ${ApiService.textoError(e)}")));
     } finally {
       if (mounted) setState(() => _whatsappCargando = false);
     }

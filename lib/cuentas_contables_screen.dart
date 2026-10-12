@@ -102,7 +102,7 @@ class _CuentasContablesScreenState extends State<CuentasContablesScreen> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No se pudo cargar el catálogo.")));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
     }
     if (mounted) setState(() => _sembrando = false);
   }
@@ -165,7 +165,7 @@ class _CuentasContablesScreenState extends State<CuentasContablesScreen> {
     try {
       await accion();
     } catch (e) {
-      _avisar(e.toString().replaceFirst('Exception: ', ''), error: true);
+      _avisar(ApiService.textoError(e), error: true);
     } finally {
       if (mounted) setState(() => _procesando = false);
     }
@@ -327,7 +327,7 @@ class _CuentasContablesScreenState extends State<CuentasContablesScreen> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No se pudo eliminar: la cuenta tiene movimientos o subcuentas registradas.")));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
     }
   }
 
@@ -565,10 +565,10 @@ class _FormularioCuentaDialogState extends State<_FormularioCuentaDialog> {
       if (r.statusCode == 200 || r.statusCode == 201) {
         if (mounted) Navigator.pop(context, true);
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo guardar (HTTP ${r.statusCode}). Revisá que el código no esté repetido.")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo guardar: ${ApiService.mensajeError(r)}. Revisá que el código no esté repetido.")));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
     }
     if (mounted) setState(() => _guardando = false);
   }

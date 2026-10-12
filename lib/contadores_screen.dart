@@ -105,7 +105,7 @@ class _ContadoresScreenState extends State<ContadoresScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("No se pudo abrir el negocio: $e")),
+          SnackBar(content: Text("No se pudo abrir el negocio: ${ApiService.textoError(e)}")),
         );
       }
     }
@@ -142,7 +142,7 @@ class _ContadoresScreenState extends State<ContadoresScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text("Error: $e")));
+        ).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
       }
     }
   }
@@ -167,7 +167,7 @@ class _ContadoresScreenState extends State<ContadoresScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error al cargar contadores: $e")),
+          SnackBar(content: Text("Error al cargar contadores: ${ApiService.textoError(e)}")),
         );
       }
     }
@@ -280,7 +280,7 @@ class _ContadoresScreenState extends State<ContadoresScreen> {
                         if (ctx.mounted) {
                           ScaffoldMessenger.of(
                             ctx,
-                          ).showSnackBar(SnackBar(content: Text("Error: $e")));
+                          ).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
                         }
                       }
                     },

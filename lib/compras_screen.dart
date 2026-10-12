@@ -123,12 +123,12 @@ Future<void> mostrarDialogoNotaDebito(BuildContext context, Compra compra, {Void
                         if (ctx.mounted) Navigator.pop(ctx);
                         onCreada?.call();
                       } else {
-                        throw Exception(utf8.decode(response.bodyBytes));
+                        throw Exception(ApiService.mensajeError(response));
                       }
                     } catch (e) {
                       setStateDialog(() => guardando = false);
                       if (ctx.mounted) {
-                        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Error: $e")));
+                        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
                       }
                     }
                   },
@@ -209,7 +209,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _cargando = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al cargar compras: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al cargar compras: ${ApiService.textoError(e)}")));
     }
   }
 
@@ -273,7 +273,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
       _cargarDatos();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al descartar: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al descartar: ${ApiService.textoError(e)}")));
       }
     }
   }
@@ -331,7 +331,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
             );
           }
         } catch (e) {
-          fallidos.add("${archivo.name}: $e");
+          fallidos.add("${archivo.name}: ${ApiService.textoError(e)}");
         }
         procesados++;
         refrescarDialogo?.call(() {});
@@ -431,9 +431,9 @@ class _ComprasScreenState extends State<ComprasScreen> {
       bytes,
       nombreArchivo,
     );
-    if (response.statusCode != 200) {
-      throw Exception(utf8.decode(response.bodyBytes));
-    }
+    // El motivo real (ej. "es una nota de crédito, no una factura"), no el
+    // JSON crudo ni un "no se pudo" genérico.
+    if (response.statusCode != 200) throw Exception(ApiService.mensajeError(response));
     final datos = json.decode(utf8.decode(response.bodyBytes));
 
     // Si el proveedor facturó en dólares, se convierte todo a colones acá
@@ -455,7 +455,9 @@ class _ComprasScreenState extends State<ComprasScreen> {
         'correo': datos['proveedor_correo'] ?? '',
       });
       // 200 = ya existía con esa cédula (el backend no duplica proveedores).
-      if (resProv.statusCode != 201 && resProv.statusCode != 200) throw Exception("No se pudo crear el proveedor");
+      if (resProv.statusCode != 201 && resProv.statusCode != 200) {
+        throw Exception("No se pudo crear el proveedor: ${ApiService.mensajeError(resProv)}");
+      }
       proveedorId = json.decode(utf8.decode(resProv.bodyBytes))['id'];
     }
     if (proveedorId == null) throw Exception("El XML no trae datos del proveedor");
@@ -490,7 +492,9 @@ class _ComprasScreenState extends State<ComprasScreen> {
           'stock': 0,
           if (impuestoId != null && impuestoId != -1) 'impuesto': impuestoId,
         });
-        if (resProd.statusCode != 201) throw Exception("No se pudo crear el producto '${linea['detalle']}'");
+        if (resProd.statusCode != 201) {
+          throw Exception("No se pudo crear el producto '${linea['detalle']}': ${ApiService.mensajeError(resProd)}");
+        }
         productoId = json.decode(utf8.decode(resProd.bodyBytes))['id'];
       }
       detallesCompra.add({'producto': productoId, 'cantidad': cantidad.toInt(), 'precio_costo': precio});
@@ -508,7 +512,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
       if (datos['fecha'] != null) 'fecha_compra': datos['fecha'],
       'detalles_compra': detallesCompra,
     });
-    if (resCompra.statusCode != 201) throw Exception("No se pudo crear la compra");
+    if (resCompra.statusCode != 201) throw Exception("No se pudo crear la compra: ${ApiService.mensajeError(resCompra)}");
 
     final compraId = json.decode(utf8.decode(resCompra.bodyBytes))['id'];
     final resAdjunto = await ApiService.uploadBytes('/compras/$compraId/', 'comprobante', bytes, nombreArchivo);
@@ -648,12 +652,12 @@ class _ComprasScreenState extends State<ComprasScreen> {
                           if (ctx.mounted) Navigator.pop(ctx);
                           _cargarDatos();
                         } else {
-                          throw Exception(utf8.decode(response.bodyBytes));
+                          throw Exception(ApiService.mensajeError(response));
                         }
                       } catch (e) {
                         setStateDialog(() => guardando = false);
                         if (ctx.mounted) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Error: $e")));
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
                         }
                       }
                     },
@@ -689,11 +693,11 @@ class _ComprasScreenState extends State<ComprasScreen> {
       if (response.statusCode == 204 || response.statusCode == 200) {
         _cargarDatos();
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al borrar: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al borrar: ${ApiService.textoError(e)}")));
       }
     }
   }
@@ -989,7 +993,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
                       } catch (e) {
                         setStateDialog(() => enviando = false);
                         if (ctx.mounted) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Error: $e")));
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
                         }
                       }
                     },
@@ -1077,7 +1081,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
       await Future.delayed(const Duration(seconds: 6));
       await _consultarFec(c);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
     }
   }
 
@@ -1101,7 +1105,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(texto)));
       }
     } catch (e) {
-      if (avisar && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo consultar: $e")));
+      if (avisar && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo consultar: ${ApiService.textoError(e)}")));
     }
   }
 
@@ -1345,7 +1349,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
             fallidos.add("Compra #$id: $detalle");
           }
         } catch (e) {
-          fallidos.add("Compra #$id: $e");
+          fallidos.add("Compra #$id: ${ApiService.textoError(e)}");
         }
         procesados++;
         refrescarDialogo?.call(() {});
@@ -1434,7 +1438,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo borrar: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo borrar: ${ApiService.textoError(e)}")));
       }
     }
   }

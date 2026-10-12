@@ -2264,7 +2264,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("No se pudo borrar: $e"), backgroundColor: Colors.red),
+          SnackBar(content: Text("No se pudo borrar: ${ApiService.textoError(e)}"), backgroundColor: Colors.red),
         );
       }
     }

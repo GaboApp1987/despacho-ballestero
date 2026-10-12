@@ -69,7 +69,7 @@ class _RecuperarPasswordScreenState extends State<RecuperarPasswordScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error de conexión: $e")),
+        SnackBar(content: Text(ApiService.textoError(e))),
       );
     } finally {
       if (mounted) setState(() => _cargando = false);
@@ -122,7 +122,7 @@ class _RecuperarPasswordScreenState extends State<RecuperarPasswordScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error de conexión: $e")),
+        SnackBar(content: Text(ApiService.textoError(e))),
       );
     } finally {
       if (mounted) setState(() => _cargando = false);

@@ -67,7 +67,7 @@ class _RecargaOnvoScreenState extends State<RecargaOnvoScreen> {
     } catch (e) {
       setState(() {
         _cargando = false;
-        _error = "No se pudo iniciar el pago: $e";
+        _error = "No se pudo iniciar el pago: ${ApiService.textoError(e)}";
       });
     }
   }

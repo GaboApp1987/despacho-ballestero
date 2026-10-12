@@ -171,6 +171,6 @@ Future<void> abrirCatalogoCuentas(BuildContext context) async {
       MaterialPageRoute(builder: (_) => CuentasContablesScreen(negocioId: elegido!.id, negocioNombre: elegido.nombreComercial)),
     );
   } catch (e) {
-    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudieron cargar los clientes: $e")));
+    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudieron cargar los clientes: ${ApiService.textoError(e)}")));
   }
 }

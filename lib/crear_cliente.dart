@@ -250,7 +250,7 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString()),
+            content: Text(ApiService.textoError(e)),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 5),
           ),

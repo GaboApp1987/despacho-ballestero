@@ -295,7 +295,7 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${ApiService.textoError(e)}")));
       }
     } finally {
       if (mounted) setState(() => _enviando = false);

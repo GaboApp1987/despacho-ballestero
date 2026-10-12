@@ -109,7 +109,7 @@ class _IngresosScreenState extends State<IngresosScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _cargando = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al cargar ingresos: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al cargar ingresos: ${ApiService.textoError(e)}")));
     }
   }
 
@@ -319,12 +319,12 @@ class _IngresosScreenState extends State<IngresosScreen> {
                             if (ctx.mounted) Navigator.pop(ctx);
                             _cargarDatos();
                           } else {
-                            throw Exception(utf8.decode(response.bodyBytes));
+                            throw Exception(ApiService.mensajeError(response));
                           }
                         } catch (e) {
                           setStateDialog(() => guardando = false);
                           if (ctx.mounted) {
-                            ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Error: $e")));
+                            ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
                           }
                         }
                       },
@@ -361,11 +361,11 @@ class _IngresosScreenState extends State<IngresosScreen> {
       if (response.statusCode == 204 || response.statusCode == 200) {
         _cargarDatos();
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo borrar: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo borrar: ${ApiService.textoError(e)}")));
       }
     }
   }

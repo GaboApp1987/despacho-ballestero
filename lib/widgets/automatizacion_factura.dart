@@ -105,7 +105,7 @@ class _AutomatizacionFacturaState extends State<AutomatizacionFactura> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("No se pudo guardar: $e"),
+            content: Text("No se pudo guardar: ${ApiService.textoError(e)}"),
             backgroundColor: Colors.red,
           ),
         );
@@ -704,7 +704,7 @@ Future<Map<String, dynamic>?> configurarCobroAutomatico(
       '/cobro-automatico/?negocio=$negocioId',
       c,
     );
-    if (r.statusCode >= 300) throw Exception(utf8.decode(r.bodyBytes));
+    if (r.statusCode >= 300) throw Exception(ApiService.mensajeError(r));
     final nueva = Map<String, dynamic>.from(
       json.decode(utf8.decode(r.bodyBytes)) as Map,
     );
@@ -725,7 +725,7 @@ Future<Map<String, dynamic>?> configurarCobroAutomatico(
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("No se pudo guardar: $e"),
+          content: Text("No se pudo guardar: ${ApiService.textoError(e)}"),
           backgroundColor: Colors.red,
         ),
       );

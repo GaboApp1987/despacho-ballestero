@@ -205,7 +205,7 @@ class _ResumenFiscalNegocioScreenState extends State<ResumenFiscalNegocioScreen>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al exportar: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al exportar: ${ApiService.textoError(e)}")));
       }
     } finally {
       if (mounted) setState(() => _exportandoIva = false);
@@ -258,7 +258,7 @@ class _ResumenFiscalNegocioScreenState extends State<ResumenFiscalNegocioScreen>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al exportar: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al exportar: ${ApiService.textoError(e)}")));
       }
     } finally {
       if (mounted) setState(() => _exportandoRenta = false);

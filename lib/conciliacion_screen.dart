@@ -51,7 +51,7 @@ String _dinero(dynamic valor, String moneda, {bool signo = false}) {
 
 void _aviso(BuildContext context, Object mensaje) {
   if (!context.mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(mensaje.toString().replaceFirst('Exception: ', ''))));
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(mensaje))));
 }
 
 const _verde = Color(0xFF16A34A);

@@ -105,12 +105,12 @@ class _LogoScreenState extends State<LogoScreen> {
           Navigator.pop(context, true);
         }
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error al subir la imagen: $e"), backgroundColor: Colors.red),
+          SnackBar(content: Text("Error al subir la imagen: ${ApiService.textoError(e)}"), backgroundColor: Colors.red),
         );
       }
     } finally {

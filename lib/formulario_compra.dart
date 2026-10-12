@@ -119,13 +119,29 @@ class _FormularioCompraState extends State<FormularioCompra> {
         nombreArchivo,
       );
       if (response.statusCode != 200) {
-        throw Exception(utf8.decode(response.bodyBytes));
+        // Ej. una nota de crédito: el servidor explica qué es y qué hacer.
+        final motivo = ApiService.mensajeError(response);
+        if (mounted) {
+          setState(() {
+            _bytesComprobante = null;
+            _nombreComprobante = null;
+          });
+          await showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text("Este archivo no es una factura de compra"),
+              content: Text(motivo),
+              actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Entendido"))],
+            ),
+          );
+        }
+        return;
       }
       await _aplicarDatosParseados(json.decode(utf8.decode(response.bodyBytes)));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error al leer el XML: $e")),
+          SnackBar(content: Text("No se pudo leer el archivo: ${ApiService.textoError(e)}")),
         );
       }
     } finally {
@@ -241,7 +257,7 @@ class _FormularioCompraState extends State<FormularioCompra> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error al precargar los datos: $e")),
+          SnackBar(content: Text("Error al precargar los datos: ${ApiService.textoError(e)}")),
         );
       }
     }
@@ -614,12 +630,12 @@ class _FormularioCompraState extends State<FormularioCompra> {
           Navigator.pop(context, true);
         }
       } else {
-        throw Exception(utf8.decode(res.bodyBytes));
+        throw Exception(ApiService.mensajeError(res));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error al registrar la compra: $e")),
+          SnackBar(content: Text("Error al registrar la compra: ${ApiService.textoError(e)}")),
         );
       }
     } finally {

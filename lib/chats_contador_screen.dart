@@ -146,7 +146,7 @@ class _ChatsContadorScreenState extends State<ChatsContadorScreen> {
         if (mounted) _abrirConversacion(conv);
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo crear el chat: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo crear el chat: ${ApiService.textoError(e)}")));
     }
   }
 

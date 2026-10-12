@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import '../theme/app_theme.dart';
+import '../api_service.dart';
 
 /// Notas de voz, fotos y archivos para los chats (asistente de IA, soporte
 /// y chat negocio <-> contador). En el chat de la IA el backend "escucha"
@@ -300,7 +301,7 @@ class _NotaVozBurbujaState extends State<NotaVozBurbuja> {
       await _player.resume();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo reproducir la nota de voz ($e).')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo reproducir la nota de voz (${ApiService.textoError(e)}).')));
       }
     }
   }

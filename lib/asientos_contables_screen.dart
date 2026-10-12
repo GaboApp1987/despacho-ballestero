@@ -254,7 +254,7 @@ class _LibroDiarioState extends State<_LibroDiario> {
     } catch (e) {
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
       }
     }
   }
@@ -280,7 +280,7 @@ class _LibroDiarioState extends State<_LibroDiario> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No se pudo eliminar el asiento.")));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
     }
   }
 
@@ -509,7 +509,7 @@ class _AsientoContableFormScreenState extends State<AsientoContableFormScreen> {
         throw Exception(texto);
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
     } finally {
       if (mounted) setState(() => _guardando = false);
     }

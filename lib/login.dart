@@ -111,7 +111,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error de conexión: $e")),
+          SnackBar(content: Text(ApiService.textoError(e))),
         );
       }
     } finally {

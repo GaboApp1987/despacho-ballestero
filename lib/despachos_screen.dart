@@ -72,7 +72,7 @@ class _DespachosScreenState extends State<DespachosScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error al cargar despachos: $e")),
+          SnackBar(content: Text("Error al cargar despachos: ${ApiService.textoError(e)}")),
         );
       }
     }
@@ -163,12 +163,12 @@ class _DespachosScreenState extends State<DespachosScreen> {
                           if (ctx.mounted) Navigator.pop(ctx);
                           _cargarDespachos();
                         } else {
-                          throw Exception(utf8.decode(response.bodyBytes));
+                          throw Exception(ApiService.mensajeError(response));
                         }
                       } catch (e) {
                         setStateDialog(() => guardando = false);
                         if (ctx.mounted) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Error: $e")));
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
                         }
                       }
                     },
@@ -261,12 +261,12 @@ class _DespachosScreenState extends State<DespachosScreen> {
                           if (ctx.mounted) Navigator.pop(ctx);
                           _cargarDespachos();
                         } else {
-                          throw Exception(utf8.decode(response.bodyBytes));
+                          throw Exception(ApiService.mensajeError(response));
                         }
                       } catch (e) {
                         setStateDialog(() => guardando = false);
                         if (ctx.mounted) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Error: $e")));
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
                         }
                       }
                     },
@@ -300,11 +300,11 @@ class _DespachosScreenState extends State<DespachosScreen> {
                 if (response.statusCode == 204) {
                   _cargarDespachos();
                 } else {
-                  throw Exception(utf8.decode(response.bodyBytes));
+                  throw Exception(ApiService.mensajeError(response));
                 }
               } catch (e) {
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al eliminar: $e")));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al eliminar: ${ApiService.textoError(e)}")));
                 }
               }
             },
@@ -424,11 +424,11 @@ class _DespachosScreenState extends State<DespachosScreen> {
       if (response.statusCode == 200 || response.statusCode == 201) {
         _cargarDespachos();
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al actualizar la suscripción: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al actualizar la suscripción: ${ApiService.textoError(e)}")));
       }
     }
   }

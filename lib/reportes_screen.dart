@@ -177,7 +177,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+          SnackBar(content: Text(ApiService.textoError(e)), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -560,7 +560,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+          SnackBar(content: Text(ApiService.textoError(e)), backgroundColor: Colors.red),
         );
       }
     } finally {

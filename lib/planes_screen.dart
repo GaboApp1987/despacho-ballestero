@@ -44,7 +44,7 @@ class _PlanesScreenState extends State<PlanesScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error al cargar los planes: $e")),
+          SnackBar(content: Text("Error al cargar los planes: ${ApiService.textoError(e)}")),
         );
       }
     }
@@ -166,12 +166,12 @@ class _PlanesScreenState extends State<PlanesScreen> {
                           if (ctx.mounted) Navigator.pop(ctx);
                           _cargarPlanes();
                         } else {
-                          throw Exception(utf8.decode(response.bodyBytes));
+                          throw Exception(ApiService.mensajeError(response));
                         }
                       } catch (e) {
                         setStateDialog(() => guardando = false);
                         if (ctx.mounted) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Error: $e")));
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
                         }
                       }
                     },
@@ -207,11 +207,11 @@ class _PlanesScreenState extends State<PlanesScreen> {
       if (response.statusCode == 204 || response.statusCode == 200) {
         _cargarPlanes();
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al borrar: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al borrar: ${ApiService.textoError(e)}")));
       }
     }
   }

@@ -58,10 +58,10 @@ class _EstadosFinancierosScreenState extends State<EstadosFinancierosScreen> {
       if (r.statusCode == 200) {
         if (mounted) setState(() => _datos = json.decode(utf8.decode(r.bodyBytes)));
       } else if (mounted) {
-        setState(() => _error = "No se pudo cargar (HTTP ${r.statusCode}).");
+        setState(() => _error = "No se pudo cargar: ${ApiService.mensajeError(r)}.");
       }
     } catch (e) {
-      if (mounted) setState(() => _error = "Error: $e");
+      if (mounted) setState(() => _error = "Error: ${ApiService.textoError(e)}");
     }
     if (mounted) setState(() => _cargando = false);
   }
@@ -78,10 +78,10 @@ class _EstadosFinancierosScreenState extends State<EstadosFinancierosScreen> {
         if (mounted) setState(() => _analisis = data['analisis'] ?? '');
       } else {
         final data = json.decode(utf8.decode(r.bodyBytes));
-        if (mounted) setState(() => _errorAnalisis = data['detail']?.toString() ?? "No se pudo generar el análisis (HTTP ${r.statusCode}).");
+        if (mounted) setState(() => _errorAnalisis = data['detail']?.toString() ?? "No se pudo generar el análisis: ${ApiService.mensajeError(r)}.");
       }
     } catch (e) {
-      if (mounted) setState(() => _errorAnalisis = "No se pudo generar el análisis: $e");
+      if (mounted) setState(() => _errorAnalisis = "No se pudo generar el análisis: ${ApiService.textoError(e)}");
     }
     if (mounted) setState(() => _analizando = false);
   }

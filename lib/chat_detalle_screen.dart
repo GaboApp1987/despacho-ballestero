@@ -185,7 +185,7 @@ class _ChatDetalleScreenState extends State<ChatDetalleScreen> {
         );
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo subir el archivo: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo subir el archivo: ${ApiService.textoError(e)}")));
     } finally {
       if (mounted) setState(() => _subiendoArchivo = false);
     }
@@ -231,7 +231,7 @@ class _ChatDetalleScreenState extends State<ChatDetalleScreen> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No se pudo mandar la nota de voz.")));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo mandar la nota de voz: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo mandar la nota de voz: ${ApiService.textoError(e)}")));
     } finally {
       if (mounted) setState(() => _subiendoArchivo = false);
     }

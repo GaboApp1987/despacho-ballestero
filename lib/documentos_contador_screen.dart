@@ -25,11 +25,11 @@ Future<void> descargarDocumento(BuildContext context, String endpointBase, int i
         await FilePicker.platform.saveFile(fileName: nombreArchivo, bytes: response.bodyBytes);
       }
     } else if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo descargar (HTTP ${response.statusCode}).")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo descargar: ${ApiService.mensajeError(response)}.")));
     }
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo descargar: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo descargar: ${ApiService.textoError(e)}")));
     }
   }
 }

@@ -42,7 +42,7 @@ class _ImpuestosScreenState extends State<ImpuestosScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error al cargar impuestos: $e")),
+          SnackBar(content: Text("Error al cargar impuestos: ${ApiService.textoError(e)}")),
         );
       }
     }
@@ -68,12 +68,12 @@ class _ImpuestosScreenState extends State<ImpuestosScreen> {
       if (response.statusCode == 200 || response.statusCode == 201) {
         _cargarImpuestos();
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error al guardar impuesto: $e")),
+          SnackBar(content: Text("Error al guardar impuesto: ${ApiService.textoError(e)}")),
         );
       }
     }
@@ -107,7 +107,7 @@ class _ImpuestosScreenState extends State<ImpuestosScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("$e"), backgroundColor: Colors.red),
+          SnackBar(content: Text("${ApiService.textoError(e)}"), backgroundColor: Colors.red),
         );
       }
     }

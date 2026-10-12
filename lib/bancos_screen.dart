@@ -53,7 +53,7 @@ class _BancosScreenState extends State<BancosScreen> {
         _catalogo = (json.decode(utf8.decode(r[1].bodyBytes)) as List).map((j) => CuentaContable.fromJson(j)).toList();
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudieron cargar los bancos: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudieron cargar los bancos: ${ApiService.textoError(e)}")));
     }
     if (mounted) setState(() => _cargando = false);
   }
@@ -128,7 +128,7 @@ class _BancosScreenState extends State<BancosScreen> {
       }));
       await _cargar();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
     }
   }
 
@@ -224,7 +224,7 @@ class _BancosScreenState extends State<BancosScreen> {
       await _cargar();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Traslado registrado con su asiento.")));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
     }
   }
 
@@ -349,7 +349,7 @@ class _MovimientosCuentaScreenState extends State<_MovimientosCuentaScreen> {
       _movimientos = (json.decode(utf8.decode(ApiService.verificar(r[0]).bodyBytes)) as List).cast<Map<String, dynamic>>();
       _saldo = json.decode(utf8.decode(ApiService.verificar(r[1]).bodyBytes))['saldo'].toString();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudieron cargar los movimientos: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudieron cargar los movimientos: ${ApiService.textoError(e)}")));
     }
     if (mounted) setState(() => _cargando = false);
   }
@@ -450,7 +450,7 @@ class _MovimientosCuentaScreenState extends State<_MovimientosCuentaScreen> {
           : await ApiService.put('/movimientos-bancarios/${existente['id']}/', body));
       await _cargar();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
     }
   }
 
@@ -473,7 +473,7 @@ class _MovimientosCuentaScreenState extends State<_MovimientosCuentaScreen> {
       ApiService.verificar(await ApiService.delete('/movimientos-bancarios/${m['id']}/'));
       await _cargar();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
     }
   }
 
@@ -609,6 +609,6 @@ Future<void> abrirBancos(BuildContext context) async {
     if (elegido == null || !context.mounted) return;
     await Navigator.push(context, MaterialPageRoute(builder: (_) => BancosScreen(negocioId: elegido.id, negocioNombre: elegido.nombreComercial)));
   } catch (e) {
-    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudieron cargar los clientes: $e")));
+    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudieron cargar los clientes: ${ApiService.textoError(e)}")));
   }
 }

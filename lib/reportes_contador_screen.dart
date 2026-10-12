@@ -115,7 +115,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("No se pudo exportar: $e"), backgroundColor: Colors.red),
+          SnackBar(content: Text("No se pudo exportar: ${ApiService.textoError(e)}"), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -205,7 +205,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
         if (mounted) setState(() => _reportes = reportes);
       }
     } catch (e) {
-      if (mounted) setState(() => _error = '$e');
+      if (mounted) setState(() => _error = '${ApiService.textoError(e)}');
     } finally {
       if (mounted) setState(() => _generando = false);
     }

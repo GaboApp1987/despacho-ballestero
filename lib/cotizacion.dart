@@ -118,12 +118,12 @@ class _CotizacionScreenState extends State<CotizacionScreen> {
           _cargarCotizaciones();
         }
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error al cambiar cliente: $e"), backgroundColor: Colors.red),
+          SnackBar(content: Text("Error al cambiar cliente: ${ApiService.textoError(e)}"), backgroundColor: Colors.red),
         );
       }
     }
@@ -344,12 +344,12 @@ class _CotizacionScreenState extends State<CotizacionScreen> {
           );
         }
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("No se pudo generar la factura: $e"), backgroundColor: Colors.red),
+          SnackBar(content: Text("No se pudo generar la factura: ${ApiService.textoError(e)}"), backgroundColor: Colors.red),
         );
       }
     }

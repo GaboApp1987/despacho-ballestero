@@ -55,7 +55,7 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isProcesando = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo repetir: $e"), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo repetir: ${ApiService.textoError(e)}"), backgroundColor: Colors.red));
       }
     }
   }
@@ -104,7 +104,7 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+          SnackBar(content: Text(ApiService.textoError(e)), backgroundColor: Colors.red),
         );
       }
     } finally {

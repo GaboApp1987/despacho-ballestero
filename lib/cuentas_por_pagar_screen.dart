@@ -53,7 +53,7 @@ class _CuentasPorPagarScreenState extends State<CuentasPorPagarScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error al cargar saldos: $e")),
+          SnackBar(content: Text("Error al cargar saldos: ${ApiService.textoError(e)}")),
         );
       }
     }
@@ -107,12 +107,12 @@ class _CuentasPorPagarScreenState extends State<CuentasPorPagarScreen> {
                     SnackBar(content: Text("Proveedor \"${nombreCtrl.text.trim()}\" guardado."), backgroundColor: Colors.green),
                   );
                 } else {
-                  throw Exception(utf8.decode(response.bodyBytes));
+                  throw Exception(ApiService.mensajeError(response));
                 }
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("No se pudo guardar: $e"), backgroundColor: Colors.red),
+                    SnackBar(content: Text("No se pudo guardar: ${ApiService.textoError(e)}"), backgroundColor: Colors.red),
                   );
                 }
               }
@@ -411,13 +411,13 @@ class _DetalleCuentaProveedorScreenState extends State<DetalleCuentaProveedorScr
           _cargarHistorial();
         }
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
+          SnackBar(content: Text(ApiService.textoError(e)), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
         );
       }
     }

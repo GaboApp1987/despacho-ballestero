@@ -79,7 +79,7 @@ class _CorreosCompraScreenState extends State<CorreosCompraScreen> {
       ApiService.verificar(await ApiService.delete('/correos-compra-recibidos/${correo['id']}/'));
       _cargar();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al descartar: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al descartar: ${ApiService.textoError(e)}")));
     }
   }
 
@@ -87,6 +87,10 @@ class _CorreosCompraScreenState extends State<CorreosCompraScreen> {
     final tieneError = (correo['error'] ?? '').toString().isNotEmpty;
     final confirmado = correo['compra'] != null;
     if (confirmado) return (icono: Icons.check_circle_outline, color: Colors.green, texto: "Registrada como compra");
+    // Se leyó pero no es una factura (nota de crédito, respuesta de Hacienda).
+    if (tieneError && correo['datos_parseados'] != null) {
+      return (icono: Icons.info_outline, color: Colors.blueGrey, texto: "No es una factura de compra");
+    }
     if (tieneError) return (icono: Icons.error_outline, color: Colors.red, texto: "Error al leer el XML");
     return (icono: Icons.pending_outlined, color: Colors.amber.shade800, texto: "Pendiente de revisar");
   }

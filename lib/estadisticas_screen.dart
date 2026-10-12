@@ -42,10 +42,10 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
       if (r.statusCode == 200) {
         setState(() => _datos = json.decode(utf8.decode(r.bodyBytes)));
       } else {
-        setState(() => _error = "No se pudieron cargar las estadísticas (HTTP ${r.statusCode}).");
+        setState(() => _error = "No se pudieron cargar las estadísticas: ${ApiService.mensajeError(r)}.");
       }
     } catch (e) {
-      if (mounted) setState(() => _error = "No se pudieron cargar las estadísticas: $e");
+      if (mounted) setState(() => _error = "No se pudieron cargar las estadísticas: ${ApiService.textoError(e)}");
     } finally {
       if (mounted) setState(() => _cargando = false);
     }

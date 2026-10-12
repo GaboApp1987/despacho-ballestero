@@ -314,7 +314,7 @@ class _DetalleSolicitudScreenState extends State<_DetalleSolicitudScreen> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No se pudo marcar como completada.")));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
     }
     if (mounted) setState(() => _procesando = false);
   }

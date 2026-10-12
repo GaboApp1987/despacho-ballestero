@@ -130,7 +130,7 @@ class _OnvoCobroAutomaticoScreenState extends State<OnvoCobroAutomaticoScreen> {
     } catch (e) {
       setState(() {
         _cargando = false;
-        _error = "Error al iniciar el cobro automático: $e";
+        _error = "Error al iniciar el cobro automático: ${ApiService.textoError(e)}";
       });
     }
   }
@@ -171,7 +171,7 @@ class _OnvoCobroAutomaticoScreenState extends State<OnvoCobroAutomaticoScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _confirmando = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al confirmar: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al confirmar: ${ApiService.textoError(e)}")));
       }
     }
   }

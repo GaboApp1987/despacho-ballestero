@@ -105,14 +105,14 @@ Future<Map<String, dynamic>?> configurarDatosPago(BuildContext context, {require
   };
   try {
     final r = await ApiService.patch('/datos-pago/?negocio=$negocioId', cuerpo);
-    if (r.statusCode >= 300) throw Exception(utf8.decode(r.bodyBytes));
+    if (r.statusCode >= 300) throw Exception(ApiService.mensajeError(r));
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Datos de pago guardados."), backgroundColor: Colors.green));
     }
     return Map<String, dynamic>.from(json.decode(utf8.decode(r.bodyBytes)) as Map);
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo guardar: $e"), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo guardar: ${ApiService.textoError(e)}"), backgroundColor: Colors.red));
     }
     return null;
   }
@@ -173,7 +173,7 @@ class _PagoReportadoTileState extends State<PagoReportadoTile> {
       }
       widget.onCambio();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$e"), backgroundColor: Colors.red));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${ApiService.textoError(e)}"), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() => _trabajando = false);
     }

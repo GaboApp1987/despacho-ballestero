@@ -390,10 +390,10 @@ class _AtestiguamientoFormScreenState extends State<AtestiguamientoFormScreen> {
         if (descargarWord) await descargarDocumento(context, 'atestiguamientos', _at.id!, 'word', 'atestiguamiento');
         if (mounted) Navigator.pop(context, true);
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
     } finally {
       if (mounted) setState(() => _guardando = false);
     }

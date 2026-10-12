@@ -120,7 +120,7 @@ class _RecibosPagoScreenState extends State<RecibosPagoScreen> {
       if (mounted) {
         setState(() => _cargando = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudieron cargar los recibos de pago: $e')),
+          SnackBar(content: Text('No se pudieron cargar los recibos de pago: ${ApiService.textoError(e)}')),
         );
       }
     }
@@ -143,7 +143,7 @@ class _RecibosPagoScreenState extends State<RecibosPagoScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo reenviar: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
+          SnackBar(content: Text('No se pudo reenviar: ${ApiService.textoError(e)}'), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
         );
       }
     } finally {

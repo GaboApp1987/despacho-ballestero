@@ -106,7 +106,7 @@ class _NotasCreditoDebitoScreenState extends State<NotasCreditoDebitoScreen> wit
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("No se pudo consultar: $e"), backgroundColor: Colors.red),
+          SnackBar(content: Text("No se pudo consultar: ${ApiService.textoError(e)}"), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -213,7 +213,7 @@ class _NotasCreditoDebitoScreenState extends State<NotasCreditoDebitoScreen> wit
         content: Text("Nota de débito: $texto${data['correo_info'] != null ? ' · ${data['correo_info']}' : ''}"),
       ));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo consultar: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo consultar: ${ApiService.textoError(e)}")));
     }
   }
 
@@ -224,7 +224,7 @@ class _NotasCreditoDebitoScreenState extends State<NotasCreditoDebitoScreen> wit
       final bytes = base64.decode(data['pdf']);
       await Printing.layoutPdf(onLayout: (_) async => bytes, name: data['nombre'] ?? 'nota_debito.pdf');
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo generar el PDF: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo generar el PDF: ${ApiService.textoError(e)}")));
     }
   }
 

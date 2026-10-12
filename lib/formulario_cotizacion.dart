@@ -297,7 +297,7 @@ class _FormularioCotizacionState extends State<FormularioCotizacion> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error al interpretar la nota: $e"), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
+          SnackBar(content: Text("Error al interpretar la nota: ${ApiService.textoError(e)}"), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
         );
       }
     } finally {
@@ -372,12 +372,12 @@ class _FormularioCotizacionState extends State<FormularioCotizacion> {
           'equivalencia': equivalencia,
         });
         if (response.statusCode != 201) {
-          throw Exception(utf8.decode(response.bodyBytes));
+          throw Exception(ApiService.mensajeError(response));
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("No se pudo guardar la presentación: $e"), backgroundColor: Colors.red),
+            SnackBar(content: Text("No se pudo guardar la presentación: ${ApiService.textoError(e)}"), backgroundColor: Colors.red),
           );
         }
         continue;
@@ -518,11 +518,11 @@ class _FormularioCotizacionState extends State<FormularioCotizacion> {
         // configurada se queda "guardando" para siempre y parece que falló).
         if (mounted) Navigator.pop(context, true);
       } else {
-        throw Exception(utf8.decode(res.bodyBytes));
+        throw Exception(ApiService.mensajeError(res));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al guardar: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al guardar: ${ApiService.textoError(e)}")));
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);

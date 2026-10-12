@@ -1002,12 +1002,12 @@ class _FormularioFacturaState extends State<FormularioFactura> {
           );
         }
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error al registrar factura: $e")),
+          SnackBar(content: Text("Error al registrar factura: ${ApiService.textoError(e)}")),
         );
       }
     } finally {

@@ -77,10 +77,10 @@ class _WhatsAppBandejaScreenState extends State<WhatsAppBandejaScreen> {
           _error = null;
         });
       } else if (!silencioso) {
-        setState(() => _error = "No se pudo cargar la bandeja (HTTP ${r.statusCode}).");
+        setState(() => _error = "No se pudo cargar la bandeja: ${ApiService.mensajeError(r)}.");
       }
     } catch (e) {
-      if (mounted && !silencioso) setState(() => _error = "No se pudo cargar la bandeja: $e");
+      if (mounted && !silencioso) setState(() => _error = "No se pudo cargar la bandeja: ${ApiService.textoError(e)}");
     } finally {
       if (mounted && !silencioso) setState(() => _cargando = false);
     }
@@ -260,10 +260,10 @@ class _WhatsAppConversacionScreenState extends State<WhatsAppConversacionScreen>
         _aplicar(data);
         if (exito != null) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(exito)));
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['detail']?.toString() ?? "Error (HTTP ${r.statusCode})")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['detail']?.toString() ?? ApiService.mensajeError(r))));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
     }
   }
 

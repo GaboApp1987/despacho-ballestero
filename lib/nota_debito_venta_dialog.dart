@@ -163,7 +163,7 @@ Future<bool> mostrarDialogoNotaDebitoVenta(BuildContext context, int negocioId, 
                       } catch (e) {
                         setStateDialog(() => guardando = false);
                         if (ctx.mounted) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
                         }
                       }
                     },

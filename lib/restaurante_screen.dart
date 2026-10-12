@@ -355,7 +355,7 @@ class _SalonState extends State<_Salon> with AutomaticKeepAliveClientMixin {
       if (!mounted) return;
       await Navigator.push(context, MaterialPageRoute(builder: (_) => RestauranteOrdenScreen(negocio: widget.negocio, ordenId: id!)));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo abrir: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo abrir: ${ApiService.textoError(e)}")));
     }
     if (mounted) setState(() => _abriendo = false);
     _cargar();

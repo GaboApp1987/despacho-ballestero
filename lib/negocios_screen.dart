@@ -335,7 +335,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo reasignar: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo reasignar: ${ApiService.textoError(e)}")));
       }
     }
   }
@@ -402,7 +402,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo abrir el negocio: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo abrir el negocio: ${ApiService.textoError(e)}")));
       }
     }
   }
@@ -462,11 +462,11 @@ class _NegociosScreenState extends State<NegociosScreen> {
       if (response.statusCode == 200) {
         _cargarNegocios();
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al cambiar el plan: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al cambiar el plan: ${ApiService.textoError(e)}")));
       }
     }
   }
@@ -499,7 +499,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
       _cargarMiSocio();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
       }
     }
   }
@@ -525,7 +525,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error al cargar negocios: $e")),
+          SnackBar(content: Text("Error al cargar negocios: ${ApiService.textoError(e)}")),
         );
       }
     }
@@ -735,12 +735,12 @@ class _NegociosScreenState extends State<NegociosScreen> {
                           if (ctx.mounted) Navigator.pop(ctx);
                           _cargarNegocios();
                         } else {
-                          throw Exception(utf8.decode(response.bodyBytes));
+                          throw Exception(ApiService.mensajeError(response));
                         }
                       } catch (e) {
                         setStateDialog(() => guardando = false);
                         if (ctx.mounted) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Error: $e")));
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
                         }
                       }
                     },
@@ -895,12 +895,12 @@ class _NegociosScreenState extends State<NegociosScreen> {
                           if (ctx.mounted) Navigator.pop(ctx);
                           _cargarNegocios();
                         } else {
-                          throw Exception(utf8.decode(response.bodyBytes));
+                          throw Exception(ApiService.mensajeError(response));
                         }
                       } catch (e) {
                         setStateDialog(() => guardando = false);
                         if (ctx.mounted) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Error: $e")));
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
                         }
                       }
                     },
@@ -1029,11 +1029,11 @@ class _NegociosScreenState extends State<NegociosScreen> {
       if (response.statusCode == 200 || response.statusCode == 201) {
         _cargarNegocios();
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al actualizar la suscripción: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al actualizar la suscripción: ${ApiService.textoError(e)}")));
       }
     }
   }

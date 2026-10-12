@@ -126,12 +126,12 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
           );
         }
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error al subir la llave: $e"), backgroundColor: Colors.red),
+          SnackBar(content: Text("Error al subir la llave: ${ApiService.textoError(e)}"), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -277,12 +277,12 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
                           if (ctx.mounted) Navigator.pop(ctx);
                           _cargarActividades();
                         } else {
-                          throw Exception(utf8.decode(response.bodyBytes));
+                          throw Exception(ApiService.mensajeError(response));
                         }
                       } catch (e) {
                         setStateDialog(() => guardando = false);
                         if (ctx.mounted) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Error: $e")));
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
                         }
                       }
                     },
@@ -318,11 +318,11 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
       if (response.statusCode == 204 || response.statusCode == 200) {
         _cargarActividades();
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo borrar: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo borrar: ${ApiService.textoError(e)}")));
       }
     }
   }
@@ -393,7 +393,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo actualizar: $e"), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo actualizar: ${ApiService.textoError(e)}"), backgroundColor: Colors.red));
       }
     } finally {
       if (mounted) setState(() => _ajustandoNumeracion.remove(tipo));
@@ -469,7 +469,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
         ),
       );
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo probar la conexión: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo probar la conexión: ${ApiService.textoError(e)}")));
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
@@ -534,7 +534,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("❌ Error al guardar: $e"),
+          content: Text("❌ Error al guardar: ${ApiService.textoError(e)}"),
           backgroundColor: Colors.red,
         ),
       );
@@ -560,7 +560,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
         ));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo cambiar: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo cambiar: ${ApiService.textoError(e)}")));
     }
     if (mounted) setState(() => _guardandoRestaurante = false);
   }

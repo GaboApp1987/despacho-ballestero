@@ -57,11 +57,11 @@ class _AddonsScreenState extends State<AddonsScreen> {
       if (response.statusCode == 200 || response.statusCode == 201) {
         _cargarDatos();
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo actualizar: $e"), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo actualizar: ${ApiService.textoError(e)}"), backgroundColor: Colors.red));
       }
     }
   }
@@ -106,7 +106,7 @@ class _AddonsScreenState extends State<AddonsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo registrar: $e"), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo registrar: ${ApiService.textoError(e)}"), backgroundColor: Colors.red));
       }
     }
   }

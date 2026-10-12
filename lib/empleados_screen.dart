@@ -59,7 +59,7 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al cargar colaboradores: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al cargar colaboradores: ${ApiService.textoError(e)}")));
       }
     }
   }
@@ -143,7 +143,7 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                       } catch (e) {
                         setStateDialog(() => guardando = false);
                         if (ctx.mounted) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Error: $e")));
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
                         }
                       }
                     },
@@ -163,11 +163,11 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
       if (response.statusCode == 200) {
         _cargarEmpleados();
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e)), backgroundColor: Colors.red));
       }
     }
   }
@@ -194,11 +194,11 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
       if (response.statusCode == 204 || response.statusCode == 200) {
         _cargarEmpleados();
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e)), backgroundColor: Colors.red));
       }
     }
   }

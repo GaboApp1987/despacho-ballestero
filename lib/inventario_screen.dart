@@ -252,7 +252,7 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Error al eliminar: $e"), backgroundColor: Colors.red),
+            SnackBar(content: Text("Error al eliminar: ${ApiService.textoError(e)}"), backgroundColor: Colors.red),
           );
         }
       }
@@ -544,13 +544,13 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
                             if (dialogContext.mounted) Navigator.pop(dialogContext);
                             if (mounted) _cargarDatos();
                           } else {
-                            throw Exception(utf8.decode(response.bodyBytes));
+                            throw Exception(ApiService.mensajeError(response));
                           }
                         } catch (e) {
                           setStateDialog(() => guardando = false);
                           if (dialogContext.mounted) {
                             ScaffoldMessenger.of(dialogContext).showSnackBar(
-                              SnackBar(content: Text("Error: $e")),
+                              SnackBar(content: Text(ApiService.textoError(e))),
                             );
                           }
                         }
@@ -609,7 +609,7 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Error al eliminar: $e"), backgroundColor: Colors.red),
+            SnackBar(content: Text("Error al eliminar: ${ApiService.textoError(e)}"), backgroundColor: Colors.red),
           );
         }
       }

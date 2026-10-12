@@ -51,7 +51,7 @@ class _DetalleContadorScreenState extends State<DetalleContadorScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _cargando = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al cargar clientes: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al cargar clientes: ${ApiService.textoError(e)}")));
       }
     }
   }
@@ -141,12 +141,12 @@ class _DetalleContadorScreenState extends State<DetalleContadorScreen> {
                             );
                           }
                         } else {
-                          throw Exception(utf8.decode(response.bodyBytes));
+                          throw Exception(ApiService.mensajeError(response));
                         }
                       } catch (e) {
                         setStateDialog(() => guardando = false);
                         if (ctx.mounted) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Error: $e")));
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
                         }
                       }
                     },
@@ -264,12 +264,12 @@ class _DetalleContadorScreenState extends State<DetalleContadorScreen> {
                             _cargarNegocios();
                           }
                         } else {
-                          throw Exception(utf8.decode(response.bodyBytes));
+                          throw Exception(ApiService.mensajeError(response));
                         }
                       } catch (e) {
                         setStateDialog(() => guardando = false);
                         if (ctx.mounted) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("Error: $e")));
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
                         }
                       }
                     },
@@ -333,7 +333,7 @@ class _DetalleContadorScreenState extends State<DetalleContadorScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo eliminar: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo eliminar: ${ApiService.textoError(e)}")));
       }
     }
   }

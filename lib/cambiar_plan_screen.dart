@@ -54,7 +54,7 @@ class _CambiarPlanScreenState extends State<CambiarPlanScreen> {
       });
     } catch (e) {
       setState(() {
-        _error = "No se pudieron cargar los planes disponibles: $e";
+        _error = "No se pudieron cargar los planes disponibles: ${ApiService.textoError(e)}";
         _cargando = false;
       });
     }
@@ -138,7 +138,7 @@ class _CambiarPlanScreenState extends State<CambiarPlanScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("No se pudo iniciar el cambio de plan: $e")),
+          SnackBar(content: Text("No se pudo iniciar el cambio de plan: ${ApiService.textoError(e)}")),
         );
       }
     } finally {

@@ -38,11 +38,11 @@ Future<void> descargarCertificacion(BuildContext context, CertificacionIngreso c
         await FilePicker.platform.saveFile(fileName: nombreArchivo, bytes: response.bodyBytes);
       }
     } else if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo descargar (HTTP ${response.statusCode}).")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo descargar: ${ApiService.mensajeError(response)}.")));
     }
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo descargar: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo descargar: ${ApiService.textoError(e)}")));
     }
   }
 }
@@ -85,11 +85,11 @@ Future<void> compartirCertificacion(BuildContext context, CertificacionIngreso c
         text: 'Certificación de ingresos de ${cert.nombreSolicitante}.',
       );
     } else if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo compartir (HTTP ${response.statusCode}).")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo compartir: ${ApiService.mensajeError(response)}.")));
     }
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo compartir: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo compartir: ${ApiService.textoError(e)}")));
     }
   }
 }
@@ -741,11 +741,11 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
         if (luegoDescargarWord) await _descargar('word');
         if (!quedarseEnPantalla && mounted) Navigator.pop(context, true);
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
       }
     } finally {
       if (mounted) setState(() => _guardando = false);
@@ -824,10 +824,10 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
       if (response.statusCode == 200) {
         _aplicarDatosSolicitante(json.decode(utf8.decode(response.bodyBytes)));
       } else {
-        throw Exception(json.decode(utf8.decode(response.bodyBytes))['detail'] ?? 'Error desconocido');
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo analizar la imagen: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo analizar la imagen: ${ApiService.textoError(e)}")));
     } finally {
       if (mounted) setState(() => _analizandoSolicitante = false);
     }
@@ -868,10 +868,10 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
       if (response.statusCode == 200) {
         _aplicarDatosSolicitante(json.decode(utf8.decode(response.bodyBytes)));
       } else {
-        throw Exception(json.decode(utf8.decode(response.bodyBytes))['detail'] ?? 'Error desconocido');
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo analizar el texto: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo analizar el texto: ${ApiService.textoError(e)}")));
     } finally {
       if (mounted) setState(() => _analizandoSolicitante = false);
     }
@@ -981,10 +981,10 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
             setState(() => _mezclarMesesSugeridos(meses));
           }
         } else {
-          errores.add("${archivo.name}: HTTP ${response.statusCode}");
+          errores.add("${archivo.name}: ${ApiService.mensajeError(response)}");
         }
       } catch (e) {
-        errores.add("${archivo.name}: $e");
+        errores.add("${archivo.name}: ${ApiService.textoError(e)}");
       }
     }
     setState(() {

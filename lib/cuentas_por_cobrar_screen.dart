@@ -73,7 +73,7 @@ class _CuentasPorCobrarScreenState extends State<CuentasPorCobrarScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error al cargar saldos: $e")),
+          SnackBar(content: Text("Error al cargar saldos: ${ApiService.textoError(e)}")),
         );
       }
     }
@@ -105,7 +105,7 @@ class _CuentasPorCobrarScreenState extends State<CuentasPorCobrarScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("No se pudieron generar los recordatorios: $e"), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
+          SnackBar(content: Text("No se pudieron generar los recordatorios: ${ApiService.textoError(e)}"), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
         );
       }
     } finally {
@@ -451,14 +451,14 @@ class _DetalleCuentaClienteScreenState extends State<DetalleCuentaClienteScreen>
           _cargarHistorial();
         }
       } else {
-        throw Exception(utf8.decode(response.bodyBytes));
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Error: $e"), 
+            content: Text(ApiService.textoError(e)), 
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 5),
           ),
@@ -484,7 +484,7 @@ class _DetalleCuentaClienteScreenState extends State<DetalleCuentaClienteScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("No se pudo generar el mensaje: $e"), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
+          SnackBar(content: Text("No se pudo generar el mensaje: ${ApiService.textoError(e)}"), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
         );
       }
     } finally {
