@@ -457,8 +457,11 @@ class _AvisoPagosPorConfirmarState extends State<AvisoPagosPorConfirmar> {
       padding: const EdgeInsets.only(bottom: 12),
       child: Material(
         color: hay ? Colors.green.withValues(alpha: 0.12) : AppColors.surface,
-        shape: hay ? null : RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: AppColors.border)),
-        borderRadius: BorderRadius.circular(14),
+        // Solo shape (shape + borderRadius a la vez es un error de Flutter).
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: hay ? BorderSide.none : BorderSide(color: AppColors.border),
+        ),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
           onTap: () async {

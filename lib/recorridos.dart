@@ -196,3 +196,190 @@ class GuiaOrden {
         ),
       ]);
 }
+
+
+/// Cierre de caja (caja_screen.dart).
+class GuiaCaja {
+  static const clave = 'caja';
+  static final fondo = GlobalKey(debugLabel: 'guia_caja_fondo');
+  static final movimientos = GlobalKey(debugLabel: 'guia_caja_movimientos');
+  static final resumen = GlobalKey(debugLabel: 'guia_caja_resumen');
+  static final cerrar = GlobalKey(debugLabel: 'guia_caja_cerrar');
+  static final historial = GlobalKey(debugLabel: 'guia_caja_historial');
+
+  static void mostrar(BuildContext context) => mostrarRecorrido(context, clave: clave, pasos: [
+        const PasoRecorrido(
+          titulo: "El cierre de caja",
+          texto: "Abrís la caja con el fondo, vendés normal (marcando en cada factura cómo pagó) y al final contás el dinero: Equilibra te dice si sobra o falta.",
+        ),
+        PasoRecorrido(
+          objetivo: fondo,
+          titulo: "Abrir la caja",
+          texto: "Al empezar el turno, poné cuánto dinero hay en la gaveta para dar cambio y tocá Abrir caja.",
+        ),
+        PasoRecorrido(
+          objetivo: movimientos,
+          titulo: "Entradas y salidas",
+          texto: "Si sacás plata de la caja para pagar algo (hielo, un proveedor) o metés más cambio, anotalo aquí con el motivo.",
+        ),
+        PasoRecorrido(
+          objetivo: resumen,
+          titulo: "Lo que debería haber",
+          texto: "Ventas de contado, abonos y propinas por medio de pago. Los cajeros no lo ven hasta cerrar, así el conteo es honesto.",
+        ),
+        PasoRecorrido(
+          objetivo: cerrar,
+          titulo: "Cerrar la caja",
+          texto: "Contás billetes y monedas con el contador, y lo de tarjeta y SINPE. Sale el resultado con faltantes o sobrantes y lo podés imprimir.",
+        ),
+        PasoRecorrido(
+          objetivo: historial,
+          titulo: "Historial",
+          texto: "Todos los cierres con su diferencia, para revisar cualquier día.",
+        ),
+      ]);
+}
+
+/// Inventario (inventario_screen.dart).
+class GuiaInventario {
+  static const clave = 'inventario';
+  static final nuevo = GlobalKey(debugLabel: 'guia_inv_nuevo');
+  static final buscar = GlobalKey(debugLabel: 'guia_inv_buscar');
+  static final importar = GlobalKey(debugLabel: 'guia_inv_importar');
+  static final precios = GlobalKey(debugLabel: 'guia_inv_precios');
+  static final pestanas = GlobalKey(debugLabel: 'guia_inv_pestanas');
+
+  static void mostrar(BuildContext context) => mostrarRecorrido(context, clave: clave, pasos: [
+        const PasoRecorrido(
+          titulo: "Tu inventario",
+          texto: "Aquí están tus productos y servicios, lo que ponés en las facturas. Las compras suman al stock y las ventas lo restan solas.",
+        ),
+        PasoRecorrido(
+          objetivo: nuevo,
+          titulo: "Nuevo producto",
+          texto: "Nombre, precio y el código CABYS, que Hacienda exige (lo buscás por palabra). Con el costo, Equilibra te calcula la ganancia.",
+        ),
+        PasoRecorrido(
+          objetivo: buscar,
+          titulo: "Buscar y editar",
+          texto: "Encontrá cualquier producto. Con ⋮ lo editás o ajustás solo el stock después de un conteo.",
+        ),
+        PasoRecorrido(
+          objetivo: importar,
+          titulo: "¿Tenés una lista en Excel?",
+          texto: "Subila y se crean todos de una vez; la IA le busca el CABYS a cada uno.",
+        ),
+        PasoRecorrido(
+          objetivo: precios,
+          titulo: "Actualizar precios",
+          texto: "Subí los precios de varios productos a la vez, por porcentaje.",
+        ),
+        PasoRecorrido(
+          objetivo: pestanas,
+          titulo: "Categorías",
+          texto: "Agrupá los productos (Bebidas, Repuestos...) para encontrarlos rápido y verlos en los reportes.",
+        ),
+      ]);
+}
+
+/// Clientes (detalle_negocio.dart, sección Clientes).
+class GuiaClientes {
+  static const clave = 'clientes';
+  static final nuevo = GlobalKey(debugLabel: 'guia_cli_nuevo');
+  static final buscar = GlobalKey(debugLabel: 'guia_cli_buscar');
+  static final historial = GlobalKey(debugLabel: 'guia_cli_historial');
+
+  static void mostrar(BuildContext context) => mostrarRecorrido(context, clave: clave, pasos: [
+        const PasoRecorrido(
+          titulo: "Tus clientes",
+          texto: "Con el cliente guardado, facturarle es elegirlo de la lista: sus datos van solos al comprobante.",
+        ),
+        PasoRecorrido(
+          objetivo: nuevo,
+          titulo: "Nuevo cliente",
+          texto: "Escribí la cédula y se trae el nombre desde Hacienda. Agregá el correo: ahí le llegan las facturas (y una copia a quien vos digás).",
+        ),
+        PasoRecorrido(
+          objetivo: buscar,
+          titulo: "Buscar",
+          texto: "Por nombre, cédula o correo.",
+        ),
+        PasoRecorrido(
+          objetivo: historial,
+          titulo: "Historial de precios",
+          texto: "Qué le vendiste y a qué precio. Al facturarle, la app te avisa si le estás cambiando el precio.",
+        ),
+      ]);
+}
+
+/// Cuentas por cobrar (cuentas_por_cobrar_screen.dart).
+class GuiaCobrar {
+  static const clave = 'cuentas_cobrar';
+  static final total = GlobalKey(debugLabel: 'guia_cxc_total');
+  static final cliente = GlobalKey(debugLabel: 'guia_cxc_cliente');
+  static final pagos = GlobalKey(debugLabel: 'guia_cxc_pagos');
+  static final recordatorios = GlobalKey(debugLabel: 'guia_cxc_recordatorios');
+  static final exportar = GlobalKey(debugLabel: 'guia_cxc_exportar');
+
+  static void mostrar(BuildContext context) => mostrarRecorrido(context, clave: clave, pasos: [
+        const PasoRecorrido(
+          titulo: "Cuentas por cobrar",
+          texto: "Quién te debe y cuánto: cada factura a crédito suma al saldo del cliente hasta que te pague.",
+        ),
+        PasoRecorrido(
+          objetivo: total,
+          titulo: "Total por cobrar",
+          texto: "Lo que te deben entre todos los clientes.",
+        ),
+        PasoRecorrido(
+          objetivo: cliente,
+          titulo: "El saldo de cada cliente",
+          texto: "Tocá un cliente para ver sus facturas pendientes y registrar un abono (efectivo, SINPE, transferencia...). El abono baja el saldo y le podés mandar el recibo.",
+        ),
+        PasoRecorrido(
+          objetivo: pagos,
+          titulo: "Pagos reportados",
+          texto: "Cuando un cliente paga desde el enlace de su factura, aparece aquí para que lo confirmés.",
+        ),
+        PasoRecorrido(
+          objetivo: recordatorios,
+          titulo: "Recordatorios de cobro",
+          texto: "Arma un mensaje de WhatsApp para cada cliente con lo que debe, listo para mandar.",
+        ),
+        PasoRecorrido(
+          objetivo: exportar,
+          titulo: "Exportar",
+          texto: "El estado de cuentas en PDF o en Excel.",
+        ),
+      ]);
+}
+
+/// Notas de crédito y débito (notas_credito_debito_screen.dart).
+class GuiaNotas {
+  static const clave = 'notas';
+  static final nueva = GlobalKey(debugLabel: 'guia_notas_nueva');
+  static final pestanas = GlobalKey(debugLabel: 'guia_notas_pestanas');
+  static final estados = GlobalKey(debugLabel: 'guia_notas_estados');
+
+  static void mostrar(BuildContext context) => mostrarRecorrido(context, clave: clave, pasos: [
+        const PasoRecorrido(
+          titulo: "Notas de crédito y débito",
+          texto: "Una factura emitida no se borra ni se edita: se corrige con una nota, que se manda a Hacienda igual que una factura.",
+        ),
+        PasoRecorrido(
+          objetivo: nueva,
+          titulo: "Nueva nota de crédito",
+          texto: "Para anular o rebajar una factura (devolución, precio equivocado): elegís la factura y si es total o solo algunas líneas. Lo devuelto vuelve al inventario.",
+        ),
+        PasoRecorrido(
+          objetivo: pestanas,
+          titulo: "Las tres pestañas",
+          texto: "Las notas de crédito que emitiste, las de débito (para cobrar de más, como intereses) y las notas de débito que te mandan tus proveedores.",
+        ),
+        PasoRecorrido(
+          objetivo: estados,
+          titulo: "Estado en Hacienda",
+          texto: "Revisá si Hacienda ya aceptó tus notas de crédito.",
+        ),
+      ]);
+}

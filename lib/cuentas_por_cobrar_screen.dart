@@ -8,6 +8,8 @@ import 'factura.dart';
 import 'export_service.dart'; // 👈 Importamos el servicio de exportación
 import 'formato.dart';
 import 'widgets/pagos_en_linea.dart';
+import 'recorridos.dart';
+import 'widgets/recorrido_guiado.dart';
 
 /// Abre WhatsApp (wa.me) con el mensaje ya escrito para ese número --
 /// compartido entre el recordatorio individual (por cliente) y el masivo
@@ -65,6 +67,7 @@ class _CuentasPorCobrarScreenState extends State<CuentasPorCobrarScreen> {
             _saldosClientes = data.cast<Map<String, dynamic>>();
             _isLoading = false;
           });
+          ofrecerRecorrido(context, clave: GuiaCobrar.clave, titulo: "funcionan las cuentas por cobrar", iniciar: () => GuiaCobrar.mostrar(context));
         }
       } else {
         throw Exception("Error del servidor: ${response.statusCode}");
@@ -125,10 +128,14 @@ class _CuentasPorCobrarScreenState extends State<CuentasPorCobrarScreen> {
               color: AppColors.surface,
               border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            // Wrap: en celular el título y los botones no caben en una fila.
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              runSpacing: 4,
               children: [
                 Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.monetization_on_outlined, color: AppColors.primary),
                     SizedBox(width: 10),
@@ -138,7 +145,8 @@ class _CuentasPorCobrarScreenState extends State<CuentasPorCobrarScreen> {
                     ),
                   ],
                 ),
-                Row(
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     _generandoRecordatorios
                         ? const Padding(
@@ -146,11 +154,13 @@ class _CuentasPorCobrarScreenState extends State<CuentasPorCobrarScreen> {
                             child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
                           )
                         : TextButton.icon(
+                            key: GuiaCobrar.recordatorios,
                             onPressed: _saldosClientes.isEmpty ? null : _enviarRecordatorios,
                             icon: const Icon(Icons.campaign_outlined, color: Colors.green),
                             label: const Text("Enviar Recordatorios", style: TextStyle(color: Colors.green)),
                           ),
                     IconButton(
+                      key: GuiaCobrar.exportar,
                       icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent),
                       tooltip: "Exportar PDF",
                       onPressed: _saldosClientes.isEmpty ? null : () => ExportService.exportSaldosToPdf(_saldosClientes, widget.negocio.nombreComercial),
@@ -164,6 +174,7 @@ class _CuentasPorCobrarScreenState extends State<CuentasPorCobrarScreen> {
                       icon: const Icon(Icons.refresh),
                       onPressed: _cargarSaldos,
                     ),
+                    BotonGuia(iniciar: () => GuiaCobrar.mostrar(context)),
                   ],
                 )
               ],
@@ -174,20 +185,23 @@ class _CuentasPorCobrarScreenState extends State<CuentasPorCobrarScreen> {
           // enlace de su factura (ver widgets/pagos_en_linea.dart).
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-            child: AvisoPagosPorConfirmar(negocioId: widget.negocio.id, siempre: true),
+            child: KeyedSubtree(key: GuiaCobrar.pagos, child: AvisoPagosPorConfirmar(negocioId: widget.negocio.id, siempre: true)),
           ),
 
           if (!_isLoading && _saldosClientes.isNotEmpty)
             Container(
+              key: GuiaCobrar.total,
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
               color: AppColors.surfaceSubtle,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    "Total General por Cobrar",
-                    style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.primary),
+                  Flexible(
+                    child: Text(
+                      "Total General por Cobrar",
+                      style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.primary),
+                    ),
                   ),
                   Text(
                     formatearColones(_totalGeneral),
@@ -210,6 +224,7 @@ class _CuentasPorCobrarScreenState extends State<CuentasPorCobrarScreen> {
                           final double saldo = double.tryParse(item['saldo'].toString()) ?? 0.0;
                           
                           return Card(
+                            key: index == 0 ? GuiaCobrar.cliente : null,
                             margin: const EdgeInsets.only(bottom: 12),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             child: ListTile(

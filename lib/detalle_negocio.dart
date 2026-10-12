@@ -48,6 +48,8 @@ import 'widgets/asistente_flotante.dart';
 import 'widgets/selector_periodo.dart';
 import 'nota_credito.dart';
 import 'widgets/pagos_en_linea.dart';
+import 'recorridos.dart';
+import 'widgets/recorrido_guiado.dart';
 
 /// Envuelve a un hijo y le avisa a [builder] si el cursor está encima
 /// (hover) -- solo tiene efecto real con mouse (escritorio/web), en touch no
@@ -1176,6 +1178,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         if ([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 18].contains(_seccionActiva)) return null;
         if (_seccionActiva == 2) {
           return FloatingActionButton(
+            key: GuiaClientes.nuevo,
             heroTag: "fab_negocio_cliente",
             backgroundColor: AppColors.primary,
             tooltip: "Agregar Nuevo Cliente",
@@ -2271,13 +2274,21 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
   }
 
   Widget _buildListaClientes() {
+    if (widget.rolEmpleado == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) ofrecerRecorrido(context, clave: GuiaClientes.clave, titulo: "se manejan los clientes", iniciar: () => GuiaClientes.mostrar(context));
+      });
+    }
     return Container(
       color: AppColors.surfaceSubtle,
       child: Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Row(children: [
+              Expanded(
             child: TextField(
+              key: GuiaClientes.buscar,
               controller: _busquedaClientesCtrl,
               decoration: InputDecoration(
                 hintText: "Buscar por nombre, cédula o correo...",
@@ -2292,6 +2303,9 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
               ),
             ),
+              ),
+              BotonGuia(iniciar: () => GuiaClientes.mostrar(context)),
+            ]),
           ),
           Expanded(
             child: FutureBuilder<List<Cliente>>(
@@ -2342,6 +2356,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
+                              key: i == 0 ? GuiaClientes.historial : null,
                               icon: const Icon(Icons.sell_outlined, color: Colors.teal, size: 20),
                               tooltip: "Historial de precios",
                               onPressed: () => Navigator.push(

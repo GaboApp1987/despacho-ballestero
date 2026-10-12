@@ -7,6 +7,8 @@ import 'negocio.dart';
 import 'cliente.dart';
 import 'compra_model.dart';
 import 'factura.dart';
+import 'recorridos.dart';
+import 'widgets/recorrido_guiado.dart';
 import 'nota_credito.dart';
 import 'formato.dart';
 import 'export_service.dart';
@@ -72,6 +74,7 @@ class _NotasCreditoDebitoScreenState extends State<NotasCreditoDebitoScreen> wit
       // Si falla, se queda con lo que ya tenía cargado.
     }
     if (mounted) setState(() => _cargandoCredito = false);
+    if (mounted) ofrecerRecorrido(context, clave: GuiaNotas.clave, titulo: "funcionan las notas de crédito", iniciar: () => GuiaNotas.mostrar(context));
   }
 
   /// Consulta a Hacienda el estado real de UNA nota de crédito puntual
@@ -453,14 +456,17 @@ class _NotasCreditoDebitoScreenState extends State<NotasCreditoDebitoScreen> wit
                               child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
                             )
                           : IconButton(
+                              key: GuiaNotas.estados,
                               icon: const Icon(Icons.refresh),
                               tooltip: 'Actualizar estados con Hacienda',
                               onPressed: _actualizarEstadosNotasCredito,
                             ),
+                    BotonGuia(iniciar: () => GuiaNotas.mostrar(context)),
                   ],
                 ),
                 const SizedBox(height: 12),
                 TabBar(
+                  key: GuiaNotas.pestanas,
                   controller: _tabController,
                   labelColor: AppColors.primary,
                   unselectedLabelColor: AppColors.textMuted,
@@ -484,6 +490,7 @@ class _NotasCreditoDebitoScreenState extends State<NotasCreditoDebitoScreen> wit
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        key: GuiaNotas.nueva,
         onPressed: switch (_tabController.index) {
           0 => _iniciarNuevaNotaCredito,
           1 => _iniciarNuevaNotaDebitoVenta,

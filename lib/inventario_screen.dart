@@ -10,6 +10,8 @@ import 'producto.dart';
 import 'formato.dart';
 import 'actualizar_precios_screen.dart' show PantallaActualizarPrecios;
 import 'importar_externo_dialog.dart';
+import 'recorridos.dart';
+import 'widgets/recorrido_guiado.dart';
 
 class InventarioScreen extends StatefulWidget {
   final Negocio negocio;
@@ -79,6 +81,7 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
           _categorias = categoriasData.map((j) => Categoria.fromJson(j)).toList();
           _cargando = false;
         });
+        ofrecerRecorrido(context, clave: GuiaInventario.clave, titulo: "funciona el inventario", iniciar: () => GuiaInventario.mostrar(context));
       } else {
         throw Exception('Error del servidor (Prod: ${resProd.statusCode}, Cat: ${resCat.statusCode})');
       }
@@ -269,11 +272,13 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
         foregroundColor: AppColors.textStrong,
         actions: [
           IconButton(
+            key: GuiaInventario.precios,
             tooltip: "Actualizar Precios",
             icon: const Icon(Icons.price_change_outlined),
             onPressed: _productos.isEmpty ? null : _abrirActualizarPrecios,
           ),
           IconButton(
+            key: GuiaInventario.importar,
             tooltip: "Cargar Productos Masivamente",
             icon: const Icon(Icons.upload_file_outlined),
             onPressed: () => importarProductosMasivo(
@@ -282,6 +287,7 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
               onImportado: _cargarDatos,
             ),
           ),
+          BotonGuia(iniciar: () => GuiaInventario.mostrar(context)),
         ],
         bottom: PreferredSize(
           // Antes cada Tab tenia icono arriba + texto abajo (mas alto, mas
@@ -290,6 +296,7 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
           // debajo de la palabra en vez de toda la pestaña.
           preferredSize: const Size.fromHeight(38),
           child: TabBar(
+            key: GuiaInventario.pestanas,
             controller: _tabController,
             indicatorColor: AppColors.primary,
             indicatorWeight: 2,
@@ -340,6 +347,7 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
       floatingActionButton: (_cargando || _error != null)
           ? null
           : FloatingActionButton.extended(
+              key: GuiaInventario.nuevo,
               heroTag: 'crear-inventario',
               onPressed: enProductos ? _abrirCrearProducto : () => _mostrarFormularioCategoria(),
               icon: const Icon(Icons.add),
@@ -367,6 +375,7 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
             children: [
               Expanded(
                 child: TextField(
+                  key: GuiaInventario.buscar,
                   controller: _searchCtrl,
                   decoration: InputDecoration(
                     hintText: "Buscar producto por nombre...",

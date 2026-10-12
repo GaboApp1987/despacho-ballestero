@@ -26,6 +26,8 @@ class PasoRecorrido {
 /// Lo que cada usuario ya vio (se pide una vez por sesión).
 class Recorridos {
   static Set<String>? _vistos;
+  // Ofrecidos en esta sesión: una pantalla que recarga no lo vuelve a ofrecer.
+  static final _ofrecidos = <String>{};
   static Future<Set<String>>? _cargando;
 
   static Future<Set<String>> vistos() {
@@ -63,6 +65,7 @@ class Recorridos {
 /// "¿Te muestro cómo funciona?". Se ofrece una sola vez (aunque diga "Ahora
 /// no"); después queda el botón "?" de la pantalla.
 Future<void> ofrecerRecorrido(BuildContext context, {required String clave, required String titulo, required VoidCallback iniciar}) async {
+  if (!Recorridos._ofrecidos.add(clave)) return;
   final vistos = await Recorridos.vistos();
   if (vistos.contains(clave) || vistos.contains('*') || !context.mounted) return;
   // Que termine de dibujarse la pantalla antes de ofrecerlo.

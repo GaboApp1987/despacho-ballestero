@@ -8,6 +8,8 @@ import 'package:printing/printing.dart';
 import 'api_service.dart';
 import 'formato.dart';
 import 'negocio.dart';
+import 'recorridos.dart';
+import 'widgets/recorrido_guiado.dart';
 import 'theme/app_theme.dart';
 
 /// Cierre de caja (gestion/caja.py): abrir con el fondo inicial, registrar
@@ -63,6 +65,7 @@ class _CajaScreenState extends State<CajaScreen> {
       if (r.statusCode == 200 && mounted) _datos = json.decode(utf8.decode(r.bodyBytes));
     } catch (_) {}
     if (mounted) setState(() => _cargando = false);
+    if (mounted) ofrecerRecorrido(context, clave: GuiaCaja.clave, titulo: "funciona el cierre de caja", iniciar: () => GuiaCaja.mostrar(context));
   }
 
   Future<void> _abrir() async {
@@ -162,6 +165,7 @@ class _CajaScreenState extends State<CajaScreen> {
           Row(children: [
             Expanded(
               child: TextField(
+                key: GuiaCaja.fondo,
                 controller: _fondoCtrl,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
@@ -209,16 +213,16 @@ class _CajaScreenState extends State<CajaScreen> {
           Text("Abrió ${t['abierto_por']} con ${formatearColones(_n(t['fondo_inicial']), decimales: 0)} de fondo",
               style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
           const SizedBox(height: 14),
-          Wrap(spacing: 8, runSpacing: 8, children: [
+          Wrap(key: GuiaCaja.movimientos, spacing: 8, runSpacing: 8, children: [
             OutlinedButton.icon(onPressed: () => _movimiento('entrada'), icon: const Icon(Icons.add, size: 18), label: const Text("Entrada de efectivo")),
             OutlinedButton.icon(onPressed: () => _movimiento('salida'), icon: const Icon(Icons.remove, size: 18), label: const Text("Salida de efectivo")),
-            FilledButton.icon(onPressed: _cerrar, icon: const Icon(Icons.lock, size: 18), label: const Text("Cerrar caja")),
+            FilledButton.icon(key: GuiaCaja.cerrar, onPressed: _cerrar, icon: const Icon(Icons.lock, size: 18), label: const Text("Cerrar caja")),
           ]),
         ]),
       ),
       if (resumen != null)
         _tarjeta(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child: Column(key: GuiaCaja.resumen, crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text("Debería haber en este momento", style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.textStrong)),
             const SizedBox(height: 4),
             Text("${resumen['cantidad_ventas']} ventas de contado por ${formatearColones(_n(resumen['total_ventas']), decimales: 0)}"
@@ -286,8 +290,10 @@ class _CajaScreenState extends State<CajaScreen> {
                     Icon(Icons.point_of_sale, color: AppColors.primary),
                     const SizedBox(width: 10),
                     Expanded(child: Text("Caja", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textStrong))),
-                    if (!_esCajero) TextButton.icon(onPressed: _historial, icon: const Icon(Icons.history, size: 18), label: const Text("Historial")),
+                    if (!_esCajero)
+                      TextButton.icon(key: GuiaCaja.historial, onPressed: _historial, icon: const Icon(Icons.history, size: 18), label: const Text("Historial")),
                     IconButton(onPressed: _cargar, icon: const Icon(Icons.refresh), tooltip: "Actualizar"),
+                    BotonGuia(iniciar: () => GuiaCaja.mostrar(context)),
                   ]),
                   const SizedBox(height: 10),
                   ConstrainedBox(
