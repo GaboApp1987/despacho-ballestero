@@ -551,7 +551,8 @@ class _NegociosScreenState extends State<NegociosScreen> {
     bool guardando = false;
     // Cargados de Hacienda con la cédula (ver CampoCedulaHacienda).
     String nombreLegal = '';
-    String actividadAlanube = '';
+    // Actividad principal que trae Hacienda con la cédula (llena el código).
+    String actividadHacienda = '';
     // Un negocio que solo lleva su contabilidad con el contador (Ingresos,
     // Compras, Reportes) pero no factura electrónicamente por acá no
     // necesita correo/usuario/clave de Hacienda -- eso trababa la creación
@@ -598,7 +599,11 @@ class _NegociosScreenState extends State<NegociosScreen> {
                             if (_tiposCedula.containsKey(tipo)) tipoCedula = tipo;
                             nombreLegal = (datos['nombre'] ?? '').toString();
                             final principal = datos['actividad_principal'] as Map?;
-                            actividadAlanube = (principal?['codigo'] ?? '').toString();
+                            actividadHacienda = (principal?['codigo'] ?? '').toString();
+                            // Antes este código solo se guardaba para Alanube y el
+                            // principal se escribía a mano (así se coló un 9010.0
+                            // que el contribuyente no tenía).
+                            if (actividadHacienda.isNotEmpty) codigoActividadCtrl.text = actividadHacienda;
                           }),
                         ),
                       ),
@@ -621,10 +626,10 @@ class _NegociosScreenState extends State<NegociosScreen> {
                     controller: nombreCtrl,
                     decoration: const InputDecoration(labelText: "Nombre Comercial *", border: OutlineInputBorder()),
                   ),
-                  if (actividadAlanube.isNotEmpty)
+                  if (actividadHacienda.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 6),
-                      child: Text("Actividad económica de Hacienda: $actividadAlanube (se guarda para facturar)",
+                      child: Text("Actividad principal según Hacienda: $actividadHacienda (ya quedó en \"Código de actividad\")",
                           style: const TextStyle(fontSize: 12, color: Colors.green)),
                     ),
                   const SizedBox(height: 10),
@@ -726,7 +731,6 @@ class _NegociosScreenState extends State<NegociosScreen> {
                           'cedula': cedulaCtrl.text.trim(),
                           'tipo_cedula': tipoCedula,
                           if (nombreLegal.isNotEmpty) 'nombre_legal': nombreLegal,
-                          if (actividadAlanube.isNotEmpty) 'alanube_economic_activity': actividadAlanube,
                           'correo_hacienda': correoHaciendaCtrl.text.trim(),
                           'codigo_actividad': codigoActividadCtrl.text.trim(),
                           'usuario_api': usuarioApiCtrl.text.trim(),
@@ -1502,6 +1506,9 @@ class _NegociosScreenState extends State<NegociosScreen> {
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
                       final n = _negociosFiltrados[index];
+                      // Celular: con la franja del menú a la izquierda queda poco
+                      // ancho -- logo y márgenes más chicos y los datos en renglones.
+                      final angosto = MediaQuery.sizeOf(context).width < 700;
                       return Card(
                         key: index == 0 && esContador ? GuiaPanelContador.cliente : null,
                         margin: const EdgeInsets.only(bottom: 10),
@@ -1512,9 +1519,13 @@ class _NegociosScreenState extends State<NegociosScreen> {
                           side: esContador ? const BorderSide(color: _PaletaContador.borde) : BorderSide.none,
                         ),
                         child: ListTile(
+                          contentPadding: EdgeInsets.symmetric(horizontal: angosto ? 10 : 16, vertical: angosto ? 2 : 0),
+                          horizontalTitleGap: angosto ? 10 : 16,
+                          minLeadingWidth: 0,
                           leading: avatarConLogo(
                             logoUrl: n.logoUrl,
                             icono: Icons.business_center,
+                            radius: angosto ? 18 : 24,
                             nombre: n.nombreComercial,
                             color: esContador ? _PaletaContador.acento : null,
                             fondo: esContador ? _PaletaContador.acento.withOpacity(0.14) : null,
@@ -1534,10 +1545,14 @@ class _NegociosScreenState extends State<NegociosScreen> {
                                       ? "Plan: ${n.planNombre} (documentos ilimitados)"
                                       : "Plan: ${n.planNombre} (${n.facturasDisponibles ?? 0}/${n.limiteFacturasMensual} documentos disp.)")
                                   : "Sin plan asignado",
-                            ].join(" · "),
+                            ].join(angosto ? "\n" : " · "),
                             style: esContador ? const TextStyle(color: _PaletaContador.textoTenue, fontSize: 12.5) : null,
                           ),
-                          trailing: Row(
+                          // En celular la fila de botones aplastaba el nombre y los
+                          // datos en una columna angosta: ahí van en un menú ⋮.
+                          trailing: MediaQuery.sizeOf(context).width < 700
+                              ? _accionesClienteEnMenu(n, esContador)
+                              : Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               if (widget.puedeCrear)
@@ -1585,6 +1600,39 @@ class _NegociosScreenState extends State<NegociosScreen> {
   }
 
   static const double _anchoRail = MenuLateral.anchoColapsado;
+
+  /// Las acciones de la tarjeta de un cliente en un menú ⋮ (pantallas angostas).
+  Widget _accionesClienteEnMenu(Negocio n, bool esContador) {
+    final opciones = <PopupMenuEntry<String>>[
+      if (widget.puedeCrear) const PopupMenuItem(value: 'editar', child: ListTile(leading: Icon(Icons.edit_outlined), title: Text("Editar"))),
+      if (widget.puedeGestionarPlanes)
+        const PopupMenuItem(value: 'plan', child: ListTile(leading: Icon(Icons.workspace_premium_outlined), title: Text("Cambiar plan"))),
+      if (_puedeReasignar)
+        const PopupMenuItem(value: 'reasignar', child: ListTile(leading: Icon(Icons.swap_horiz), title: Text("Reasignar a otro contador"))),
+      if (widget.esSuperusuario)
+        const PopupMenuItem(value: 'renta', child: ListTile(leading: Icon(Icons.payments_outlined), title: Text("Renta de la plataforma"))),
+    ];
+    if (opciones.isEmpty) return Icon(Icons.chevron_right, color: esContador ? _PaletaContador.acento : null);
+    return PopupMenuButton<String>(
+      tooltip: "Acciones",
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 200),
+      icon: Icon(Icons.more_vert, color: esContador ? _PaletaContador.textoTenue : null),
+      onSelected: (v) {
+        switch (v) {
+          case 'editar':
+            _mostrarFormularioEditar(n);
+          case 'plan':
+            _cambiarPlan(n);
+          case 'reasignar':
+            _reasignarNegocio(n);
+          case 'renta':
+            _gestionarSuscripcion(n);
+        }
+      },
+      itemBuilder: (_) => opciones,
+    );
+  }
 
   /// Barra lateral del contador (widgets/menu_lateral.dart): secciones
   /// Principal / Contabilidad / Documentos / Comunicación, buscador de

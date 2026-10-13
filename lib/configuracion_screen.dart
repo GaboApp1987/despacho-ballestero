@@ -28,7 +28,6 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
   late TextEditingController _direccionController;
   late TextEditingController _telefonoController;
   late TextEditingController _correoController;
-  late TextEditingController _alanubeActividadController;
   late TextEditingController _actividadPrincipalController;
   late String _entornoSeleccionado;
   late bool _avisosPorCorreo;
@@ -98,7 +97,6 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
     _direccionController = TextEditingController(text: widget.negocio.direccion ?? '');
     _telefonoController = TextEditingController(text: widget.negocio.telefono ?? '');
     _correoController = TextEditingController(text: widget.negocio.correoHacienda ?? '');
-    _alanubeActividadController = TextEditingController(text: widget.negocio.alanubeEconomicActivity ?? '');
     _actividadPrincipalController = TextEditingController(text: widget.negocio.codigoActividad ?? '');
     _logoUrl = widget.negocio.logoUrl;
     _llaveCargadaEnServidor = widget.negocio.llaveCriptografica != null;
@@ -209,7 +207,6 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
 
   void _mostrarFormularioActividad() {
     final codigoCtrl = TextEditingController();
-    final codigoAlanubeCtrl = TextEditingController();
     final descripcionCtrl = TextEditingController();
     bool guardando = false;
 
@@ -230,15 +227,6 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
                     autofocus: true,
                     decoration: const InputDecoration(
                       labelText: "Código de actividad * (ej. 4520.0)",
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: codigoAlanubeCtrl,
-                    decoration: const InputDecoration(
-                      labelText: "Código CIIU (Alanube, ej: 6820.0)",
-                      helperText: "Opcional -- si se deja vacío, se intenta usar el código de Hacienda tal cual",
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -272,7 +260,6 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
                         final response = await ApiService.post('/actividades-economicas/', {
                           'negocio': widget.negocio.id,
                           'codigo_actividad': codigoCtrl.text.trim(),
-                          'alanube_economic_activity': codigoAlanubeCtrl.text.trim(),
                           'descripcion': descripcionCtrl.text.trim(),
                         });
                         if (response.statusCode == 201) {
@@ -338,7 +325,6 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
     _direccionController.dispose();
     _telefonoController.dispose();
     _correoController.dispose();
-    _alanubeActividadController.dispose();
     _actividadPrincipalController.dispose();
     _consecutivoFacturaController.dispose();
     _consecutivoTiqueteController.dispose();
@@ -505,7 +491,6 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
         'factor_rts_iva_2': _factorIva2Ctrl.text.trim().isEmpty ? null : _factorIva2Ctrl.text.trim().replaceAll(',', '.'),
         'factor_rts_iva_1': _factorIva1Ctrl.text.trim().isEmpty ? null : _factorIva1Ctrl.text.trim().replaceAll(',', '.'),
         'correo_hacienda': _correoController.text.trim(),
-        'alanube_economic_activity': _alanubeActividadController.text.trim(),
         'codigo_actividad': _actividadPrincipalController.text.trim(),
       };
 
@@ -832,19 +817,6 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        child: TextFormField(
-                          controller: _alanubeActividadController,
-                          decoration: const InputDecoration(
-                            labelText: "Actividad Económica (Alanube)",
-                            helperText: "Solo si factura por Alanube: el código CIIU que pide Alanube (ej: 6820.0)",
-                            prefixIcon: Icon(Icons.work_outline),
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
                       const SizedBox(height: 8),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -890,7 +862,6 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
                               subtitle: Text(
                                 [
                                   if (a.descripcion.isNotEmpty) a.descripcion,
-                                  if ((a.alanubeEconomicActivity ?? '').isNotEmpty) "Alanube: ${a.alanubeEconomicActivity}",
                                 ].join(" · "),
                               ),
                               trailing: IconButton(
