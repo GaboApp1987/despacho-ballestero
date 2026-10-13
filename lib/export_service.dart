@@ -508,6 +508,10 @@ class ExportService {
   @visibleForTesting
   static void Function(List<int> bytes, String fileName)? capturarExcelParaPruebas;
 
+  /// Igual que [capturarExcelParaPruebas], para los PDF de préstamos.
+  @visibleForTesting
+  static void Function(List<int> bytes, String fileName)? capturarPdfParaPruebas;
+
   static Future<void> _guardarExcel(Excel excel, {required String dialogTitle, required String fileName}) async {
     final bytes = excel.encode()!;
     if (capturarExcelParaPruebas != null) {
@@ -4758,5 +4762,450 @@ class ExportService {
     _dashboardPrimero(excel);
 
     await _guardarExcel(excel, dialogTitle: 'Guardar Reporte de Notas de Crédito', fileName: 'reporte_notas_credito.xlsx');
+  }
+
+  // ------------------------------------------------------------ Préstamos
+
+  static double _np(dynamic v) => double.tryParse('${v ?? 0}') ?? 0;
+
+  static String _dineroPrestamo(dynamic v, String moneda) =>
+      moneda == 'USD' ? formatearDolares(_np(v), decimales: 2) : formatearColones(_np(v), decimales: 2);
+
+  static String _fechaCorta(dynamic iso) {
+    final d = DateTime.tryParse('${iso ?? ''}');
+    return d == null ? '' : '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+  }
+
+  static const _metodosPrestamo = {
+    'frances': 'Cuota fija',
+    'saldo': 'Interés sobre saldo',
+    'plano': 'Interés plano',
+    'solo_interes': 'Solo intereses',
+  };
+
+  static String _vehiculoTexto(Map v) =>
+      [v['marca'], v['modelo'], v['anio']].where((x) => '${x ?? ''}'.isNotEmpty).join(' ') +
+      ('${v['placa'] ?? ''}'.isNotEmpty ? ' · Placa ${v['placa']}' : '');
+
+  static String _estadoCuota(Map c) => switch (c['estado']) {
+        'pagada' => 'Pagada',
+        'vencida' => 'Vencida',
+        'parcial' => 'Parcial',
+        _ => 'Pendiente',
+      };
+
+  /// Estado de cuenta de un préstamo (el detalle de /prestamos/<id>/): datos
+  /// del negocio y del deudor, resumen a hoy, plan de cuotas y pagos.
+  static Future<void> exportEstadoCuentaPrestamoPdf(Map<String, dynamic> p, Negocio negocio, {bool share = false}) async {
+    final pdf = pw.Document(theme: await _cargarTema());
+    final logo = await _cargarLogo(negocio.logoUrl);
+    final info = NegocioInfo(
+      nombreComercial: negocio.nombreComercial,
+      cedula: negocio.cedula,
+      tipoCedula: negocio.tipoCedula,
+      correo: negocio.correoHacienda,
+      direccion: negocio.direccion,
+      telefono: negocio.telefono,
+    );
+    final moneda = '${p['moneda'] ?? 'CRC'}';
+    final r = (p['resumen'] as Map?) ?? {};
+    final cuotas = ((p['cuotas'] as List?) ?? []).cast<Map>();
+    final pagos = ((p['pagos'] as List?) ?? []).cast<Map>().where((g) => g['anulado'] != true).toList();
+    final vehiculo = (p['vehiculo'] as Map?) ?? {};
+    final dias = (r['dias_atraso'] ?? 0) as int;
+    const color = PdfColor.fromInt(0xFF3730A3);
+    final hoy = DateTime.now();
+    final estado = p['estado'] == 'cancelado'
+        ? 'Cancelado'
+        : p['estado'] == 'anulado'
+            ? 'Anulado'
+            : (dias > 0 ? 'Atrasado $dias días' : 'Al día');
+
+    pw.Widget fila(String a, String b, {bool fuerte = false, PdfColor? colorValor}) => pw.Padding(
+          padding: const pw.EdgeInsets.symmetric(vertical: 1.5),
+          child: pw.Row(children: [
+            pw.Expanded(child: pw.Text(a, style: const pw.TextStyle(fontSize: 9.5, color: PdfColors.grey700))),
+            pw.Text(b, style: pw.TextStyle(fontSize: 9.5, fontWeight: fuerte ? pw.FontWeight.bold : null, color: colorValor)),
+          ]),
+        );
+
+    pw.Widget caja(String titulo, List<pw.Widget> hijos) => pw.Container(
+          padding: const pw.EdgeInsets.all(8),
+          decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey400, width: 0.6), borderRadius: pw.BorderRadius.circular(4)),
+          child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.stretch, children: [
+            pw.Text(titulo, style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: color)),
+            pw.SizedBox(height: 4),
+            ...hijos,
+          ]),
+        );
+
+    const celda = pw.TextStyle(fontSize: 8.5);
+    final encabezado = pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, color: PdfColors.white);
+
+    pdf.addPage(pw.MultiPage(
+      pageTheme: _temaPagina(margin: const pw.EdgeInsets.fromLTRB(32, 32, 32, 44)),
+      build: (context) => [
+        _encabezadoDocumento(
+          info: info,
+          nombreNegocio: negocio.nombreComercial,
+          logo: logo,
+          titulo: 'ESTADO DE CUENTA',
+          datos: ['Préstamo N.° ${p['numero']}', 'Al ${_fechaCorta(hoy.toIso8601String())}'],
+          color: color,
+        ),
+        pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+          pw.Expanded(
+            child: caja('Deudor', [
+              pw.Text('${p['cliente_nombre'] ?? ''}', style: pw.TextStyle(fontSize: 10.5, fontWeight: pw.FontWeight.bold)),
+              if ('${p['cliente_cedula'] ?? ''}'.isNotEmpty) fila('Cédula', '${p['cliente_cedula']}'),
+              if ('${p['cliente_telefono'] ?? ''}'.isNotEmpty) fila('Teléfono', '${p['cliente_telefono']}'),
+              fila('Tipo', p['tipo'] == 'vehiculo' ? 'Venta de vehículo a plazo' : 'Préstamo personal'),
+              if (p['tipo'] == 'vehiculo' && _vehiculoTexto(vehiculo).isNotEmpty) fila('Vehículo', _vehiculoTexto(vehiculo)),
+              if ('${p['garantia'] ?? ''}'.isNotEmpty) fila('Garantía', '${p['garantia']}'),
+            ]),
+          ),
+          pw.SizedBox(width: 10),
+          pw.Expanded(
+            child: caja('Condiciones', [
+              if (p['tipo'] == 'vehiculo') ...[
+                fila('Precio de venta', _dineroPrestamo(p['precio_venta'], moneda)),
+                fila('Prima', _dineroPrestamo(p['prima'], moneda)),
+              ],
+              fila('Monto financiado', _dineroPrestamo(p['monto'], moneda)),
+              fila('Tasa de interés', '${p['tasa_anual']}% anual'),
+              fila('Plazo', '${p['plazo_meses']} meses · día ${p['dia_pago']}'),
+              fila('Forma de cálculo', _metodosPrestamo[p['metodo']] ?? '${p['metodo']}'),
+              fila('Mora', '${p['tasa_mora_anual']}% anual · ${p['dias_gracia']} días de gracia'),
+              fila('Desde', _fechaCorta(p['fecha_inicio'])),
+            ]),
+          ),
+        ]),
+        pw.SizedBox(height: 10),
+        caja('Resumen al ${_fechaCorta(hoy.toIso8601String())}', [
+          fila('Estado', estado, fuerte: true, colorValor: dias > 0 && p['estado'] == 'activo' ? PdfColors.red700 : PdfColors.green800),
+          fila('Saldo de capital', _dineroPrestamo(r['saldo_capital'], moneda), fuerte: true),
+          if (_np(r['para_estar_al_dia']) > 0) fila('Para estar al día', _dineroPrestamo(r['para_estar_al_dia'], moneda), fuerte: true, colorValor: PdfColors.red700),
+          if (_np(r['mora']) > 0) fila('Intereses moratorios a hoy', _dineroPrestamo(r['mora'], moneda), colorValor: PdfColors.red700),
+          if (r['proxima'] != null)
+            fila('Próxima cuota (N.° ${(r['proxima'] as Map)['numero']}, vence ${_fechaCorta((r['proxima'] as Map)['vencimiento'])})',
+                _dineroPrestamo((r['proxima'] as Map)['monto'], moneda)),
+          fila('Saldo total para cancelar hoy', _dineroPrestamo(r['saldo_total'], moneda)),
+          fila('Cuotas pagadas', '${r['cuotas_pagadas']} de ${r['cuotas_total']}'),
+          fila('Total pagado', _dineroPrestamo(pagos.fold<double>(0, (a, g) => a + _np(g['monto'])), moneda)),
+        ]),
+        pw.SizedBox(height: 12),
+        pw.Text('Plan de pagos', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: color)),
+        pw.SizedBox(height: 4),
+        pw.TableHelper.fromTextArray(
+          headerStyle: encabezado,
+          headerDecoration: const pw.BoxDecoration(color: color),
+          cellStyle: celda,
+          cellPadding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+          oddRowDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF5F7FF)),
+          cellAlignments: {
+            for (final i in [3, 4, 5, 6, 7]) i: pw.Alignment.centerRight,
+          },
+          headers: const ['N.°', 'Vence', 'Estado', 'Capital', 'Interés', 'Mora', 'Cuota', 'Pendiente'],
+          data: [
+            for (final c in cuotas)
+              [
+                '${c['numero']}',
+                _fechaCorta(c['vencimiento']),
+                _estadoCuota(c),
+                _dineroPrestamo(c['capital'], moneda),
+                _dineroPrestamo(c['interes'], moneda),
+                _np(c['mora']) > 0 ? _dineroPrestamo(c['mora'], moneda) : '',
+                _dineroPrestamo(c['total'], moneda),
+                _np(c['pendiente']) > 0 ? _dineroPrestamo(c['pendiente'], moneda) : '',
+              ],
+          ],
+        ),
+        pw.SizedBox(height: 12),
+        pw.Text('Pagos recibidos', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: color)),
+        pw.SizedBox(height: 4),
+        if (pagos.isEmpty)
+          pw.Text('Todavía no hay pagos.', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700))
+        else
+          pw.TableHelper.fromTextArray(
+            headerStyle: encabezado,
+            headerDecoration: const pw.BoxDecoration(color: color),
+            cellStyle: celda,
+            cellPadding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+            cellAlignments: {3: pw.Alignment.centerRight},
+            headers: const ['Fecha', 'Medio', 'Referencia', 'Monto'],
+            data: [
+              for (final g in pagos)
+                [
+                  _fechaCorta(g['fecha']),
+                  '${g['medio_pago_nombre'] ?? ''}${g['a_capital'] == true ? ' (abono a capital)' : ''}',
+                  '${g['referencia'] ?? ''}',
+                  _dineroPrestamo(g['monto'], moneda),
+                ],
+            ],
+          ),
+        if (p['enlace'] != null && p['estado'] == 'activo') ...[
+          pw.SizedBox(height: 14),
+          pw.Container(
+            padding: const pw.EdgeInsets.all(8),
+            color: const PdfColor.fromInt(0xFFEEF2FF),
+            child: pw.Row(children: [
+              pw.Expanded(
+                child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                  pw.Text('Estado de cuenta en línea y cómo pagar', style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('Escanee el código para ver su estado de cuenta actualizado, pagar por SINPE Móvil o transferencia y subir el comprobante.',
+                      style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey800)),
+                ]),
+              ),
+              pw.SizedBox(width: 10),
+              pw.BarcodeWidget(barcode: pw.Barcode.qrCode(), data: '${p['enlace']}', width: 64, height: 64),
+            ]),
+          ),
+        ],
+        _piePagina(),
+      ],
+    ));
+
+    final bytes = await pdf.save();
+    const sinTilde = {'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u', 'ü': 'u', 'ñ': 'n', 'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U', 'Ü': 'U', 'Ñ': 'N'};
+    final cliente = '${p['cliente_nombre'] ?? ''}'.split('').map((c) => sinTilde[c] ?? c).join().replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_');
+    final nombre = 'Estado_cuenta_prestamo_${p['numero']}_$cliente.pdf';
+    if (capturarPdfParaPruebas != null) return capturarPdfParaPruebas!(bytes, nombre);
+    if (share) {
+      await Share.shareXFiles([XFile.fromData(bytes, name: nombre, mimeType: 'application/pdf')],
+          text: 'Estado de cuenta del préstamo N.° ${p['numero']}');
+    } else {
+      await Printing.layoutPdf(onLayout: (format) async => bytes, name: nombre);
+    }
+  }
+
+  /// El mismo estado de cuenta en Excel: plan de cuotas y pagos.
+  static Future<void> exportEstadoCuentaPrestamoExcel(Map<String, dynamic> p) async {
+    final excel = Excel.createExcel();
+    final moneda = '${p['moneda'] ?? 'CRC'}';
+    final usd = moneda == 'USD';
+    final r = (p['resumen'] as Map?) ?? {};
+    final cuotas = ((p['cuotas'] as List?) ?? []).cast<Map>();
+    final pagos = ((p['pagos'] as List?) ?? []).cast<Map>().where((g) => g['anulado'] != true).toList();
+    final titulo = 'Estado de cuenta · Préstamo N.° ${p['numero']} · ${p['cliente_nombre'] ?? ''}';
+
+    final resumen = excel['Resumen'];
+    _escribirTabla(
+      resumen,
+      titulo: titulo,
+      subtitulo: p['tipo'] == 'vehiculo' ? 'Venta de vehículo a plazo' : 'Préstamo personal',
+      encabezados: const ['Concepto', 'Valor'],
+      filas: [
+        [TextCellValue('Monto financiado'), DoubleCellValue(_np(p['monto']))],
+        [TextCellValue('Saldo de capital'), DoubleCellValue(_np(r['saldo_capital']))],
+        [TextCellValue('Para estar al día'), DoubleCellValue(_np(r['para_estar_al_dia']))],
+        [TextCellValue('Intereses moratorios a hoy'), DoubleCellValue(_np(r['mora']))],
+        [TextCellValue('Saldo total para cancelar hoy'), DoubleCellValue(_np(r['saldo_total']))],
+        [TextCellValue('Total pagado'), DoubleCellValue(pagos.fold<double>(0, (a, g) => a + _np(g['monto'])))],
+      ],
+      moneda: usd ? const {} : const {1},
+      dolares: usd ? const {1} : const {},
+      anchos: const [34, 20],
+    );
+    resumen.appendRow([]);
+    for (final (a, b) in [
+      ('Tasa de interés', '${p['tasa_anual']}% anual'),
+      ('Plazo', '${p['plazo_meses']} meses · día ${p['dia_pago']}'),
+      ('Forma de cálculo', _metodosPrestamo[p['metodo']] ?? '${p['metodo']}'),
+      ('Mora', '${p['tasa_mora_anual']}% anual · ${p['dias_gracia']} días de gracia'),
+      ('Desde', _fechaCorta(p['fecha_inicio'])),
+      ('Cuotas pagadas', '${r['cuotas_pagadas']} de ${r['cuotas_total']}'),
+      ('Días de atraso', '${r['dias_atraso'] ?? 0}'),
+    ]) {
+      resumen.appendRow([TextCellValue(a), TextCellValue(b)]);
+    }
+
+    _escribirTabla(
+      excel['Cuotas'],
+      titulo: titulo,
+      subtitulo: 'Plan de pagos',
+      encabezados: const ['N.°', 'Vence', 'Estado', 'Capital', 'Interés', 'Mora', 'Cuota', 'Pendiente'],
+      filas: [
+        for (final c in cuotas)
+          [
+            IntCellValue((c['numero'] ?? 0) as int),
+            TextCellValue(_fechaCorta(c['vencimiento'])),
+            TextCellValue(_estadoCuota(c)),
+            DoubleCellValue(_np(c['capital'])),
+            DoubleCellValue(_np(c['interes'])),
+            DoubleCellValue(_np(c['mora'])),
+            DoubleCellValue(_np(c['total'])),
+            DoubleCellValue(_np(c['pendiente'])),
+          ],
+      ],
+      moneda: usd ? const {} : const {3, 4, 5, 6, 7},
+      dolares: usd ? const {3, 4, 5, 6, 7} : const {},
+      sumar: const {3, 4, 5, 6, 7},
+      anchos: const [6, 12, 11, 16, 16, 14, 16, 16],
+    );
+
+    _escribirTabla(
+      excel['Pagos'],
+      titulo: titulo,
+      subtitulo: 'Pagos recibidos',
+      encabezados: const ['Fecha', 'Medio', 'Referencia', 'Abono a capital', 'Monto'],
+      filas: [
+        for (final g in pagos)
+          [
+            TextCellValue(_fechaCorta(g['fecha'])),
+            TextCellValue('${g['medio_pago_nombre'] ?? ''}'),
+            TextCellValue('${g['referencia'] ?? ''}'),
+            TextCellValue(g['a_capital'] == true ? 'Sí' : ''),
+            DoubleCellValue(_np(g['monto'])),
+          ],
+      ],
+      moneda: usd ? const {} : const {4},
+      dolares: usd ? const {4} : const {},
+      sumar: const {4},
+      anchos: const [12, 16, 22, 14, 18],
+      vacio: 'Todavía no hay pagos.',
+    );
+
+    excel.setDefaultSheet('Resumen');
+    if (excel.sheets.containsKey('Sheet1')) excel.delete('Sheet1');
+    await _guardarExcel(excel, dialogTitle: 'Guardar estado de cuenta', fileName: 'estado_cuenta_prestamo_${p['numero']}.xlsx');
+  }
+
+  /// Cartera de préstamos (la lista de /prestamos/): un renglón por préstamo
+  /// con saldo, atraso y próxima cuota.
+  static Future<void> exportCarteraPrestamosPdf(List<Map<String, dynamic>> prestamos, Negocio negocio) async {
+    final pdf = pw.Document(theme: await _cargarTema());
+    final logo = await _cargarLogo(negocio.logoUrl);
+    const color = PdfColor.fromInt(0xFF3730A3);
+    final hoy = DateTime.now();
+    final monedas = prestamos.map((p) => '${p['moneda']}').toSet().toList()..sort();
+    pdf.addPage(pw.MultiPage(
+      pageTheme: _temaPagina(margin: const pw.EdgeInsets.fromLTRB(28, 28, 28, 44)),
+      build: (context) => [
+        _encabezadoDocumento(
+          info: NegocioInfo(
+            nombreComercial: negocio.nombreComercial,
+            cedula: negocio.cedula,
+            tipoCedula: negocio.tipoCedula,
+            correo: negocio.correoHacienda,
+            telefono: negocio.telefono,
+          ),
+          nombreNegocio: negocio.nombreComercial,
+          logo: logo,
+          titulo: 'CARTERA DE PRÉSTAMOS',
+          datos: ['${prestamos.length} préstamo(s)', 'Al ${_fechaCorta(hoy.toIso8601String())}'],
+          color: color,
+        ),
+        for (final m in monedas) ...[
+          () {
+            final lista = prestamos.where((p) => '${p['moneda']}' == m).toList();
+            double suma(String k) => lista.fold<double>(0, (a, p) => a + _np(((p['resumen'] as Map?) ?? {})[k]));
+            return pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.stretch, children: [
+              if (monedas.length > 1)
+                pw.Padding(
+                  padding: const pw.EdgeInsets.only(top: 6, bottom: 4),
+                  child: pw.Text(m == 'USD' ? 'En dólares' : 'En colones', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: color)),
+                ),
+              pw.TableHelper.fromTextArray(
+                headerStyle: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+                headerDecoration: const pw.BoxDecoration(color: color),
+                cellStyle: const pw.TextStyle(fontSize: 8),
+                cellPadding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 3),
+                oddRowDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF5F7FF)),
+                cellAlignments: {for (final i in [3, 4, 5, 6]) i: pw.Alignment.centerRight},
+                columnWidths: const {
+                  0: pw.FixedColumnWidth(26),
+                  1: pw.FlexColumnWidth(3),
+                  2: pw.FlexColumnWidth(3),
+                  3: pw.FixedColumnWidth(36),
+                  4: pw.FlexColumnWidth(2),
+                  5: pw.FlexColumnWidth(2),
+                  6: pw.FixedColumnWidth(50),
+                },
+                headers: const ['N.°', 'Cliente', 'Detalle', 'Cuotas', 'Saldo capital', 'Para estar al día', 'Atraso'],
+                data: [
+                  for (final p in lista)
+                    () {
+                      final r = (p['resumen'] as Map?) ?? {};
+                      final dias = (r['dias_atraso'] ?? 0) as int;
+                      return [
+                        '${p['numero']}',
+                        '${p['cliente_nombre'] ?? ''}',
+                        p['tipo'] == 'vehiculo' ? _vehiculoTexto((p['vehiculo'] as Map?) ?? {}) : 'Personal',
+                        '${r['cuotas_pagadas']}/${r['cuotas_total']}',
+                        _dineroPrestamo(r['saldo_capital'], m),
+                        _np(r['para_estar_al_dia']) > 0 ? _dineroPrestamo(r['para_estar_al_dia'], m) : '',
+                        p['estado'] == 'cancelado' ? 'Cancelado' : (dias > 0 ? '$dias días' : 'Al día'),
+                      ];
+                    }(),
+                ],
+              ),
+              pw.SizedBox(height: 6),
+              pw.Align(
+                alignment: pw.Alignment.centerRight,
+                child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
+                  pw.Text('Saldo de capital: ${_dineroPrestamo(suma('saldo_capital'), m)}', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('Vencido (para estar al día): ${_dineroPrestamo(suma('para_estar_al_dia'), m)}',
+                      style: const pw.TextStyle(fontSize: 9.5, color: PdfColors.red700)),
+                ]),
+              ),
+              pw.SizedBox(height: 10),
+            ]);
+          }(),
+        ],
+      ],
+    ));
+    final bytes = await pdf.save();
+    if (capturarPdfParaPruebas != null) return capturarPdfParaPruebas!(bytes, 'Cartera_prestamos.pdf');
+    await Printing.layoutPdf(onLayout: (format) async => bytes, name: 'Cartera_prestamos.pdf');
+  }
+
+  static Future<void> exportCarteraPrestamosExcel(List<Map<String, dynamic>> prestamos) async {
+    final excel = Excel.createExcel();
+    final monedas = prestamos.map((p) => '${p['moneda']}').toSet().toList()..sort();
+    if (monedas.isEmpty) monedas.add('CRC');
+    for (final m in monedas) {
+      final usd = m == 'USD';
+      final lista = prestamos.where((p) => '${p['moneda']}' == m).toList();
+      _escribirTabla(
+        excel[usd ? 'Cartera USD' : 'Cartera'],
+        titulo: 'Cartera de préstamos${monedas.length > 1 ? (usd ? ' en dólares' : ' en colones') : ''}',
+        subtitulo: '${lista.length} préstamo(s)',
+        encabezados: const ['N.°', 'Cliente', 'Cédula', 'Tipo', 'Vehículo', 'Inicio', 'Monto', 'Tasa %', 'Cuotas pagadas', 'Cuotas',
+          'Saldo capital', 'Para estar al día', 'Mora', 'Días de atraso', 'Próximo vencimiento', 'Estado'],
+        filas: [
+          for (final p in lista)
+            () {
+              final r = (p['resumen'] as Map?) ?? {};
+              final proxima = r['proxima'] as Map?;
+              return <CellValue>[
+                IntCellValue((p['numero'] ?? 0) as int),
+                TextCellValue('${p['cliente_nombre'] ?? ''}'),
+                TextCellValue('${p['cliente_cedula'] ?? ''}'),
+                TextCellValue(p['tipo'] == 'vehiculo' ? 'Vehículo' : 'Personal'),
+                TextCellValue(p['tipo'] == 'vehiculo' ? _vehiculoTexto((p['vehiculo'] as Map?) ?? {}) : ''),
+                TextCellValue(_fechaCorta(p['fecha_inicio'])),
+                DoubleCellValue(_np(p['monto'])),
+                DoubleCellValue(_np(p['tasa_anual'])),
+                IntCellValue((r['cuotas_pagadas'] ?? 0) as int),
+                IntCellValue((r['cuotas_total'] ?? 0) as int),
+                DoubleCellValue(_np(r['saldo_capital'])),
+                DoubleCellValue(_np(r['para_estar_al_dia'])),
+                DoubleCellValue(_np(r['mora'])),
+                IntCellValue((r['dias_atraso'] ?? 0) as int),
+                TextCellValue(proxima == null ? '' : _fechaCorta(proxima['vencimiento'])),
+                TextCellValue(p['estado'] == 'cancelado' ? 'Cancelado' : (p['estado'] == 'anulado' ? 'Anulado' : 'Activo')),
+              ];
+            }(),
+        ],
+        moneda: usd ? const {} : const {6, 10, 11, 12},
+        dolares: usd ? const {6, 10, 11, 12} : const {},
+        sumar: const {6, 10, 11, 12},
+        anchos: const [6, 30, 14, 10, 26, 11, 16, 8, 9, 8, 16, 16, 12, 9, 12, 10],
+        vacio: 'No hay préstamos.',
+      );
+    }
+    excel.setDefaultSheet(monedas.first == 'USD' ? 'Cartera USD' : 'Cartera');
+    if (excel.sheets.containsKey('Sheet1')) excel.delete('Sheet1');
+    await _guardarExcel(excel, dialogTitle: 'Guardar cartera de préstamos', fileName: 'cartera_prestamos.xlsx');
   }
 }

@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'api_service.dart';
 import 'cliente.dart';
 import 'cuentas_por_cobrar_screen.dart' show abrirWhatsApp;
+import 'export_service.dart';
 import 'formato.dart';
 import 'negocio.dart';
 import 'theme/app_theme.dart';
@@ -212,6 +213,29 @@ class _PrestamosScreenState extends State<PrestamosScreen> {
     if (creado == true) _cargar();
   }
 
+  Future<void> _exportarCartera(String formato) async {
+    // Se exporta lo que se ve: el filtro de estado y la búsqueda.
+    final b = _busqueda.toLowerCase();
+    final lista = _prestamos
+        .where((p) => b.isEmpty || '${p['cliente_nombre']} ${p['cliente_cedula'] ?? ''} ${p['numero']} ${(p['vehiculo'] as Map?)?['placa'] ?? ''}'
+            .toLowerCase()
+            .contains(b))
+        .toList();
+    if (lista.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No hay préstamos para exportar.")));
+      return;
+    }
+    try {
+      if (formato == 'pdf') {
+        await ExportService.exportCarteraPrestamosPdf(lista, widget.negocio);
+      } else {
+        await ExportService.exportCarteraPrestamosExcel(lista);
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo exportar: ${ApiService.textoError(e)}")));
+    }
+  }
+
   Future<void> _ajustesCobro() async {
     Map<String, dynamic> c;
     try {
@@ -379,6 +403,15 @@ class _PrestamosScreenState extends State<PrestamosScreen> {
                       onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _RecordatoriosWhatsApp(negocio: widget.negocio))),
                       icon: const Icon(Icons.chat_outlined),
                       tooltip: "Recordatorios por WhatsApp",
+                    ),
+                    PopupMenuButton<String>(
+                      tooltip: "Exportar cartera",
+                      icon: const Icon(Icons.download_outlined),
+                      onSelected: (v) => _exportarCartera(v),
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(value: 'pdf', child: ListTile(leading: Icon(Icons.picture_as_pdf_outlined), title: Text("Cartera en PDF"))),
+                        PopupMenuItem(value: 'excel', child: ListTile(leading: Icon(Icons.grid_on), title: Text("Cartera en Excel"))),
+                      ],
                     ),
                     IconButton(onPressed: _ajustesCobro, icon: const Icon(Icons.tune), tooltip: "Ajustes de cobro"),
                     IconButton(onPressed: _cargar, icon: const Icon(Icons.refresh), tooltip: "Actualizar"),
@@ -963,6 +996,20 @@ class _DetallePrestamoState extends State<_DetallePrestamo> {
     if (ok == true) await _accion('anular-pago', {'pago': pago['id']}, "Pago anulado.");
   }
 
+  Future<void> _exportar(String formato) async {
+    setState(() => _trabajando = true);
+    try {
+      if (formato == 'excel') {
+        await ExportService.exportEstadoCuentaPrestamoExcel(_p!);
+      } else {
+        await ExportService.exportEstadoCuentaPrestamoPdf(_p!, widget.negocio, share: formato == 'compartir');
+      }
+    } catch (e) {
+      if (mounted) _aviso("No se pudo exportar: ${ApiService.textoError(e)}");
+    }
+    if (mounted) setState(() => _trabajando = false);
+  }
+
   Future<void> _copiarEnlace() async {
     await Clipboard.setData(ClipboardData(text: '${_p!['enlace']}'));
     _aviso("Enlace copiado. Mandáselo al cliente: ahí ve su estado de cuenta, cómo pagar y sube el comprobante.");
@@ -1003,6 +1050,16 @@ class _DetallePrestamoState extends State<_DetallePrestamo> {
             ),
             IconButton(tooltip: "Copiar enlace de estado de cuenta y pago", icon: const Icon(Icons.link), onPressed: _copiarEnlace),
           ],
+          PopupMenuButton<String>(
+            tooltip: "Exportar estado de cuenta",
+            icon: const Icon(Icons.download_outlined),
+            onSelected: _exportar,
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'pdf', child: ListTile(leading: Icon(Icons.picture_as_pdf_outlined), title: Text("Estado de cuenta en PDF"))),
+              PopupMenuItem(value: 'compartir', child: ListTile(leading: Icon(Icons.share_outlined), title: Text("Compartir PDF"))),
+              PopupMenuItem(value: 'excel', child: ListTile(leading: Icon(Icons.grid_on), title: Text("Estado de cuenta en Excel"))),
+            ],
+          ),
         ],
       ),
       floatingActionButton: p['estado'] == 'activo'
