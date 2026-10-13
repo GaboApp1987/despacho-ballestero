@@ -16,6 +16,7 @@ import 'widgets/menu_lateral.dart';
 import 'whatsapp_bandeja_screen.dart';
 import 'estadisticas_screen.dart';
 import 'crm_screen.dart';
+import 'admin_contadores_screen.dart';
 import 'perfil_sesion.dart';
 
 /// Pantalla de nivel plataforma: solo la ve un superusuario (el dueño del programa).
@@ -454,6 +455,7 @@ class _DespachosScreenState extends State<DespachosScreen> {
   void _abrirCrm() => Navigator.push(context, MaterialPageRoute(builder: (_) => const CrmScreen()));
   void _abrirEstadisticas() => Navigator.push(context, MaterialPageRoute(builder: (_) => const EstadisticasScreen()));
   void _abrirPlanes() => Navigator.push(context, MaterialPageRoute(builder: (_) => const PlanesScreen()));
+  void _abrirContadores() => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminContadoresScreen()));
   void _abrirNegocios() => Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const NegociosScreen(puedeCrear: false, puedeGestionarPlanes: true, esSuperusuario: true)),
@@ -476,6 +478,8 @@ class _DespachosScreenState extends State<DespachosScreen> {
       secciones: [
         SeccionMenu("PLATAFORMA", [
           EntradaMenu(icono: Icons.account_balance_outlined, etiqueta: "Despachos", activo: !superpuesto, onTap: _cargarDespachos),
+          // Todos, también los independientes (sin despacho), que no salían en ningún lado.
+          EntradaMenu(icono: Icons.badge_outlined, etiqueta: "Contadores", onTap: _abrirContadores),
           EntradaMenu(icono: Icons.storefront_outlined, etiqueta: "Todos los negocios", onTap: _abrirNegocios),
         ]),
         SeccionMenu("CRECIMIENTO", [
