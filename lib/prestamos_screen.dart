@@ -3,9 +3,11 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'api_service.dart';
 import 'cliente.dart';
+import 'cuentas_por_cobrar_screen.dart' show abrirWhatsApp;
 import 'formato.dart';
 import 'negocio.dart';
 import 'theme/app_theme.dart';
@@ -45,10 +47,140 @@ const _medios = {'04': 'Transferencia', '06': 'SINPE Móvil', '01': 'Efectivo', 
 
 Color _colorAtraso(int dias) => dias == 0 ? _verde : (dias <= 30 ? _ambar : _rojo);
 
+/// Confirma (registra el pago, con el monto editable) o rechaza un pago que
+/// el deudor reportó desde su enlace. Devuelve true si se resolvió.
+Future<bool> _resolverReporte(BuildContext context, Map rep, String accion) async {
+  final moneda = '${rep['moneda']}';
+  final monto = TextEditingController(text: _n(rep['monto_detectado'] ?? rep['monto_reportado']).toStringAsFixed(2));
+  final nota = TextEditingController();
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(accion == 'confirmar' ? "Confirmar pago" : "Rechazar pago"),
+      content: SizedBox(
+        width: 400,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          if (accion == 'confirmar') ...[
+            Text("Se registra como pago del préstamo #${rep['numero']} y se aplica a mora, intereses y capital.",
+                style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+            const SizedBox(height: 10),
+            TextField(
+              controller: monto,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(labelText: "Monto recibido", prefixText: moneda == 'USD' ? '\$ ' : '₡ ', border: const OutlineInputBorder()),
+            ),
+          ] else
+            TextField(controller: nota, decoration: const InputDecoration(labelText: "Motivo (opcional)", border: OutlineInputBorder())),
+        ]),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
+        FilledButton(
+          style: accion == 'confirmar' ? null : FilledButton.styleFrom(backgroundColor: _rojo),
+          onPressed: () => Navigator.pop(ctx, true),
+          child: Text(accion == 'confirmar' ? "Confirmar" : "Rechazar"),
+        ),
+      ],
+    ),
+  );
+  if (ok != true) return false;
+  try {
+    ApiService.verificar(await ApiService.post('/prestamos-reportes/${rep['id']}/', {
+      'accion': accion,
+      if (accion == 'confirmar') 'monto': monto.text.trim().replaceAll(',', '.'),
+      'nota': nota.text.trim(),
+    }));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(accion == 'confirmar' ? "Pago registrado." : "Pago rechazado.")));
+    }
+    return true;
+  } catch (e) {
+    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
+    return false;
+  }
+}
+
+/// Un pago reportado por el deudor: monto que leyó la IA del comprobante,
+/// si coincide con lo que debía, y los botones para resolverlo.
+class _TarjetaReporte extends StatelessWidget {
+  final Map rep;
+  final VoidCallback onResuelto;
+  final VoidCallback? onAbrirPrestamo;
+  const _TarjetaReporte({required this.rep, required this.onResuelto, this.onAbrirPrestamo});
+
+  @override
+  Widget build(BuildContext context) {
+    final moneda = '${rep['moneda']}';
+    final monto = rep['monto_detectado'] ?? rep['monto_reportado'];
+    final coincide = rep['coincide'] == true;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      color: AppColors.surface,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 8, 6),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          InkWell(
+            onTap: onAbrirPrestamo,
+            child: Row(children: [
+              Icon(Icons.receipt_long_outlined, color: AppColors.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text("${rep['cliente']}", style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textStrong)),
+                  Text(monto == null ? "Sin monto" : _dinero(monto, moneda, decimales: 2),
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textStrong)),
+                  Text(
+                    [
+                      "Préstamo #${rep['numero']}",
+                      _fecha(rep['creado']),
+                      if ('${rep['referencia'] ?? ''}'.isNotEmpty) "Ref. ${rep['referencia']}",
+                    ].join(' · '),
+                    style: TextStyle(fontSize: 12.5, color: AppColors.textMuted),
+                  ),
+                ]),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 6),
+          Row(children: [
+            Icon(coincide ? Icons.check_circle_outline : Icons.info_outline, size: 16, color: coincide ? _verde : _ambar),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(coincide ? "Coincide con lo que debía" : "Revisá el monto: no coincide con la cuota",
+                  style: TextStyle(fontSize: 12, color: coincide ? _verde : _ambar, fontWeight: FontWeight.w600)),
+            ),
+          ]),
+          Wrap(alignment: WrapAlignment.end, spacing: 4, children: [
+            if (rep['comprobante'] != null)
+              TextButton.icon(
+                onPressed: () => launchUrl(Uri.parse('${rep['comprobante']}'), mode: LaunchMode.externalApplication),
+                icon: const Icon(Icons.image_outlined, size: 18),
+                label: const Text("Comprobante"),
+              ),
+            TextButton(
+              onPressed: () async {
+                if (await _resolverReporte(context, rep, 'rechazar')) onResuelto();
+              },
+              child: const Text("Rechazar", style: TextStyle(color: _rojo)),
+            ),
+            FilledButton(
+              onPressed: () async {
+                if (await _resolverReporte(context, rep, 'confirmar')) onResuelto();
+              },
+              child: const Text("Confirmar"),
+            ),
+          ]),
+        ]),
+      ),
+    );
+  }
+}
+
 class _PrestamosScreenState extends State<PrestamosScreen> {
   bool _cargando = true;
   Map<String, dynamic> _cartera = {};
   List<Map<String, dynamic>> _prestamos = [];
+  List<Map<String, dynamic>> _reportes = [];
   String _busqueda = '';
   String _estado = 'activo';
 
@@ -64,9 +196,11 @@ class _PrestamosScreenState extends State<PrestamosScreen> {
       final rs = await Future.wait([
         ApiService.get('/prestamos-cartera/?negocio=${widget.negocio.id}'),
         ApiService.get('/prestamos/?negocio=${widget.negocio.id}${_estado.isEmpty ? '' : '&estado=$_estado'}'),
+        ApiService.get('/prestamos-reportes/?negocio=${widget.negocio.id}'),
       ]);
       _cartera = json.decode(utf8.decode(ApiService.verificar(rs[0]).bodyBytes)) as Map<String, dynamic>;
       _prestamos = (json.decode(utf8.decode(ApiService.verificar(rs[1]).bodyBytes)) as List).cast<Map<String, dynamic>>();
+      _reportes = (json.decode(utf8.decode(ApiService.verificar(rs[2]).bodyBytes)) as List).cast<Map<String, dynamic>>();
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
     }
@@ -76,6 +210,86 @@ class _PrestamosScreenState extends State<PrestamosScreen> {
   Future<void> _nuevo() async {
     final creado = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => _NuevoPrestamo(negocio: widget.negocio)));
     if (creado == true) _cargar();
+  }
+
+  Future<void> _ajustesCobro() async {
+    Map<String, dynamic> c;
+    try {
+      c = json.decode(utf8.decode(ApiService.verificar(await ApiService.get('/prestamos-config/?negocio=${widget.negocio.id}')).bodyBytes))
+          as Map<String, dynamic>;
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
+      return;
+    }
+    if (!mounted) return;
+    bool recordatorios = c['recordatorios'] != false;
+    final diasAntes = TextEditingController(text: '${c['dias_antes'] ?? 3}');
+    final mora = TextEditingController(text: '${c['tasa_mora_anual'] ?? 0}');
+    final gracia = TextEditingController(text: '${c['dias_gracia'] ?? 0}');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) => AlertDialog(
+          title: const Text("Ajustes de cobro"),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: recordatorios,
+                  onChanged: (v) => set(() => recordatorios = v),
+                  title: const Text("Recordatorios por correo"),
+                  subtitle: const Text("Antes de cada cuota, el día que vence y a los 1, 7, 15 y 30 días de atraso, con el enlace para pagar."),
+                ),
+                if (recordatorios)
+                  TextField(
+                    controller: diasAntes,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: "Días antes del vencimiento", border: OutlineInputBorder()),
+                  ),
+                const SizedBox(height: 12),
+                Text("Para préstamos nuevos", style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textStrong)),
+                const SizedBox(height: 8),
+                Row(children: [
+                  Expanded(
+                    child: TextField(
+                      controller: mora,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(labelText: "Mora % anual", border: OutlineInputBorder()),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: gracia,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: "Días de gracia", border: OutlineInputBorder()),
+                    ),
+                  ),
+                ]),
+              ]),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Guardar")),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+    try {
+      ApiService.verificar(await ApiService.patch('/prestamos-config/?negocio=${widget.negocio.id}', {
+        'recordatorios': recordatorios,
+        'dias_antes': int.tryParse(diasAntes.text.trim()) ?? 3,
+        'tasa_mora_anual': mora.text.trim().replaceAll(',', '.'),
+        'dias_gracia': int.tryParse(gracia.text.trim()) ?? 0,
+      }));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Ajustes guardados.")));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
+    }
   }
 
   Future<void> _abrir(int id) async {
@@ -161,9 +375,24 @@ class _PrestamosScreenState extends State<PrestamosScreen> {
                     Icon(Icons.handshake_outlined, color: AppColors.primary),
                     const SizedBox(width: 10),
                     Expanded(child: Text("Préstamos", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textStrong))),
+                    IconButton(
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _RecordatoriosWhatsApp(negocio: widget.negocio))),
+                      icon: const Icon(Icons.chat_outlined),
+                      tooltip: "Recordatorios por WhatsApp",
+                    ),
+                    IconButton(onPressed: _ajustesCobro, icon: const Icon(Icons.tune), tooltip: "Ajustes de cobro"),
                     IconButton(onPressed: _cargar, icon: const Icon(Icons.refresh), tooltip: "Actualizar"),
                   ]),
                   const SizedBox(height: 10),
+                  if (_reportes.isNotEmpty) ...[
+                    Text("Pagos reportados por confirmar (${_reportes.length})",
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textStrong)),
+                    Text("Los deudores los mandaron desde su enlace con el comprobante.", style: TextStyle(fontSize: 12.5, color: AppColors.textMuted)),
+                    const SizedBox(height: 6),
+                    for (final rep in _reportes)
+                      _TarjetaReporte(rep: rep, onResuelto: _cargar, onAbrirPrestamo: () => _abrir(rep['prestamo'] as int)),
+                    const SizedBox(height: 14),
+                  ],
                   if (porMoneda.isEmpty)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 14),
@@ -734,6 +963,11 @@ class _DetallePrestamoState extends State<_DetallePrestamo> {
     if (ok == true) await _accion('anular-pago', {'pago': pago['id']}, "Pago anulado.");
   }
 
+  Future<void> _copiarEnlace() async {
+    await Clipboard.setData(ClipboardData(text: '${_p!['enlace']}'));
+    _aviso("Enlace copiado. Mandáselo al cliente: ahí ve su estado de cuenta, cómo pagar y sube el comprobante.");
+  }
+
   Widget _dato(String etiqueta, String valor, {Color? color}) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),
         child: Row(children: [
@@ -752,6 +986,7 @@ class _DetallePrestamoState extends State<_DetallePrestamo> {
     final vehiculo = (p['vehiculo'] as Map?) ?? {};
     final dias = (r['dias_atraso'] ?? 0) as int;
     final ultimoPagoVivo = pagos.where((x) => x['anulado'] != true).firstOrNull;
+    final reportes = ((p['reportes'] as List?) ?? []).cast<Map>();
     return Scaffold(
       backgroundColor: AppColors.surfaceSubtle,
       appBar: AppBar(
@@ -759,6 +994,16 @@ class _DetallePrestamoState extends State<_DetallePrestamo> {
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
         bottom: _trabajando ? const PreferredSize(preferredSize: Size.fromHeight(3), child: LinearProgressIndicator(minHeight: 3)) : null,
+        actions: [
+          if (p['enlace'] != null) ...[
+            IconButton(
+              tooltip: "Mandar recordatorio por WhatsApp",
+              icon: const Icon(Icons.chat_outlined),
+              onPressed: () => abrirWhatsApp(context, '${p['cliente_telefono'] ?? ''}', '${p['mensaje_whatsapp']}'),
+            ),
+            IconButton(tooltip: "Copiar enlace de estado de cuenta y pago", icon: const Icon(Icons.link), onPressed: _copiarEnlace),
+          ],
+        ],
       ),
       floatingActionButton: p['estado'] == 'activo'
           ? FloatingActionButton.extended(onPressed: _trabajando ? null : _pagar, icon: const Icon(Icons.payments_outlined), label: const Text("Registrar pago"))
@@ -807,6 +1052,12 @@ class _DetallePrestamoState extends State<_DetallePrestamo> {
               ]),
             ),
             const SizedBox(height: 12),
+            if (reportes.isNotEmpty) ...[
+              Text("Pagos reportados por el cliente", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textStrong)),
+              const SizedBox(height: 6),
+              for (final rep in reportes) _TarjetaReporte(rep: rep, onResuelto: _cargar),
+              const SizedBox(height: 6),
+            ],
             ExpansionTile(
               tilePadding: EdgeInsets.zero,
               title: Text("Condiciones", style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.textStrong)),
@@ -892,6 +1143,95 @@ class _DetallePrestamoState extends State<_DetallePrestamo> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// --------------------------------------------------------------- WhatsApp
+
+/// Deudores con cuota en los próximos días o atrasados, con el mensaje listo
+/// (monto exacto y enlace). Un toque abre WhatsApp; el negocio lo envía.
+class _RecordatoriosWhatsApp extends StatefulWidget {
+  final Negocio negocio;
+  const _RecordatoriosWhatsApp({required this.negocio});
+
+  @override
+  State<_RecordatoriosWhatsApp> createState() => _RecordatoriosWhatsAppState();
+}
+
+class _RecordatoriosWhatsAppState extends State<_RecordatoriosWhatsApp> {
+  List<Map<String, dynamic>>? _filas;
+  final Set<int> _enviados = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _cargar();
+  }
+
+  Future<void> _cargar() async {
+    try {
+      final r = ApiService.verificar(await ApiService.get('/prestamos-whatsapp/?negocio=${widget.negocio.id}'));
+      if (mounted) setState(() => _filas = (json.decode(utf8.decode(r.bodyBytes)) as List).cast<Map<String, dynamic>>());
+    } catch (e) {
+      if (mounted) {
+        setState(() => _filas = []);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filas = _filas;
+    return Scaffold(
+      backgroundColor: AppColors.surfaceSubtle,
+      appBar: AppBar(title: const Text("Recordatorios por WhatsApp"), backgroundColor: AppColors.surface, foregroundColor: AppColors.textStrong),
+      body: filas == null
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _cargar,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                children: [
+                  Text("Atrasados primero y después las cuotas que vencen en los próximos días. Cada mensaje lleva el monto exacto y el enlace para pagar.",
+                      style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+                  const SizedBox(height: 10),
+                  if (filas.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text("Nadie a quien recordarle hoy.", textAlign: TextAlign.center, style: TextStyle(color: AppColors.textMuted)),
+                    ),
+                  for (final f in filas)
+                    Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      color: AppColors.surface,
+                      child: ListTile(
+                        leading: Icon(
+                          _enviados.contains(f['prestamo']) ? Icons.done_all : Icons.chat_outlined,
+                          color: _enviados.contains(f['prestamo']) ? _verde : _colorAtraso(f['dias_atraso'] as int),
+                        ),
+                        title: Text('${f['cliente']}', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textStrong)),
+                        subtitle: Text(
+                          [
+                            (f['dias_atraso'] as int) > 0 ? "Atrasado ${f['dias_atraso']} días" : "Vence ${_fecha(f['vencimiento'])}",
+                            _dinero(f['monto'], '${f['moneda']}', decimales: 2),
+                            if ('${f['telefono']}'.isEmpty) "sin teléfono",
+                          ].join(' · '),
+                          style: TextStyle(fontSize: 12.5, color: _colorAtraso(f['dias_atraso'] as int)),
+                        ),
+                        trailing: FilledButton.tonal(
+                          onPressed: () async {
+                            await abrirWhatsApp(context, '${f['telefono']}', '${f['mensaje']}');
+                            setState(() => _enviados.add(f['prestamo'] as int));
+                          },
+                          child: const Text("Enviar"),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
     );
   }
 }
