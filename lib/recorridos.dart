@@ -304,6 +304,7 @@ class GuiaClientes {
   static final nuevo = GlobalKey(debugLabel: 'guia_cli_nuevo');
   static final buscar = GlobalKey(debugLabel: 'guia_cli_buscar');
   static final historial = GlobalKey(debugLabel: 'guia_cli_historial');
+  static final importar = GlobalKey(debugLabel: 'guia_cli_importar');
 
   static List<PasoRecorrido> get pasos => [
         const PasoRecorrido(
@@ -314,6 +315,11 @@ class GuiaClientes {
           objetivo: nuevo,
           titulo: "Nuevo cliente",
           texto: "Escribí la cédula y se trae el nombre desde Hacienda. Agregá el correo: ahí le llegan las facturas (y una copia a quien vos digás).",
+        ),
+        PasoRecorrido(
+          objetivo: importar,
+          titulo: "¿Venís de otro sistema?",
+          texto: "Subí tu lista de clientes en Excel, CSV o PDF y se crean todos de una vez. Los que ya estaban no se repiten.",
         ),
         PasoRecorrido(
           objetivo: buscar,

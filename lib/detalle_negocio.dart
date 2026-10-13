@@ -49,6 +49,7 @@ import 'widgets/selector_periodo.dart';
 import 'nota_credito.dart';
 import 'widgets/pagos_en_linea.dart';
 import 'recorridos.dart';
+import 'importar_externo_dialog.dart';
 import 'widgets/recorrido_guiado.dart';
 
 /// Envuelve a un hijo y le avisa a [builder] si el cursor está encima
@@ -2348,6 +2349,20 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
               ),
             ),
               ),
+              // La lista de clientes que traen de otro sistema (Excel, CSV, PDF...).
+              if (widget.rolEmpleado != 'cajero')
+                IconButton(
+                  key: GuiaClientes.importar,
+                  tooltip: "Importar clientes de otro sistema (Excel, CSV o PDF)",
+                  icon: const Icon(Icons.upload_file_outlined),
+                  onPressed: () => importarArchivoExterno(
+                    context: context,
+                    negocio: widget.negocio,
+                    endpoint: '/clientes/importar-externo/',
+                    tipoLabel: 'clientes',
+                    onImportado: () => _recargarDatos(facturas: false, clientes: true),
+                  ),
+                ),
               BotonGuia(iniciar: () => GuiaClientes.mostrar(context)),
             ]),
           ),
