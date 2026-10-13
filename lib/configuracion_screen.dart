@@ -511,22 +511,24 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
         // en los logs del servidor (mismo patron que el logo, ver
         // LogoScreen).
         final data = json.decode(utf8.decode(response.bodyBytes));
-        final avisoAlanube = data['alanube_nombre_info'] as String?;
+        final avisoAlanube = (data['aviso'] ?? data['alanube_nombre_info']) as String?;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(avisoAlanube ?? "✅ ¡Configuración guardada con éxito en Django!"),
-            backgroundColor: (avisoAlanube != null && avisoAlanube.contains("no se pudo"))
+            content: Text(avisoAlanube ?? "✅ Configuración guardada."),
+            duration: Duration(seconds: avisoAlanube != null ? 8 : 4),
+            backgroundColor: (avisoAlanube != null && (avisoAlanube.contains("no se pudo") || data['aviso'] != null))
                 ? Colors.orange
                 : Colors.green,
           ),
         );
       } else {
-        throw Exception('Error del servidor: ${response.statusCode}');
+        throw Exception(ApiService.mensajeError(response));
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("❌ Error al guardar: ${ApiService.textoError(e)}"),
+          duration: const Duration(seconds: 8),
+          content: Text("❌ No se pudo guardar: ${ApiService.textoError(e)}"),
           backgroundColor: Colors.red,
         ),
       );
