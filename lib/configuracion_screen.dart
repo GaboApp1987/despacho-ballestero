@@ -32,6 +32,8 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
   late String _entornoSeleccionado;
   late bool _avisosPorCorreo;
   late bool _restauranteActivo;
+  late bool _prestamosActivo;
+  bool _guardandoPrestamos = false;
   bool _guardandoRestaurante = false;
   late bool _aceptarComprasAutomatico;
   late String _regimen;
@@ -85,6 +87,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
     _entornoSeleccionado = widget.negocio.entornoHacienda ?? 'STAGING';
     _avisosPorCorreo = widget.negocio.avisosPorCorreo;
     _restauranteActivo = widget.negocio.restauranteActivo;
+    _prestamosActivo = widget.negocio.prestamosActivo;
     _aceptarComprasAutomatico = widget.negocio.aceptarComprasAutomatico;
     _regimen = widget.negocio.regimen;
     String f(double? v) => v == null ? '' : v.toString();
@@ -554,6 +557,24 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
     if (mounted) setState(() => _guardandoRestaurante = false);
   }
 
+  Future<void> _cambiarPrestamos(bool activo) async {
+    setState(() => _guardandoPrestamos = true);
+    try {
+      final r = await ApiService.patch('/prestamos-config/?negocio=${widget.negocio.id}', {'activo': activo});
+      if (r.statusCode != 200) throw Exception(ApiService.mensajeError(r));
+      setState(() => _prestamosActivo = activo);
+      widget.onGuardado?.call();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(activo ? "Listo: ya tenés la sección Préstamos en Finanzas." : "Módulo de préstamos apagado."),
+        ));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo cambiar: ${ApiService.textoError(e)}")));
+    }
+    if (mounted) setState(() => _guardandoPrestamos = false);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -740,6 +761,15 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
                           "Mesas, comandas y pantalla de cocina. Aparece la sección Restaurante en el menú de Ventas.",
                         ),
                         secondary: const Icon(Icons.restaurant_outlined),
+                      ),
+                      SwitchListTile(
+                        value: _prestamosActivo,
+                        onChanged: _guardandoPrestamos ? null : _cambiarPrestamos,
+                        title: const Text("Módulo de préstamos"),
+                        subtitle: const Text(
+                          "Ventas de vehículos a plazo y préstamos personales: cuotas, pagos, mora y cartera. Aparece la sección Préstamos en Finanzas.",
+                        ),
+                        secondary: const Icon(Icons.handshake_outlined),
                       ),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
