@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../api_service.dart';
 import '../theme/app_theme.dart';
+import 'recorrido_guiado.dart';
 
 /// Guía de "Primeros pasos" arriba del Dashboard del negocio -- para que
 /// quien se acaba de registrar sepa qué hacer primero y llegue rápido a su
@@ -51,7 +52,12 @@ class _PrimerosPasosCardState extends State<PrimerosPasosCard> {
     } catch (_) {}
   }
 
+  /// Recorrido guiado de cada paso (ver lib/recorridos.dart).
+  static const _recorridoDelPaso = {'factura': 'factura', 'productos': 'inventario', 'clientes': 'clientes'};
+
   Future<void> _abrirPaso(Map<String, dynamic> paso) async {
+    final recorrido = _recorridoDelPaso[paso['id']];
+    if (recorrido != null) Recorridos.pedir(recorrido);
     if (paso['id'] == 'factura') {
       await widget.onNuevaFactura();
       _cargar();

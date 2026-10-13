@@ -644,7 +644,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
                     const SizedBox(height: 10),
                     TextField(
                       controller: codigoActividadCtrl,
-                      decoration: const InputDecoration(labelText: "Código Actividad (6 dígitos) *", border: OutlineInputBorder()),
+                      decoration: const InputDecoration(labelText: "Código de actividad * (ej. 4520.0)", helperText: "Tal como sale en la consulta de Hacienda (TRIBU-CR)", border: OutlineInputBorder()),
                     ),
                     const SizedBox(height: 10),
                     TextField(
@@ -834,7 +834,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
                     const SizedBox(height: 10),
                     TextField(
                       controller: codigoActividadCtrl,
-                      decoration: const InputDecoration(labelText: "Código Actividad (6 dígitos) *", border: OutlineInputBorder()),
+                      decoration: const InputDecoration(labelText: "Código de actividad * (ej. 4520.0)", helperText: "Tal como sale en la consulta de Hacienda (TRIBU-CR)", border: OutlineInputBorder()),
                     ),
                     const SizedBox(height: 10),
                     TextField(
@@ -1236,6 +1236,11 @@ class _NegociosScreenState extends State<NegociosScreen> {
 
   /// Secciones del panel del contador que la barra de IA puede abrir.
   static const Map<String, String> _seccionesAsistenteContador = {
+    'guia-panel': 'Guía paso a paso en pantalla: cómo funciona el panel del contador',
+    'guia-catalogo': 'Guía paso a paso en pantalla: el catálogo de cuentas de un cliente (estándar, plantilla, Excel)',
+    'guia-asientos': 'Guía paso a paso en pantalla: asientos contables, automáticos y estados financieros',
+    'guia-bancos': 'Guía paso a paso en pantalla: bancos de un cliente y conciliación bancaria',
+    'guia-reportes': 'Guía paso a paso en pantalla: el centro de reportes (ventas, compras, IVA, renta)',
     'clientes': 'Clientes: tu cartera de negocios, entrar a uno, ver su resumen fiscal',
     'nuevo_cliente': 'Nuevo cliente: agregar un negocio a tu cartera',
     'reportes': 'Reportes: ventas, compras e IVA de uno o varios clientes en PDF/Excel',
@@ -1247,6 +1252,20 @@ class _NegociosScreenState extends State<NegociosScreen> {
 
   Future<void> _irDesdeAsistenteContador(String clave) async {
     switch (clave) {
+      case 'guia-panel':
+        lanzarRecorridoAlFrente(context, () => GuiaPanelContador.mostrar(context));
+      case 'guia-catalogo':
+        Recorridos.pedir(GuiaCatalogo.clave);
+        abrirCatalogoCuentas(context);
+      case 'guia-asientos':
+        Recorridos.pedir(GuiaAsientos.clave);
+        Navigator.push(context, MaterialPageRoute(builder: (context) => const AsientosContablesScreen()));
+      case 'guia-bancos':
+        Recorridos.pedir(GuiaBancos.clave);
+        abrirBancos(context);
+      case 'guia-reportes':
+        Recorridos.pedir(GuiaReportes.clave);
+        Navigator.push(context, MaterialPageRoute(builder: (context) => const ReportesContadorScreen(esContador: true)));
       case 'clientes':
         setState(() => _pestanaContador = 1);
       case 'nuevo_cliente':

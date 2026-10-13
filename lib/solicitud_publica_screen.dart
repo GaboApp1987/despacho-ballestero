@@ -473,7 +473,7 @@ class _SolicitudPublicaScreenState extends State<SolicitudPublicaScreen> {
                               child: TextField(
                                 controller: _numeroActividadCtrl,
                                 style: const TextStyle(color: TemaContador.textoFuerte),
-                                decoration: _decoracion("N.° de actividad (si lo sabés)", ayuda: "Código de 6 dígitos que te dio Hacienda, si lo tenés a mano"),
+                                decoration: _decoracion("N.° de actividad (si lo sabés)", ayuda: "Como sale en la consulta de Hacienda, ej. 4520.0"),
                               ),
                             ),
                             const SizedBox(width: 10),

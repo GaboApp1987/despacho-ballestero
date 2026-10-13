@@ -345,7 +345,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
   // (también cuando entra el contador a un cliente).
   late final ConfigAsistente _asistenteFlotante = ConfigAsistente(
     negocioId: widget.negocio.id,
-    secciones: {for (final e in _seccionesAsistente.entries) e.key: e.value.$2},
+    secciones: _seccionesParaIA,
     onNavegar: _irDesdeAsistente,
     abrirPantallaCompleta: _abrirAsistenteNegocio,
   );
@@ -355,7 +355,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
       context,
       negocioId: widget.negocio.id,
       saludo: "Hola, ${widget.negocio.nombreComercial}",
-      secciones: {for (final e in _seccionesAsistente.entries) e.key: e.value.$2},
+      secciones: _seccionesParaIA,
       onNavegar: _irDesdeAsistente,
       sugerencias: const [
         (Icons.receipt_long_outlined, "Hacer una factura"),
@@ -560,7 +560,51 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     'ajustes': (5, 'Ajustes: datos del negocio, llave criptográfica de Hacienda, logo, numeración'),
   };
 
+  /// Recorridos guiados que la IA puede ofrecer con "Mostrame cómo"
+  /// (clave -> recorrido, sección, descripción). -1 = Nueva factura.
+  static const Map<String, (String, int, String)> _guiasAsistente = {
+    'guia-factura': (GuiaFactura.clave, -1, 'Guía paso a paso en pantalla: cómo hacer una factura o tiquete'),
+    'guia-compras': (GuiaCompras.clave, 8, 'Guía paso a paso en pantalla: cómo registrar compras (XML, PDF o foto) y las que llegan por correo'),
+    'guia-caja': (GuiaCaja.clave, 22, 'Guía paso a paso en pantalla: cómo abrir y cerrar la caja (cierre de caja)'),
+    'guia-inventario': (GuiaInventario.clave, 3, 'Guía paso a paso en pantalla: cómo crear productos y manejar el inventario'),
+    'guia-clientes': (GuiaClientes.clave, 2, 'Guía paso a paso en pantalla: cómo agregar y manejar clientes'),
+    'guia-cobrar': (GuiaCobrar.clave, 6, 'Guía paso a paso en pantalla: cuentas por cobrar, abonos y recordatorios de cobro'),
+    'guia-notas': (GuiaNotas.clave, 15, 'Guía paso a paso en pantalla: cómo anular o corregir una factura con una nota de crédito'),
+    'guia-bancos': (GuiaBancos.clave, 20, 'Guía paso a paso en pantalla: cuentas bancarias, movimientos y conciliación'),
+    'guia-restaurante': (GuiaRestaurante.clave, 21, 'Guía paso a paso en pantalla: cómo usar el modo restaurante (mesas, cocina, cobrar)'),
+  };
+
+  /// Lo que se le manda a la IA: las secciones y las guías (la del
+  /// restaurante solo si el negocio tiene el módulo).
+  Map<String, String> get _seccionesParaIA => {
+        for (final e in _seccionesAsistente.entries) e.key: e.value.$2,
+        for (final e in _guiasAsistente.entries)
+          if (e.key != 'guia-restaurante' || _negocioConCuota.restauranteActivo) e.key: e.value.$3,
+      };
+
   void _irDesdeAsistente(String clave) {
+    final guia = _guiasAsistente[clave];
+    if (guia != null) {
+      Recorridos.pedir(guia.$1);
+      if (guia.$2 == -1) {
+        Navigator.push<bool>(context, MaterialPageRoute(builder: (context) => FormularioFactura(negocio: widget.negocio)))
+            .then((guardado) {
+          if (guardado == true) _recargarDatos();
+        });
+      } else {
+        // Se vuelve a construir la sección aunque ya estuviera abierta,
+        // para que lance el recorrido al cargar.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              _seccionActiva = guia.$2;
+              _recargasSeccion++;
+            });
+          }
+        });
+      }
+      return;
+    }
     final destino = _seccionesAsistente[clave];
     if (destino == null) return;
     if (destino.$1 == -1) {
@@ -1813,7 +1857,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
           AsistenteIABar(
             negocioId: widget.negocio.id,
             saludo: "Hola, ${widget.negocio.nombreComercial}",
-            secciones: {for (final e in _seccionesAsistente.entries) e.key: e.value.$2},
+            secciones: _seccionesParaIA,
             onNavegar: _irDesdeAsistente,
             ejemplos: const [
               "¿Cuánto vendí este mes?",

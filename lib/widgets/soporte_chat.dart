@@ -1164,8 +1164,9 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
                 }
                 widget.onNavegar!(clave);
               },
-        icon: const Icon(Icons.arrow_forward_rounded, size: 18),
-        label: Text('Abrir $titulo', style: const TextStyle(fontWeight: FontWeight.w700)),
+        icon: Icon(clave.startsWith('guia-') ? Icons.play_circle_outline : Icons.arrow_forward_rounded, size: 18),
+        // Las claves guia-... abren la pantalla con su recorrido guiado.
+        label: Text(clave.startsWith('guia-') ? 'Mostrame cómo' : 'Abrir $titulo', style: const TextStyle(fontWeight: FontWeight.w700)),
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.black,

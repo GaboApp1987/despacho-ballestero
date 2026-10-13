@@ -29,6 +29,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
   late TextEditingController _telefonoController;
   late TextEditingController _correoController;
   late TextEditingController _alanubeActividadController;
+  late TextEditingController _actividadPrincipalController;
   late String _entornoSeleccionado;
   late bool _avisosPorCorreo;
   late bool _restauranteActivo;
@@ -98,6 +99,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
     _telefonoController = TextEditingController(text: widget.negocio.telefono ?? '');
     _correoController = TextEditingController(text: widget.negocio.correoHacienda ?? '');
     _alanubeActividadController = TextEditingController(text: widget.negocio.alanubeEconomicActivity ?? '');
+    _actividadPrincipalController = TextEditingController(text: widget.negocio.codigoActividad ?? '');
     _logoUrl = widget.negocio.logoUrl;
     _llaveCargadaEnServidor = widget.negocio.llaveCriptografica != null;
   }
@@ -227,7 +229,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
                     controller: codigoCtrl,
                     autofocus: true,
                     decoration: const InputDecoration(
-                      labelText: "Código Actividad (Hacienda) *",
+                      labelText: "Código de actividad * (ej. 4520.0)",
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -337,6 +339,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
     _telefonoController.dispose();
     _correoController.dispose();
     _alanubeActividadController.dispose();
+    _actividadPrincipalController.dispose();
     _consecutivoFacturaController.dispose();
     _consecutivoTiqueteController.dispose();
     _consecutivoNotaCreditoController.dispose();
@@ -503,6 +506,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
         'factor_rts_iva_1': _factorIva1Ctrl.text.trim().isEmpty ? null : _factorIva1Ctrl.text.trim().replaceAll(',', '.'),
         'correo_hacienda': _correoController.text.trim(),
         'alanube_economic_activity': _alanubeActividadController.text.trim(),
+        'codigo_actividad': _actividadPrincipalController.text.trim(),
       };
 
       if (_passwordController.text.isNotEmpty) {
@@ -812,13 +816,30 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
+                      // La que va en cada factura si no se elige otra: antes no se
+                      // veía en Ajustes y se confundía con "Otras actividades"
+                      // (un negocio facturó con un código viejo sin saberlo).
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        child: TextFormField(
+                          controller: _actividadPrincipalController,
+                          decoration: const InputDecoration(
+                            labelText: "Actividad económica principal",
+                            helperText: "La que va en cada factura. Tal como sale en la consulta de Hacienda (TRIBU-CR), ej. 4520.0",
+                            helperMaxLines: 2,
+                            prefixIcon: Icon(Icons.work_outline),
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                         child: TextFormField(
                           controller: _alanubeActividadController,
                           decoration: const InputDecoration(
                             labelText: "Actividad Económica (Alanube)",
-                            helperText: "Código CIIU que exige Alanube al facturar (ej: 6820.0), no el código de 6 dígitos de Hacienda",
+                            helperText: "Solo si factura por Alanube: el código CIIU que pide Alanube (ej: 6820.0)",
                             prefixIcon: Icon(Icons.work_outline),
                             border: OutlineInputBorder(),
                           ),
@@ -845,8 +866,8 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Text(
-                          "Si el negocio tiene más de una actividad registrada ante Hacienda, agregalas acá -- "
-                          "al crear una Factura vas a poder elegir cuál aplica a esa venta.",
+                          "Si el negocio tiene más de una actividad registrada ante Hacienda, agregalas acá: "
+                          "al hacer una factura vas a poder elegir cuál aplica a esa venta. Si no elegís, va la principal (arriba).",
                           style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                         ),
                       ),

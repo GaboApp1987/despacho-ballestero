@@ -400,8 +400,8 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
                 controller: _actividadController,
                 decoration: const InputDecoration(
                   labelText: "Actividad Económica CIIU (opcional)",
-                  helperText: "Formato CIIU con decimales, ej. 6820.0 -- Hacienda la pide para "
-                      "clientes con crédito fiscal. NO es el código de 6 dígitos de Hacienda.",
+                  helperText: "Como sale en la consulta de Hacienda (TRIBU-CR), ej. 4520.0 -- "
+                      "Hacienda la pide para clientes con crédito fiscal.",
                   helperMaxLines: 2,
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.business_center_outlined),

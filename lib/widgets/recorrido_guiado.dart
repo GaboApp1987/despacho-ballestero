@@ -54,6 +54,25 @@ class Recorridos {
     } catch (_) {}
   }
 
+  // Recorrido pedido desde otro lado ("Mostrame cómo" del asistente, un
+  // paso de Primeros pasos): la pantalla lo lanza sola al abrirse, en vez de
+  // ofrecerlo. Vence a los 30 s por si la pantalla nunca se llega a abrir.
+  static String? _pendiente;
+  static DateTime? _pendienteEn;
+
+  /// Pide que la próxima pantalla que cargue el recorrido `clave` lo muestre.
+  static void pedir(String clave) {
+    _pendiente = clave;
+    _pendienteEn = DateTime.now();
+  }
+
+  static bool _tomarPendiente(String clave) {
+    final vigente = _pendienteEn != null && DateTime.now().difference(_pendienteEn!) < const Duration(seconds: 30);
+    if (_pendiente != clave || !vigente) return false;
+    _pendiente = null;
+    return true;
+  }
+
   /// Al cerrar sesión (otro usuario puede entrar en el mismo dispositivo).
   static void olvidar() {
     _vistos = null;
@@ -65,24 +84,15 @@ class Recorridos {
 /// "¿Te muestro cómo funciona?". Se ofrece una sola vez (aunque diga "Ahora
 /// no"); después queda el botón "?" de la pantalla.
 Future<void> ofrecerRecorrido(BuildContext context, {required String clave, required String titulo, required VoidCallback iniciar}) async {
+  if (Recorridos._tomarPendiente(clave)) {
+    Recorridos._ofrecidos.add(clave);
+    if (await _esperarAlFrente(context, espera: 500)) iniciar();
+    return;
+  }
   if (!Recorridos._ofrecidos.add(clave)) return;
   final vistos = await Recorridos.vistos();
   if (vistos.contains(clave) || vistos.contains('*') || !context.mounted) return;
-  // Que termine de dibujarse la pantalla y que esté al frente: si algo la
-  // tapa (el asistente de IA que se abre al entrar, un diálogo), se espera
-  // a que lo cierren -- si no, el recorrido iluminaría cosas tapadas.
-  await Future.delayed(const Duration(milliseconds: 1200));
-  for (var i = 0; i < 300; i++) {
-    if (!context.mounted) return;
-    if (ModalRoute.of(context)?.isCurrent ?? true) {
-      await Future.delayed(const Duration(milliseconds: 600));
-      if (!context.mounted) return;
-      if (ModalRoute.of(context)?.isCurrent ?? true) break;
-    } else {
-      await Future.delayed(const Duration(seconds: 1));
-    }
-  }
-  if (!context.mounted || !(ModalRoute.of(context)?.isCurrent ?? true)) return;
+  if (!await _esperarAlFrente(context, espera: 1200)) return;
   final messenger = ScaffoldMessenger.maybeOf(context);
   if (messenger == null) return;
   var acepto = false;
@@ -105,6 +115,31 @@ Future<void> ofrecerRecorrido(BuildContext context, {required String clave, requ
       Recorridos.marcar(clave);
     }
   });
+}
+
+/// Espera a que la pantalla termine de dibujarse y esté al frente: si algo
+/// la tapa (el asistente de IA que se abre al entrar, un diálogo), espera a
+/// que lo cierren -- si no, el recorrido iluminaría cosas tapadas. False si
+/// la pantalla se cerró o nunca quedó al frente (5 minutos).
+Future<bool> _esperarAlFrente(BuildContext context, {required int espera}) async {
+  await Future.delayed(Duration(milliseconds: espera));
+  for (var i = 0; i < 300; i++) {
+    if (!context.mounted) return false;
+    if (ModalRoute.of(context)?.isCurrent ?? true) {
+      await Future.delayed(const Duration(milliseconds: 600));
+      if (!context.mounted) return false;
+      if (ModalRoute.of(context)?.isCurrent ?? true) return true;
+    } else {
+      await Future.delayed(const Duration(seconds: 1));
+    }
+  }
+  return false;
+}
+
+/// Lanza el recorrido de la pantalla donde ya se está (ej. "Mostrame cómo"
+/// del asistente estando en esa pantalla) apenas el asistente se cierra.
+Future<void> lanzarRecorridoAlFrente(BuildContext context, VoidCallback iniciar) async {
+  if (await _esperarAlFrente(context, espera: 300)) iniciar();
 }
 
 /// Botón "?" para ver el recorrido de la pantalla cuando se quiera.

@@ -1490,7 +1490,10 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                   items: [
-                    const DropdownMenuItem<ActividadEconomica?>(value: null, child: Text("Principal del negocio")),
+                    DropdownMenuItem<ActividadEconomica?>(
+                      value: null,
+                      child: Text("Principal del negocio${(widget.negocio.codigoActividad ?? '').isEmpty ? '' : ' (${widget.negocio.codigoActividad})'}"),
+                    ),
                     ..._actividades.map((a) => DropdownMenuItem(value: a, child: Text(a.etiqueta, overflow: TextOverflow.ellipsis))),
                   ],
                   onChanged: (v) => setState(() => _actividadSeleccionada = v),
