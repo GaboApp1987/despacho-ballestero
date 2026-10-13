@@ -51,6 +51,7 @@ import 'widgets/pagos_en_linea.dart';
 import 'recorridos.dart';
 import 'importar_externo_dialog.dart';
 import 'prestamos_screen.dart';
+import 'vehiculos_screen.dart';
 import 'widgets/recorrido_guiado.dart';
 
 /// Envuelve a un hijo y le avisa a [builder] si el cursor está encima
@@ -259,6 +260,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     (id: 1, icono: Icons.pie_chart_outline, titulo: "Dashboard"),
     (id: 2, icono: Icons.people_outline, titulo: "Clientes"),
     (id: 3, icono: Icons.inventory_2_outlined, titulo: "Inventario"),
+    // Solo si el negocio activó el inventario de vehículos (ver _menuItemsVisibles).
+    (id: 24, icono: Icons.directions_car_outlined, titulo: "Vehículos"),
     // -- Ventas --
     (id: 0, icono: Icons.receipt_long_outlined, titulo: "Facturas"),
     // Solo si el negocio activó el módulo de restaurante (ver _menuItemsVisibles).
@@ -303,7 +306,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
   ];
 
   static const Map<String, List<int>> _idsPorCategoria = {
-    "Principal": [1, 2, 3],
+    "Principal": [1, 2, 3, 24],
     "Ventas": [21, 22, 0, 4, 15, 11, 16, 6, 19],
     "Compras": [8, 17, 13, 9],
     "Finanzas": [23, 18, 20, 10, 7],
@@ -314,7 +317,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
   // bloquea la escritura/lectura correspondiente de todas formas (ver
   // BloqueaCajeroMixin y los chequeos de es_cajero en views.py), esto es
   // solo para no mostrar botones que van a fallar. 'completo' ve todo esto.
-  static const Set<int> _idsOcultosParaCajero = {6, 8, 13, 9, 7, 10, 11, 12, 5, 15, 16, 17, 18, 19, 20, 23};
+  static const Set<int> _idsOcultosParaCajero = {6, 8, 13, 9, 7, 10, 11, 12, 5, 15, 16, 17, 18, 19, 20, 23, 24};
 
   List<({int id, IconData icono, String titulo})> get _menuItemsVisibles {
     // "Colaboradores" (id 14) es exclusivo del dueño real -- ni 'cajero' ni
@@ -329,6 +332,9 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     }
     if (!_negocioConCuota.prestamosActivo) {
       items = items.where((m) => m.id != 23).toList();
+    }
+    if (!_negocioConCuota.vehiculosActivo) {
+      items = items.where((m) => m.id != 24).toList();
     }
     return items;
   }
@@ -779,6 +785,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         return "Caja";
       case 23:
         return "Préstamos";
+      case 24:
+        return "Vehículos";
       case 12:
         return "Add-ons";
       case 5:
@@ -1063,6 +1071,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         return CajaScreen(negocio: widget.negocio, rolEmpleado: widget.rolEmpleado);
       case 23:
         return PrestamosScreen(negocio: widget.negocio);
+      case 24:
+        return VehiculosScreen(negocio: widget.negocio);
       case 12:
         return AddonsScreen(negocio: widget.negocio);
       case 13:

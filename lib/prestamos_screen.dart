@@ -530,9 +530,15 @@ class _PrestamosScreenState extends State<PrestamosScreen> {
 
 // --------------------------------------------------------------------- Nuevo
 
+/// Abre el formulario de préstamo nuevo. [inicial] lo llena desde una venta
+/// del inventario de vehículos: {cliente, moneda, precio, unidad, vehiculo}.
+Future<bool?> abrirNuevoPrestamo(BuildContext context, Negocio negocio, {Map<String, dynamic>? inicial}) =>
+    Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => _NuevoPrestamo(negocio: negocio, inicial: inicial)));
+
 class _NuevoPrestamo extends StatefulWidget {
   final Negocio negocio;
-  const _NuevoPrestamo({required this.negocio});
+  final Map<String, dynamic>? inicial;
+  const _NuevoPrestamo({required this.negocio, this.inicial});
 
   @override
   State<_NuevoPrestamo> createState() => _NuevoPrestamoState();
@@ -586,6 +592,17 @@ class _NuevoPrestamoState extends State<_NuevoPrestamo> {
       final config = json.decode(utf8.decode(ApiService.verificar(rs[1]).bodyBytes)) as Map<String, dynamic>;
       _mora.text = _n(config['tasa_mora_anual']) == 0 ? '' : '${config['tasa_mora_anual']}';
       _gracia.text = '${config['dias_gracia'] ?? 0}';
+      final ini = widget.inicial;
+      if (ini != null) {
+        _tipo = 'vehiculo';
+        _moneda = '${ini['moneda'] ?? 'CRC'}';
+        _cliente = _clientes.where((c) => c.id == ini['cliente']).firstOrNull;
+        if (ini['precio'] != null) _precio.text = _n(ini['precio']).toStringAsFixed(2);
+        final v = (ini['vehiculo'] as Map?) ?? {};
+        for (final e in _vehiculo.entries) {
+          e.value.text = '${v[e.key] ?? ''}';
+        }
+      }
       if (mounted) setState(() {});
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
@@ -645,6 +662,7 @@ class _NuevoPrestamoState extends State<_NuevoPrestamo> {
           'precio_venta': t(_precio),
           'prima': t(_prima).isEmpty ? '0' : t(_prima),
           'vehiculo': {for (final e in _vehiculo.entries) e.key: e.value.text.trim()},
+          if (widget.inicial?['unidad'] != null) 'unidad': widget.inicial!['unidad'],
         } else
           'garantia': _garantia.text.trim(),
       };

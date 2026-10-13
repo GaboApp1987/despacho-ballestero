@@ -111,6 +111,11 @@ class FormularioFactura extends StatefulWidget {
   /// Cobro de restaurante: campo de propina voluntaria. No suma en el total
   /// ni va a Hacienda; solo se registra (propina) para repartirla.
   final bool pedirPropina;
+  /// Con [lineasIniciales]: tipo de documento con que arranca (el
+  /// restaurante usa tiquete '04'; la venta de un carro, factura '01') y la
+  /// moneda en que vienen los precios de esas líneas.
+  final String tipoDocumentoInicial;
+  final String monedaLineas;
   const FormularioFactura({
     super.key,
     required this.negocio,
@@ -119,6 +124,8 @@ class FormularioFactura extends StatefulWidget {
     this.camposExtra,
     this.servicioPorcentaje = 0,
     this.pedirPropina = false,
+    this.tipoDocumentoInicial = '04',
+    this.monedaLineas = 'CRC',
   });
 
   @override
@@ -222,7 +229,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
   /// US$1500 se repite por US$1500 con el tipo de cambio de hoy.
   void _aplicarLineasIniciales(List<({int productoId, int cantidad, double precio, String descripcion})> lineas) {
     setState(() {
-      _tipoDocumento = '04';
+      _tipoDocumento = widget.tipoDocumentoInicial;
       _carrito.clear();
       for (final l in lineas) {
         final producto = _listaProductos.where((x) => x.id == l.productoId).firstOrNull;
@@ -231,7 +238,9 @@ class _FormularioFacturaState extends State<FormularioFactura> {
           producto: producto, cantidad: l.cantidad, impuesto: producto.impuesto, tipoCambio: _tipoCambioConversion,
           descripcion: l.descripcion,
         );
-        linea.fijarPrecio(l.precio, 'CRC');
+        // Precio negativo = el del catálogo, en la moneda del producto (los
+        // accesorios que se agregan a la venta de un carro).
+        if (l.precio >= 0) linea.fijarPrecio(l.precio, widget.monedaLineas);
         _carrito.add(linea);
       }
     });

@@ -33,6 +33,8 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
   late bool _avisosPorCorreo;
   late bool _restauranteActivo;
   late bool _prestamosActivo;
+  late bool _vehiculosActivo;
+  bool _guardandoVehiculos = false;
   bool _guardandoPrestamos = false;
   bool _guardandoRestaurante = false;
   late bool _aceptarComprasAutomatico;
@@ -88,6 +90,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
     _avisosPorCorreo = widget.negocio.avisosPorCorreo;
     _restauranteActivo = widget.negocio.restauranteActivo;
     _prestamosActivo = widget.negocio.prestamosActivo;
+    _vehiculosActivo = widget.negocio.vehiculosActivo;
     _aceptarComprasAutomatico = widget.negocio.aceptarComprasAutomatico;
     _regimen = widget.negocio.regimen;
     String f(double? v) => v == null ? '' : v.toString();
@@ -559,6 +562,24 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
     if (mounted) setState(() => _guardandoRestaurante = false);
   }
 
+  Future<void> _cambiarVehiculos(bool activo) async {
+    setState(() => _guardandoVehiculos = true);
+    try {
+      final r = await ApiService.patch('/vehiculos-config/?negocio=${widget.negocio.id}', {'activo': activo});
+      if (r.statusCode != 200) throw Exception(ApiService.mensajeError(r));
+      setState(() => _vehiculosActivo = activo);
+      widget.onGuardado?.call();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(activo ? "Listo: ya tenés la sección Vehículos al lado de Inventario." : "Inventario de vehículos apagado."),
+        ));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo cambiar: ${ApiService.textoError(e)}")));
+    }
+    if (mounted) setState(() => _guardandoVehiculos = false);
+  }
+
   Future<void> _cambiarPrestamos(bool activo) async {
     setState(() => _guardandoPrestamos = true);
     try {
@@ -772,6 +793,15 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
                           "Ventas de vehículos a plazo y préstamos personales: cuotas, pagos, mora y cartera. Aparece la sección Préstamos en Finanzas.",
                         ),
                         secondary: const Icon(Icons.handshake_outlined),
+                      ),
+                      SwitchListTile(
+                        value: _vehiculosActivo,
+                        onChanged: _guardandoVehiculos ? null : _cambiarVehiculos,
+                        title: const Text("Inventario de vehículos"),
+                        subtitle: const Text(
+                          "Para ventas de carros: cada unidad con VIN, motor, placa, costo y precio; cuántos hay por modelo y venta con factura, accesorios y préstamo. Aparece la sección Vehículos al lado de Inventario.",
+                        ),
+                        secondary: const Icon(Icons.directions_car_outlined),
                       ),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
