@@ -1,3 +1,4 @@
+import 'cedulas.dart';
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'package:http/http.dart' as http;
@@ -97,7 +98,7 @@ class _LoginScreenState extends State<LoginScreen> {
         // Guardamos el access token y el refresh token localmente
         // (el refresh permite renovar la sesión sola sin volver a pedir login).
         await ApiService.saveTokens(access: data['access'], refresh: data['refresh']);
-        await _resolverPerfilYNavegar();
+        await _resolverPerfilYNavegar(elegirCedula: true);
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -126,7 +127,9 @@ class _LoginScreenState extends State<LoginScreen> {
   ///   dueño de negocio -> directo a su negocio
   ///   contador -> lista de sus negocios (puede crear más)
   ///   dueño de despacho -> lista de sus contadores
-  Future<void> _resolverPerfilYNavegar() async {
+  /// [elegirCedula]: recién escribió usuario y contraseña -- si tiene varias
+  /// cédulas vinculadas, se le pregunta con cuál trabajar (cedulas.dart).
+  Future<void> _resolverPerfilYNavegar({bool elegirCedula = false}) async {
     String rol = 'ninguno';
     String? rolEmpleado;
     var permisosEmpleado = <String>[];
@@ -198,6 +201,19 @@ class _LoginScreenState extends State<LoginScreen> {
         // "invalid pk 0" sin que quedara claro por qué. Ahora se
         // reintenta un par de veces y, si de verdad no hay forma de
         // cargar el negocio, se avisa y no se avanza.
+        if (elegirCedula && rol == 'negocio') {
+          final cedulas = await cargarCedulas();
+          if (cedulas.length > 1 && mounted) {
+            final elegida = await Navigator.push<Cedula>(
+              context,
+              MaterialPageRoute(builder: (_) => ElegirCedulaScreen(cedulas: cedulas)),
+            );
+            if (elegida != null && !elegida.actual) {
+              await tomarSesionDe(elegida);
+              return _resolverPerfilYNavegar();
+            }
+          }
+        }
         Negocio? negocioFinal;
         Object? ultimoError;
         for (var intento = 0; intento < 3 && negocioFinal == null; intento++) {

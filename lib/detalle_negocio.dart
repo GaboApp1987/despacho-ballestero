@@ -45,6 +45,7 @@ import 'bancos_screen.dart';
 import 'widgets/asistente_ia_bar.dart';
 import 'perfil_sesion.dart';
 import 'widgets/boton_asistencia.dart';
+import 'cedulas.dart';
 import 'widgets/asistente_flotante.dart';
 import 'widgets/selector_periodo.dart';
 import 'nota_credito.dart';
@@ -102,6 +103,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
   late DateTime _fechaInicio;
   late DateTime _fechaFin;
   String _nombreUsuario = "Usuario";
+  List<Cedula> _cedulas = [];
 
   int _seccionActiva = 1;
   // Sube con el botón "Actualizar": cambia la key de la sección abierta para
@@ -402,6 +404,12 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     _fechaFin = DateTime(ahora.year, ahora.month + 1, 0);
     _anioRenta = ahora.year;
     _cargarNombreUsuario();
+    // Varias cédulas con el mismo usuario (solo el dueño; ver cedulas.dart).
+    if (widget.rolEmpleado == null && PerfilSesion.rol == 'negocio') {
+      cargarCedulas().then((l) {
+        if (mounted) setState(() => _cedulas = l);
+      });
+    }
     _cargarTipoCambio();
     _cargarNegocioActualizado();
     _cargarChat();
@@ -1177,6 +1185,10 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
                       // Con qué perfil se entró: el dueño, un colaborador, o
                       // el contador / despacho trabajando en este negocio.
                       ChipPerfil(color: AppColors.primary),
+                      if (_cedulas.length > 1) ...[
+                        const SizedBox(width: 6),
+                        _botonCambiarCedula(compacto: esMovil),
+                      ],
                     ],
                   ),
                   // El saludo vive acá (antes era una tarjeta aparte en Inicio
@@ -1386,6 +1398,31 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
   /// a otros 7 controles, lo que se sentía saturado; agruparlos bajo un solo
   /// avatar con desplegable es el patrón estándar de apps profesionales
   /// (Slack, Gmail, etc.) y deja el AppBar mucho más limpio.
+  /// Cédula abierta y botón para cambiarse (solo con varias cédulas).
+  Widget _botonCambiarCedula({required bool compacto}) {
+    return Tooltip(
+      message: "Estás en ${widget.negocio.nombreComercial} (${widget.negocio.cedula}). Tocá para cambiar de cédula.",
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => abrirCambiarCedula(context),
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: compacto ? 6 : 9, vertical: 3),
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.primary.withOpacity(0.4)),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.swap_horiz, size: 15, color: AppColors.primary),
+            if (!compacto) ...[
+              const SizedBox(width: 4),
+              Text("Cambiar cédula", style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.primary)),
+            ],
+          ]),
+        ),
+      ),
+    );
+  }
+
   Widget _menuCuentaAppBar() {
     return PopupMenuButton<String>(
       tooltip: "Mi cuenta",
@@ -1406,6 +1443,9 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
             ),
           );
           _cargarNegocioActualizado();
+        } else if (opcion == 'cedula') {
+          await abrirCambiarCedula(context);
+          if (mounted) cargarCedulas().then((l) => mounted ? setState(() => _cedulas = l) : null);
         } else if (opcion == 'logout') {
           await ApiService.logout();
           if (context.mounted) {
@@ -1423,16 +1463,28 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
           padding: EdgeInsets.zero,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-            child: Text(
-              widget.negocio.nombreComercial,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: AppColors.textStrong, fontWeight: FontWeight.bold, fontSize: 13),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.negocio.nombreComercial,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: AppColors.textStrong, fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                Text("Cédula ${widget.negocio.cedula}", style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+              ],
             ),
           ),
         ),
         const PopupMenuDivider(height: 1),
         _itemMenuCuenta(value: 'perfil', icono: Icons.account_circle_rounded, titulo: "Mi Perfil"),
+        if (widget.rolEmpleado == null && PerfilSesion.rol == 'negocio')
+          _itemMenuCuenta(
+            value: 'cedula',
+            icono: Icons.swap_horiz,
+            titulo: _cedulas.length > 1 ? "Cambiar de cédula" : "Vincular otra cédula",
+          ),
         _itemMenuCuenta(value: 'logout', icono: Icons.logout, titulo: "Cerrar sesión"),
       ],
       child: Padding(
