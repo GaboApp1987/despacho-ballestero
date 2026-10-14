@@ -18,6 +18,8 @@ class Plan {
   final double? precioDocumentoExtra;
   final int? recargaDocumentos;
   final double? recargaPrecio;
+  final int? recargaConsultasIa;
+  final double? recargaConsultasIaPrecio;
   final bool destacado;
   final int orden;
 
@@ -36,6 +38,8 @@ class Plan {
     this.precioDocumentoExtra,
     this.recargaDocumentos,
     this.recargaPrecio,
+    this.recargaConsultasIa,
+    this.recargaConsultasIaPrecio,
     this.destacado = false,
     this.orden = 0,
   });
@@ -58,6 +62,8 @@ class Plan {
       precioDocumentoExtra: _dec(json['precio_documento_extra']),
       recargaDocumentos: json['recarga_documentos'],
       recargaPrecio: _dec(json['recarga_precio']),
+      recargaConsultasIa: json['recarga_consultas_ia'],
+      recargaConsultasIaPrecio: _dec(json['recarga_consultas_ia_precio']),
       destacado: json['destacado'] ?? false,
       orden: json['orden'] ?? 0,
     );

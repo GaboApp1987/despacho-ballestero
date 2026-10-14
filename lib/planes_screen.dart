@@ -61,6 +61,14 @@ class _PlanesScreenState extends State<PlanesScreen> {
       text: planExistente?.precioMensual != null ? planExistente!.precioMensual.toString() : '',
     );
     final descripcionCtrl = TextEditingController(text: planExistente?.descripcion ?? '');
+    String textoPrecio(double? v) => v == null ? '' : (v % 1 == 0 ? v.toStringAsFixed(0) : v.toString());
+    final recargaIaCtrl = TextEditingController(text: planExistente?.recargaConsultasIa?.toString() ?? '');
+    final recargaIaPrecioCtrl = TextEditingController(text: textoPrecio(planExistente?.recargaConsultasIaPrecio));
+    final recargaDocsCtrl = TextEditingController(text: planExistente?.recargaDocumentos?.toString() ?? '');
+    final recargaDocsPrecioCtrl = TextEditingController(text: textoPrecio(planExistente?.recargaPrecio));
+    // Un plan que cobra el documento extra (ej. Empresa) no vende recarga de
+    // documentos (ver Plan.paquetes_recarga en el backend).
+    final cobraExtra = planExistente?.precioDocumentoExtra != null;
     bool activo = planExistente?.activo ?? true;
     bool guardando = false;
     // Vacío ya no quiere decir ilimitado: se guarda el mínimo. Ilimitado es
@@ -105,9 +113,33 @@ class _PlanesScreenState extends State<PlanesScreen> {
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(labelText: "Usuarios", hintText: "Ilimitados", border: OutlineInputBorder()),
                   ),
+                  const SizedBox(height: 14),
+                  _seccionRecarga(
+                    titulo: "Recarga de documentos",
+                    aviso: docsIlimitados
+                        ? "Con documentos ilimitados el plan no necesita recarga."
+                        : cobraExtra
+                            ? "Este plan cobra cada documento extra, así que no vende recarga."
+                            : "Paquete que el negocio compra cuando se le acaba el cupo (no vence). Vacío = el plan no vende recarga de documentos.",
+                    cantidadCtrl: recargaDocsCtrl,
+                    precioCtrl: recargaDocsPrecioCtrl,
+                    etiquetaCantidad: "Documentos",
+                    habilitada: !docsIlimitados && !cobraExtra,
+                  ),
+                  const SizedBox(height: 14),
+                  _seccionRecarga(
+                    titulo: "Recarga de consultas de IA",
+                    aviso: iaIlimitada
+                        ? "Con IA ilimitada el plan no necesita recarga."
+                        : "Paquete que el negocio compra cuando se le acaban las del mes (no vence). Vacío = el plan no vende recarga de IA.",
+                    cantidadCtrl: recargaIaCtrl,
+                    precioCtrl: recargaIaPrecioCtrl,
+                    etiquetaCantidad: "Consultas",
+                    habilitada: !iaIlimitada,
+                  ),
                   const SizedBox(height: 4),
                   const Text(
-                    "Periodicidad, documento extra, recargas, \"incluye\" y \"Más popular\" se ajustan en el panel de administración.",
+                    "Periodicidad, documento extra, \"incluye\" y \"Más popular\" se ajustan en el panel de administración.",
                     style: TextStyle(fontSize: 11.5, color: Colors.grey),
                   ),
                   const SizedBox(height: 10),
@@ -146,12 +178,25 @@ class _PlanesScreenState extends State<PlanesScreen> {
                         );
                         return;
                       }
+                      // Cada recarga: cantidad y precio, o ninguno (sin los dos
+                      // el backend no la ofrece, ver Plan.paquetes_recarga).
+                      final recargaDocs = _leerRecarga(recargaDocsCtrl, recargaDocsPrecioCtrl, habilitada: !docsIlimitados && !cobraExtra);
+                      final recargaIa = _leerRecarga(recargaIaCtrl, recargaIaPrecioCtrl, habilitada: !iaIlimitada);
+                      if (recargaDocs == null || recargaIa == null) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(
+                            "En la recarga de ${recargaDocs == null ? 'documentos' : 'IA'} escriba la cantidad y el precio, o deje los dos vacíos.")));
+                        return;
+                      }
                       setStateDialog(() => guardando = true);
                       final body = {
                         'nombre': nombreCtrl.text.trim(),
                         'limite_facturas_mensual': limite,
                         'limite_usuarios': int.tryParse(usuariosCtrl.text.trim()),
                         'limite_consultas_ia': limiteIa,
+                        'recarga_documentos': recargaDocs.$1,
+                        'recarga_precio': recargaDocs.$2,
+                        'recarga_consultas_ia': recargaIa.$1,
+                        'recarga_consultas_ia_precio': recargaIa.$2,
                         'precio_mensual': precioCtrl.text.trim(),
                         'descripcion': descripcionCtrl.text.trim(),
                         'activo': activo.toString(),
@@ -192,6 +237,53 @@ class _PlanesScreenState extends State<PlanesScreen> {
     final t = texto.trim();
     if (t.isEmpty) return _minimoPlan;
     return int.tryParse(t) ?? -1;
+  }
+
+  /// (cantidad, precio) de una recarga; (null, null) si no vende o está
+  /// apagada, y null si está a medias o no es válida.
+  static (int?, String?)? _leerRecarga(TextEditingController cantidadCtrl, TextEditingController precioCtrl, {required bool habilitada}) {
+    final textoCantidad = cantidadCtrl.text.trim();
+    final textoPrecio = precioCtrl.text.trim().replaceAll(',', '.');
+    if (!habilitada || (textoCantidad.isEmpty && textoPrecio.isEmpty)) return (null, null);
+    final cantidad = int.tryParse(textoCantidad);
+    final precio = double.tryParse(textoPrecio);
+    if (cantidad == null || cantidad <= 0 || precio == null || precio <= 0) return null;
+    return (cantidad, textoPrecio);
+  }
+
+  Widget _seccionRecarga({
+    required String titulo,
+    required String aviso,
+    required TextEditingController cantidadCtrl,
+    required TextEditingController precioCtrl,
+    required String etiquetaCantidad,
+    required bool habilitada,
+  }) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(titulo, style: TextStyle(fontWeight: FontWeight.w700, color: Colors.grey.shade800)),
+      const SizedBox(height: 2),
+      Text(aviso, style: const TextStyle(fontSize: 11.5, color: Colors.grey)),
+      const SizedBox(height: 8),
+      Row(children: [
+        Expanded(
+          child: TextField(
+            controller: cantidadCtrl,
+            enabled: habilitada,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(labelText: etiquetaCantidad, hintText: "Ej: 25", border: const OutlineInputBorder()),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: TextField(
+            controller: precioCtrl,
+            enabled: habilitada,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(labelText: "Precio (₡)", hintText: "Ej: 2500", border: OutlineInputBorder()),
+          ),
+        ),
+      ]),
+    ]);
   }
 
   Widget _campoConIlimitado({
