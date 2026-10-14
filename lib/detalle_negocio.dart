@@ -44,6 +44,7 @@ import 'widgets/tarjeta_d105.dart';
 import 'bancos_screen.dart';
 import 'widgets/asistente_ia_bar.dart';
 import 'perfil_sesion.dart';
+import 'widgets/boton_asistencia.dart';
 import 'widgets/asistente_flotante.dart';
 import 'widgets/selector_periodo.dart';
 import 'nota_credito.dart';
@@ -1232,6 +1233,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (!esMovil) ...[_botonTemaAppBar(), _grupoDatosAppBar()],
+                // Entrada y salida del colaborador (ver widgets/boton_asistencia.dart).
+                if (widget.rolEmpleado != null) BotonAsistencia(negocioId: widget.negocio.id),
                 _menuComunicacionAppBar(),
                 _menuCuentaAppBar(),
               ],

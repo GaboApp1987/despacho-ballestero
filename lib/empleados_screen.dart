@@ -19,6 +19,7 @@ class Empleado {
   final double comision;
   final String telefono;
   final String usuario;
+  final String? horaEntrada; // 'HH:MM' o null
 
   Empleado({
     required this.id,
@@ -29,6 +30,7 @@ class Empleado {
     this.comision = 0,
     this.telefono = '',
     this.usuario = '',
+    this.horaEntrada,
   });
 
   factory Empleado.fromJson(Map<String, dynamic> json) {
@@ -41,6 +43,7 @@ class Empleado {
       comision: double.tryParse(json['comision']?.toString() ?? '') ?? 0,
       telefono: json['telefono'] ?? '',
       usuario: json['usuario_login'] ?? '',
+      horaEntrada: (json['hora_entrada'] as String?)?.substring(0, 5),
     );
   }
 }
@@ -98,16 +101,29 @@ String _iniciales(String nombre) {
   return (partes.first[0] + (partes.length > 1 ? partes[1][0] : '')).toUpperCase();
 }
 
+// Último uso de la app (no confundir con la entrada de asistencia).
 String _haceCuanto(String? iso) {
-  if (iso == null) return 'Nunca ha entrado';
+  if (iso == null) return 'Nunca ha usado la app';
   final d = DateTime.tryParse(iso)?.toLocal();
   if (d == null) return '';
   final dif = DateTime.now().difference(d);
-  if (dif.inMinutes < 60) return 'Entró hace ${dif.inMinutes < 1 ? 1 : dif.inMinutes} min';
-  if (dif.inHours < 24) return 'Entró hace ${dif.inHours} h';
-  if (dif.inDays < 30) return 'Entró hace ${dif.inDays} ${dif.inDays == 1 ? 'día' : 'días'}';
-  return 'Entró el ${d.day}/${d.month}/${d.year}';
+  if (dif.inMinutes < 60) return 'Usó la app hace ${dif.inMinutes < 1 ? 1 : dif.inMinutes} min';
+  if (dif.inHours < 24) return 'Usó la app hace ${dif.inHours} h';
+  if (dif.inDays < 30) return 'Usó la app hace ${dif.inDays} ${dif.inDays == 1 ? 'día' : 'días'}';
+  return 'Usó la app el ${d.day}/${d.month}/${d.year}';
 }
+
+/// 7.58 -> "7 h 35 min".
+String _horasTexto(num horas) {
+  final minutos = (horas * 60).round();
+  final h = minutos ~/ 60, m = minutos % 60;
+  if (h == 0) return '$m min';
+  return m == 0 ? '$h h' : '$h h $m min';
+}
+
+String _dosDigitos(int n) => n.toString().padLeft(2, '0');
+String _horaDe(DateTime d) => '${_dosDigitos(d.hour)}:${_dosDigitos(d.minute)}';
+const _diasSemana = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];
 
 class EmpleadosScreen extends StatefulWidget {
   final Negocio negocio;
@@ -252,6 +268,8 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
     final rol = f['rol'] as String;
     final activo = f['activo'] == true;
     final diferencia = (f['diferencia_efectivo'] as num?) ?? 0;
+    final asistencia = f['asistencia'] as Map<String, dynamic>?;
+    final trabajando = asistencia?['trabajando'] == true;
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       elevation: 0,
@@ -283,10 +301,21 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          f['nombre'],
-                          style: TextStyle(fontWeight: FontWeight.w700, color: activo ? null : AppColors.textMuted),
-                        ),
+                        Row(children: [
+                          Flexible(
+                            child: Text(
+                              f['nombre'],
+                              style: TextStyle(fontWeight: FontWeight.w700, color: activo ? null : AppColors.textMuted),
+                            ),
+                          ),
+                          if (trabajando)
+                            Container(
+                              margin: const EdgeInsets.only(left: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                              decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+                              child: Text('Trabajando', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.green.shade800)),
+                            ),
+                        ]),
                         Text(
                           [nombresRol[rol] ?? rol, if (!activo) 'Inactivo', if (e != null) _haceCuanto(f['ultimo_acceso'])].join(' · '),
                           style: TextStyle(fontSize: 12, color: AppColors.textMuted),
@@ -316,6 +345,14 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                         diferencia == 0 ? 'Cuadrada' : '${diferencia > 0 ? 'Sobró' : 'Faltó'} ${formatearColones(diferencia.abs())}',
                         color: diferencia < 0 ? Colors.red.shade700 : (diferencia > 0 ? Colors.orange.shade800 : Colors.green.shade700),
                       ),
+                    if (asistencia != null && (asistencia['dias'] as int) > 0) ...[
+                      _dato('Horas (${asistencia['dias']} ${asistencia['dias'] == 1 ? 'día' : 'días'})', _horasTexto(asistencia['horas'] as num)),
+                      if ((asistencia['tardias'] as int) > 0)
+                        _dato('Llegadas tarde', '${asistencia['tardias']} · ${_horasTexto((asistencia['minutos_tarde'] as num) / 60)}',
+                            color: Colors.orange.shade800),
+                      if ((asistencia['sin_salida'] as int) > 0)
+                        _dato('Sin marcar salida', '${asistencia['sin_salida']}', color: Colors.red.shade700),
+                    ],
                   ],
                 ),
               ),
@@ -415,6 +452,14 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                               nota: 'Sobre lo vendido sin IVA',
                             ),
                             _tarjetaTotal(
+                              'Horas trabajadas',
+                              _horasTexto((_resumen?['total_horas'] as num?) ?? 0),
+                              Icons.schedule_outlined,
+                              nota: ((_resumen?['trabajando_ahora'] as num?) ?? 0) > 0
+                                  ? '${_resumen!['trabajando_ahora']} trabajando ahora'
+                                  : 'Según las marcas de entrada y salida',
+                            ),
+                            _tarjetaTotal(
                               'Colaboradores activos',
                               '$activos',
                               Icons.groups_outlined,
@@ -467,6 +512,12 @@ class _FormularioColaboradorState extends State<_FormularioColaborador> {
         : formatearNumero(widget.empleado!.comision, decimales: widget.empleado!.comision % 1 == 0 ? 0 : 2),
   );
   late String _rol = widget.empleado?.rol ?? 'cajero';
+  late TimeOfDay? _horaEntrada = widget.empleado?.horaEntrada == null
+      ? null
+      : TimeOfDay(
+          hour: int.parse(widget.empleado!.horaEntrada!.substring(0, 2)),
+          minute: int.parse(widget.empleado!.horaEntrada!.substring(3, 5)),
+        );
   late final Set<String> _elegidos = {
     ...(widget.empleado?.permisos ?? const ['facturar']),
   };
@@ -504,6 +555,7 @@ class _FormularioColaboradorState extends State<_FormularioColaborador> {
             ]
           : <String>[],
       'comision': comision.toStringAsFixed(2),
+      'hora_entrada': _horaEntrada == null ? null : '${_dosDigitos(_horaEntrada!.hour)}:${_dosDigitos(_horaEntrada!.minute)}',
       if (nuevo) ...{'username': _usuario.text.trim(), 'password': _clave.text},
     };
     setState(() => _guardando = true);
@@ -597,6 +649,34 @@ class _FormularioColaboradorState extends State<_FormularioColaborador> {
                 controller: _comision,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: _deco('Comisión sobre sus ventas (%)', ayuda: 'Opcional. Se calcula sobre lo vendido sin IVA, menos notas de crédito.'),
+              ),
+              const SizedBox(height: 16),
+              InputDecorator(
+                decoration: _deco(
+                  'Hora de entrada',
+                  ayuda: 'Opcional. Si marca la entrada más de 10 min después, cuenta como llegada tarde.',
+                  sufijo: _horaEntrada == null
+                      ? null
+                      : IconButton(
+                          tooltip: 'Sin hora fija',
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: () => setState(() => _horaEntrada = null),
+                        ),
+                ),
+                child: InkWell(
+                  onTap: () async {
+                    final hora = await showTimePicker(
+                      context: context,
+                      initialTime: _horaEntrada ?? const TimeOfDay(hour: 8, minute: 0),
+                    );
+                    if (hora != null) setState(() => _horaEntrada = hora);
+                  },
+                  child: Row(children: [
+                    Icon(Icons.schedule_outlined, size: 18, color: AppColors.textMuted),
+                    const SizedBox(width: 8),
+                    Text(_horaEntrada == null ? 'Sin hora fija' : _horaEntrada!.format(context)),
+                  ]),
+                ),
               ),
             ],
           ),
@@ -742,6 +822,61 @@ class _FichaColaboradorState extends State<FichaColaborador> {
     } catch (err) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(err)), backgroundColor: Colors.red));
     }
+  }
+
+  Future<void> _editarMarca({Map<String, dynamic>? marca}) async {
+    final resultado = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => _DialogoMarca(marca: marca, nombre: widget.fila['nombre']),
+    );
+    if (resultado == null || !mounted) return;
+    try {
+      if (resultado['borrar'] == true) {
+        ApiService.verificar(await ApiService.delete('/asistencia/marcas/${marca!['id']}/'));
+      } else if (marca == null) {
+        ApiService.verificar(await ApiService.post('/asistencia/marcas/', {
+          'negocio': widget.negocio.id,
+          'usuario': widget.fila['usuario_id'],
+          ...resultado,
+        }));
+      } else {
+        ApiService.verificar(await ApiService.patch('/asistencia/marcas/${marca['id']}/', resultado));
+      }
+      _cargar();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e)), backgroundColor: Colors.red));
+    }
+  }
+
+  Widget _filaMarca(Map<String, dynamic> m) {
+    final entrada = DateTime.parse(m['entrada']).toLocal();
+    final salida = m['salida'] == null ? null : DateTime.parse(m['salida']).toLocal();
+    final tarde = (m['minutos_tarde'] as num?) ?? 0;
+    final estado = m['abierta'] == true
+        ? Text('Trabajando', style: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.w600))
+        : m['sin_salida'] == true
+            ? Text('No marcó salida', style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w600))
+            : Text(_horasTexto(m['horas'] as num), style: const TextStyle(fontWeight: FontWeight.w600));
+    return ListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      onTap: () => _editarMarca(marca: m),
+      title: Text('${_diasSemana[entrada.weekday - 1]} ${entrada.day}/${entrada.month} · '
+          '${_horaDe(entrada)} – ${salida == null ? '…' : _horaDe(salida)}'),
+      subtitle: Text(
+        [
+          if (tarde > 0) '$tarde min tarde',
+          if (m['corregida'] == true) 'Corregida',
+          if ((m['nota'] ?? '').toString().isNotEmpty) m['nota'],
+        ].join(' · '),
+        style: TextStyle(color: tarde > 0 ? Colors.orange.shade800 : AppColors.textMuted, fontSize: 12),
+      ),
+      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        estado,
+        const SizedBox(width: 4),
+        Icon(Icons.edit_outlined, size: 16, color: AppColors.textMuted),
+      ]),
+    );
   }
 
   Widget _seccion(String titulo, List<Widget> hijos, {String? vacio}) => Container(
@@ -897,6 +1032,37 @@ class _FichaColaboradorState extends State<FichaColaborador> {
                       ),
                       _barras(d['por_dia'] as List),
                     ]),
+                    _seccion('Asistencia', [
+                      Wrap(
+                        children: [
+                          _cifra('Horas trabajadas', _horasTexto((d['resumen_asistencia']?['horas'] as num?) ?? 0)),
+                          _cifra('Días', '${d['resumen_asistencia']?['dias'] ?? 0}'),
+                          _cifra(
+                            'Llegadas tarde',
+                            d['hora_entrada'] == null
+                                ? 'Sin hora fija'
+                                : '${d['resumen_asistencia']?['tardias'] ?? 0} (entra ${d['hora_entrada']})',
+                          ),
+                        ],
+                      ),
+                      for (final m in d['asistencia'] as List) _filaMarca(Map<String, dynamic>.from(m)),
+                      if ((d['asistencia'] as List).isEmpty)
+                        Text(
+                          e == null
+                              ? 'No hay marcas en este período.'
+                              : 'No hay marcas en este período. ${e.nombre} marca su entrada y salida con el botón '
+                                  '"Marcar entrada" de arriba en la app.',
+                          style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+                        ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          onPressed: () => _editarMarca(),
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Agregar marca'),
+                        ),
+                      ),
+                    ]),
                     _seccion('Sus facturas', [
                       for (final f in d['facturas'] as List)
                         ListTile(
@@ -939,6 +1105,137 @@ class _FichaColaboradorState extends State<FichaColaborador> {
                 ),
               ),
             ),
+    );
+  }
+}
+
+/// Agregar o corregir una marca de asistencia (lo hace el dueño). Devuelve
+/// {entrada, salida, nota} para el backend, o {borrar: true}.
+class _DialogoMarca extends StatefulWidget {
+  final Map<String, dynamic>? marca;
+  final String nombre;
+  const _DialogoMarca({required this.marca, required this.nombre});
+
+  @override
+  State<_DialogoMarca> createState() => _DialogoMarcaState();
+}
+
+class _DialogoMarcaState extends State<_DialogoMarca> {
+  late DateTime _dia;
+  late TimeOfDay _entrada;
+  TimeOfDay? _salida;
+  late final _nota = TextEditingController(text: widget.marca?['nota'] ?? '');
+
+  @override
+  void initState() {
+    super.initState();
+    final m = widget.marca;
+    final entrada = m == null ? DateTime.now() : DateTime.parse(m['entrada']).toLocal();
+    _dia = DateTime(entrada.year, entrada.month, entrada.day);
+    _entrada = m == null ? const TimeOfDay(hour: 8, minute: 0) : TimeOfDay.fromDateTime(entrada);
+    if (m?['salida'] != null) _salida = TimeOfDay.fromDateTime(DateTime.parse(m!['salida']).toLocal());
+  }
+
+  @override
+  void dispose() {
+    _nota.dispose();
+    super.dispose();
+  }
+
+  DateTime _en(TimeOfDay t, {bool diaSiguiente = false}) =>
+      DateTime(_dia.year, _dia.month, _dia.day + (diaSiguiente ? 1 : 0), t.hour, t.minute);
+
+  Future<void> _elegirHora({required bool entrada}) async {
+    final hora = await showTimePicker(
+      context: context,
+      initialTime: entrada ? _entrada : (_salida ?? const TimeOfDay(hour: 17, minute: 0)),
+    );
+    if (hora != null) setState(() => entrada ? _entrada = hora : _salida = hora);
+  }
+
+  Widget _campo(String etiqueta, String valor, VoidCallback onTap, {Widget? sufijo}) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: InkWell(
+      onTap: onTap,
+      child: InputDecorator(
+        decoration: InputDecoration(labelText: etiqueta, isDense: true, border: const OutlineInputBorder(), suffixIcon: sufijo),
+        child: Text(valor),
+      ),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final nueva = widget.marca == null;
+    final entrada = _en(_entrada);
+    // Salida antes que la entrada = turno que pasa la medianoche.
+    final cruza = _salida != null && (_salida!.hour * 60 + _salida!.minute) <= (_entrada.hour * 60 + _entrada.minute);
+    final salida = _salida == null ? null : _en(_salida!, diaSiguiente: cruza);
+    return AlertDialog(
+      title: Text(nueva ? 'Agregar marca de ${widget.nombre}' : 'Corregir marca'),
+      content: SizedBox(
+        width: 380,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _campo('Día', '${_diasSemana[_dia.weekday - 1]} ${_dia.day}/${_dia.month}/${_dia.year}', () async {
+              final dia = await showDatePicker(
+                context: context,
+                initialDate: _dia,
+                firstDate: DateTime.now().subtract(const Duration(days: 400)),
+                lastDate: DateTime.now(),
+              );
+              if (dia != null) setState(() => _dia = dia);
+            }),
+            Row(children: [
+              Expanded(child: _campo('Entrada', _entrada.format(context), () => _elegirHora(entrada: true))),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _campo(
+                  'Salida',
+                  _salida == null ? 'Sin salida' : _salida!.format(context),
+                  () => _elegirHora(entrada: false),
+                  sufijo: _salida == null
+                      ? null
+                      : IconButton(icon: const Icon(Icons.close, size: 16), onPressed: () => setState(() => _salida = null)),
+                ),
+              ),
+            ]),
+            if (salida != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Text(
+                  'Total: ${_horasTexto(salida.difference(entrada).inMinutes / 60)}${cruza ? ' (sale al día siguiente)' : ''}',
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 12.5),
+                ),
+              ),
+            TextField(
+              controller: _nota,
+              maxLength: 200,
+              decoration: const InputDecoration(
+                labelText: 'Motivo (opcional)', hintText: 'Ej: se le olvidó marcar', isDense: true, border: OutlineInputBorder()),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        if (!nueva)
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, {'borrar': true}),
+            child: const Text('Borrar'),
+          ),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, {
+            'entrada': entrada.toUtc().toIso8601String(),
+            'salida': salida?.toUtc().toIso8601String(),
+            'nota': _nota.text.trim(),
+          }),
+          child: const Text('Guardar'),
+        ),
+      ],
     );
   }
 }
