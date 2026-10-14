@@ -164,9 +164,11 @@ class UsoPlanNegocio extends StatelessWidget {
               ),
             ),
           _saldo((uso['saldo_documentos_recarga'] as num?)?.toInt() ?? 0, "documentos"),
+          _saldo((uso['saldo_documentos_cortesia'] as num?)?.toInt() ?? 0, "documentos", origen: "de regalo de Equilibra", icono: Icons.card_giftcard),
           _barra("Usuarios", (uso['usuarios'] as num?)?.toInt() ?? 0, (uso['usuarios_limite'] as num?)?.toInt()),
           _barra("Consultas de IA este mes", (uso['consultas_ia'] as num?)?.toInt() ?? 0, (uso['consultas_ia_limite'] as num?)?.toInt()),
           _saldo((uso['saldo_consultas_ia_recarga'] as num?)?.toInt() ?? 0, "consultas de IA"),
+          _saldo((uso['saldo_consultas_ia_cortesia'] as num?)?.toInt() ?? 0, "consultas de IA", origen: "de regalo de Equilibra", icono: Icons.card_giftcard),
           if (onComprarRecarga != null && paquetes.isNotEmpty) ...[
             const SizedBox(height: 4),
             Text("¿Necesitás más? Se suma a lo que te queda y no vence:", style: TextStyle(fontSize: 12.5, color: AppColors.textMuted)),
@@ -186,14 +188,14 @@ class UsoPlanNegocio extends StatelessWidget {
     );
   }
 
-  Widget _saldo(int saldo, String que) {
+  Widget _saldo(int saldo, String que, {String origen = "de recargas", IconData icono = Icons.add_circle}) {
     if (saldo <= 0) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(children: [
-        Icon(Icons.add_circle, size: 14, color: Colors.green.shade700),
+        Icon(icono, size: 14, color: Colors.green.shade700),
         const SizedBox(width: 6),
-        Text("+$saldo $que de recargas", style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Colors.green.shade800)),
+        Text("+$saldo $que $origen", style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Colors.green.shade800)),
       ]),
     );
   }

@@ -72,6 +72,8 @@ class Negocio {
   final int? limiteFacturasMensual;
   final int? facturasUsadasMes;
   final int? facturasDisponibles;
+  /// Facturas regaladas por el administrador que le quedan (ver cortesia_dialog.dart).
+  final int facturasCortesia;
   /// Uso del plan (documentos del período, usuarios, consultas de IA) --
   /// ver uso_plan_negocio en el backend. null si no tiene plan.
   final Map<String, dynamic>? usoPlan;
@@ -131,6 +133,7 @@ class Negocio {
     this.limiteFacturasMensual,
     this.facturasUsadasMes,
     this.facturasDisponibles,
+    this.facturasCortesia = 0,
     this.usoPlan,
     this.suscripcionId,
     this.suscripcionEstado,
@@ -180,6 +183,7 @@ class Negocio {
       limiteFacturasMensual: json['limite_facturas_mensual'],
       facturasUsadasMes: json['facturas_usadas_mes'],
       facturasDisponibles: json['facturas_disponibles'],
+      facturasCortesia: json['facturas_cortesia'] ?? 0,
       usoPlan: json['uso_plan'] is Map ? Map<String, dynamic>.from(json['uso_plan']) : null,
       suscripcionId: json['suscripcion_id'],
       suscripcionEstado: json['suscripcion_estado'],

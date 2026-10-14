@@ -945,6 +945,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
               ? "Plan ${_negocioConCuota.planNombre}: documentos ilimitados -- tocá para ver tu plan"
               : "Plan ${_negocioConCuota.planNombre}: te quedan ${docsDisp ?? 0} documentos $unidad"
                   "${(uso?['saldo_documentos_recarga'] ?? 0) > 0 ? ' (incluye ${uso!['saldo_documentos_recarga']} de recargas)' : ''}"
+                  "${(uso?['saldo_documentos_cortesia'] ?? 0) > 0 ? ' (incluye ${uso!['saldo_documentos_cortesia']} de regalo)' : ''}"
                   "${extraPermitido ? '; después se cobran como extra' : ''} -- tocá para ver tu plan o comprar más",
           colorTexto: extraPermitido ? null : colorSegun(docsDisp, docsLimite),
           onTap: abrirPlanes,

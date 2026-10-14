@@ -5,6 +5,7 @@ import 'theme/app_theme.dart';
 import 'api_service.dart';
 import 'avatar_logo.dart';
 import 'chats_contador_screen.dart';
+import 'cortesia_dialog.dart';
 import 'dashboard_despacho_widgets.dart';
 import 'negocio.dart';
 import 'onvo_cobro_automatico_screen.dart';
@@ -942,6 +943,10 @@ class _NegociosScreenState extends State<NegociosScreen> {
     }
   }
 
+  Future<void> _regalarFacturas(Negocio negocio) async {
+    if (await abrirCortesia(context, negocio)) _cargarNegocios();
+  }
+
   Future<void> _gestionarSuscripcion(Negocio negocio) async {
     String estado = negocio.suscripcionEstado ?? 'activo';
     final montoCtrl = TextEditingController();
@@ -1545,6 +1550,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
                                       ? "Plan: ${n.planNombre} (documentos ilimitados)"
                                       : "Plan: ${n.planNombre} (${n.facturasDisponibles ?? 0}/${n.limiteFacturasMensual} documentos disp.)")
                                   : "Sin plan asignado",
+                              if (n.facturasCortesia > 0) "🎁 ${n.facturasCortesia} de cortesía",
                             ].join(angosto ? "\n" : " · "),
                             style: esContador ? const TextStyle(color: _PaletaContador.textoTenue, fontSize: 12.5) : null,
                           ),
@@ -1572,6 +1578,12 @@ class _NegociosScreenState extends State<NegociosScreen> {
                                   icon: Icon(Icons.swap_horiz, color: esContador ? _PaletaContador.textoTenue : null),
                                   tooltip: "Reasignar a otro contador",
                                   onPressed: () => _reasignarNegocio(n),
+                                ),
+                              if (widget.esSuperusuario)
+                                IconButton(
+                                  icon: Icon(Icons.card_giftcard, color: Colors.pink.shade400),
+                                  tooltip: "Regalar facturas o consultas de IA",
+                                  onPressed: () => _regalarFacturas(n),
                                 ),
                               if (widget.esSuperusuario)
                                 IconButton(
@@ -1610,6 +1622,8 @@ class _NegociosScreenState extends State<NegociosScreen> {
       if (_puedeReasignar)
         const PopupMenuItem(value: 'reasignar', child: ListTile(leading: Icon(Icons.swap_horiz), title: Text("Reasignar a otro contador"))),
       if (widget.esSuperusuario)
+        const PopupMenuItem(value: 'cortesia', child: ListTile(leading: Icon(Icons.card_giftcard), title: Text("Regalar facturas"))),
+      if (widget.esSuperusuario)
         const PopupMenuItem(value: 'renta', child: ListTile(leading: Icon(Icons.payments_outlined), title: Text("Renta de la plataforma"))),
     ];
     if (opciones.isEmpty) return Icon(Icons.chevron_right, color: esContador ? _PaletaContador.acento : null);
@@ -1626,6 +1640,8 @@ class _NegociosScreenState extends State<NegociosScreen> {
             _cambiarPlan(n);
           case 'reasignar':
             _reasignarNegocio(n);
+          case 'cortesia':
+            _regalarFacturas(n);
           case 'renta':
             _gestionarSuscripcion(n);
         }
