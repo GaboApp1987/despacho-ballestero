@@ -512,6 +512,11 @@ class ExportService {
   @visibleForTesting
   static void Function(List<int> bytes, String fileName)? capturarPdfParaPruebas;
 
+  /// Para Excel armados fuera de este archivo (ej. la plantilla de
+  /// productos, ver carga_productos.dart).
+  static Future<void> guardarExcel(Excel excel, String fileName) =>
+      _guardarExcel(excel, dialogTitle: 'Guardar Excel', fileName: fileName);
+
   static Future<void> _guardarExcel(Excel excel, {required String dialogTitle, required String fileName}) async {
     final bytes = excel.encode()!;
     if (capturarExcelParaPruebas != null) {

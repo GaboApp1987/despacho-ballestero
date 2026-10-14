@@ -9,7 +9,7 @@ import 'negocio.dart';
 import 'producto.dart';
 import 'formato.dart';
 import 'actualizar_precios_screen.dart' show PantallaActualizarPrecios;
-import 'importar_externo_dialog.dart';
+import 'carga_productos.dart';
 import 'recorridos.dart';
 import 'widgets/recorrido_guiado.dart';
 
@@ -93,6 +93,13 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
       });
     }
   }
+
+  void _abrirCarga() => abrirCargaProductos(
+        context: context,
+        negocio: widget.negocio,
+        productos: _productos,
+        onGuardado: _cargarDatos,
+      );
 
   void _abrirActualizarPrecios() {
     Future.microtask(() async {
@@ -277,16 +284,21 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
             icon: const Icon(Icons.price_change_outlined),
             onPressed: _productos.isEmpty ? null : _abrirActualizarPrecios,
           ),
-          IconButton(
-            key: GuiaInventario.importar,
-            tooltip: "Cargar Productos Masivamente",
-            icon: const Icon(Icons.upload_file_outlined),
-            onPressed: () => importarProductosMasivo(
-              context: context,
-              negocio: widget.negocio,
-              onImportado: _cargarDatos,
+          // Con texto en pantallas anchas: el ícono solo pasaba desapercibido.
+          if (MediaQuery.sizeOf(context).width >= 600)
+            TextButton.icon(
+              key: GuiaInventario.importar,
+              onPressed: _abrirCarga,
+              icon: const Icon(Icons.upload_file_outlined, size: 20),
+              label: const Text("Importar / Exportar"),
+            )
+          else
+            IconButton(
+              key: GuiaInventario.importar,
+              tooltip: "Importar / Exportar productos",
+              icon: const Icon(Icons.upload_file_outlined),
+              onPressed: _abrirCarga,
             ),
-          ),
           BotonGuia(iniciar: () => GuiaInventario.mostrar(context)),
         ],
         bottom: PreferredSize(
