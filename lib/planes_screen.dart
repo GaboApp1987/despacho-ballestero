@@ -63,6 +63,10 @@ class _PlanesScreenState extends State<PlanesScreen> {
     final descripcionCtrl = TextEditingController(text: planExistente?.descripcion ?? '');
     bool activo = planExistente?.activo ?? true;
     bool guardando = false;
+    // Vacío ya no quiere decir ilimitado: se guarda el mínimo. Ilimitado es
+    // marcar la casilla (así un plan ilimitado no pierde eso al editarlo).
+    bool docsIlimitados = planExistente != null && planExistente.limiteFacturasMensual == null;
+    bool iaIlimitada = planExistente != null && planExistente.limiteConsultasIa == null;
 
     showDialog(
       context: context,
@@ -82,32 +86,25 @@ class _PlanesScreenState extends State<PlanesScreen> {
                     decoration: const InputDecoration(labelText: "Nombre del Plan *", border: OutlineInputBorder()),
                   ),
                   const SizedBox(height: 10),
-                  TextField(
+                  _campoConIlimitado(
                     controller: limiteCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: "Documentos por período (vacío = ilimitados)",
-                      border: OutlineInputBorder(),
-                    ),
+                    etiqueta: "Documentos por período",
+                    ilimitado: docsIlimitados,
+                    onIlimitado: (v) => setStateDialog(() => docsIlimitados = v),
                   ),
                   const SizedBox(height: 10),
-                  Row(children: [
-                    Expanded(
-                      child: TextField(
-                        controller: usuariosCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: "Usuarios", hintText: "Ilimitados", border: OutlineInputBorder()),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextField(
-                        controller: iaCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: "Consultas IA/mes", hintText: "Ilimitadas", border: OutlineInputBorder()),
-                      ),
-                    ),
-                  ]),
+                  _campoConIlimitado(
+                    controller: iaCtrl,
+                    etiqueta: "Consultas de IA al mes",
+                    ilimitado: iaIlimitada,
+                    onIlimitado: (v) => setStateDialog(() => iaIlimitada = v),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: usuariosCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: "Usuarios", hintText: "Ilimitados", border: OutlineInputBorder()),
+                  ),
                   const SizedBox(height: 4),
                   const Text(
                     "Periodicidad, documento extra, recargas, \"incluye\" y \"Más popular\" se ajustan en el panel de administración.",
@@ -141,10 +138,11 @@ class _PlanesScreenState extends State<PlanesScreen> {
               onPressed: guardando
                   ? null
                   : () async {
-                      final limite = int.tryParse(limiteCtrl.text.trim());
-                      if (nombreCtrl.text.trim().isEmpty || (limiteCtrl.text.trim().isNotEmpty && limite == null)) {
+                      final limite = docsIlimitados ? null : _limiteOMinimo(limiteCtrl.text);
+                      final limiteIa = iaIlimitada ? null : _limiteOMinimo(iaCtrl.text);
+                      if (nombreCtrl.text.trim().isEmpty || (!docsIlimitados && limite == -1) || (!iaIlimitada && limiteIa == -1)) {
                         ScaffoldMessenger.of(ctx).showSnackBar(
-                          const SnackBar(content: Text("Complete el nombre y un límite de documentos válido (o vacío).")),
+                          const SnackBar(content: Text("Complete el nombre y escriba números válidos en documentos y consultas de IA.")),
                         );
                         return;
                       }
@@ -153,7 +151,7 @@ class _PlanesScreenState extends State<PlanesScreen> {
                         'nombre': nombreCtrl.text.trim(),
                         'limite_facturas_mensual': limite,
                         'limite_usuarios': int.tryParse(usuariosCtrl.text.trim()),
-                        'limite_consultas_ia': int.tryParse(iaCtrl.text.trim()),
+                        'limite_consultas_ia': limiteIa,
                         'precio_mensual': precioCtrl.text.trim(),
                         'descripcion': descripcionCtrl.text.trim(),
                         'activo': activo.toString(),
@@ -183,6 +181,44 @@ class _PlanesScreenState extends State<PlanesScreen> {
         ),
       ),
     );
+  }
+
+  /// Mínimo de documentos y de consultas de IA de un plan cuando el campo
+  /// queda vacío.
+  static const int _minimoPlan = 10;
+
+  /// El número escrito, [_minimoPlan] si está vacío o -1 si no es válido.
+  static int _limiteOMinimo(String texto) {
+    final t = texto.trim();
+    if (t.isEmpty) return _minimoPlan;
+    return int.tryParse(t) ?? -1;
+  }
+
+  Widget _campoConIlimitado({
+    required TextEditingController controller,
+    required String etiqueta,
+    required bool ilimitado,
+    required ValueChanged<bool> onIlimitado,
+  }) {
+    return Row(children: [
+      Expanded(
+        child: TextField(
+          controller: controller,
+          enabled: !ilimitado,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            labelText: etiqueta,
+            hintText: ilimitado ? "Ilimitado" : "Vacío = $_minimoPlan",
+            border: const OutlineInputBorder(),
+          ),
+        ),
+      ),
+      const SizedBox(width: 6),
+      Column(mainAxisSize: MainAxisSize.min, children: [
+        Checkbox(value: ilimitado, onChanged: (v) => onIlimitado(v ?? false)),
+        const Text("Ilimitado", style: TextStyle(fontSize: 11)),
+      ]),
+    ]);
   }
 
   Future<void> _eliminarPlan(Plan plan) async {
