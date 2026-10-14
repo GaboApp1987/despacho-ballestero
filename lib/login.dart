@@ -129,12 +129,14 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _resolverPerfilYNavegar() async {
     String rol = 'ninguno';
     String? rolEmpleado;
+    var permisosEmpleado = <String>[];
     try {
       final perfilResponse = await ApiService.get('/mi-perfil/');
       if (perfilResponse.statusCode == 200) {
         final data = json.decode(utf8.decode(perfilResponse.bodyBytes));
         rol = data['rol'] ?? 'ninguno';
         rolEmpleado = data['rol_empleado'];
+        permisosEmpleado = [for (final p in (data['permisos_empleado'] as List? ?? [])) p.toString()];
       } else if (perfilResponse.statusCode == 402) {
         // Suscripción suspendida por falta de pago: se mantiene la sesión
         // (para poder llamar a iniciar/confirmar-cobro-automatico como
@@ -181,7 +183,7 @@ class _LoginScreenState extends State<LoginScreen> {
       debugPrint("Nota: no se pudo determinar el rol del usuario: $e");
     }
 
-    PerfilSesion.fijar(rol, empleado: rolEmpleado);
+    PerfilSesion.fijar(rol, empleado: rolEmpleado, permisos: permisosEmpleado);
     Widget pantallaDestino;
     switch (rol) {
       case 'negocio':

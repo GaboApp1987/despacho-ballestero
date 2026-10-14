@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_service.dart';
 import 'formato.dart';
+import 'perfil_sesion.dart';
 import 'negocio.dart';
 import 'recorridos.dart';
 import 'restaurante_insumos.dart';
@@ -65,7 +66,7 @@ class _RestauranteScreenState extends State<RestauranteScreen> with SingleTicker
   String _cocina = 'pantalla';
   bool _cargado = false;
 
-  bool get _esCajero => widget.rolEmpleado == 'cajero';
+  bool get _esCajero => PerfilSesion.sinPermiso(widget.rolEmpleado, 'restaurante');
   bool get _conPantallaCocina => _cocina != 'impresora';
 
   @override

@@ -319,6 +319,14 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
   // solo para no mostrar botones que van a fallar. 'completo' ve todo esto.
   static const Set<int> _idsOcultosParaCajero = {6, 8, 13, 9, 7, 10, 11, 12, 5, 15, 16, 17, 18, 19, 20, 23, 24};
 
+  // Colaborador 'A la medida': sección -> permiso que la muestra (las que no
+  // están acá las ve siempre, igual que el cajero).
+  static const Map<int, String> _permisoPorSeccion = {
+    24: 'vehiculos', 8: 'compras', 17: 'compras', 13: 'compras', 18: 'gastos', 9: 'gastos', 23: 'prestamos',
+    6: 'cobros', 19: 'cobros', 16: 'cobros', 15: 'notas', 11: 'ajustes', 12: 'ajustes', 5: 'ajustes',
+    10: 'reportes', 7: 'reportes', 20: 'bancos',
+  };
+
   List<({int id, IconData icono, String titulo})> get _menuItemsVisibles {
     // "Colaboradores" (id 14) es exclusivo del dueño real -- ni 'cajero' ni
     // 'completo' pueden gestionar otros colaboradores (ver
@@ -326,6 +334,10 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     var items = widget.rolEmpleado == null ? _menuItems : _menuItems.where((m) => m.id != 14).toList();
     if (widget.rolEmpleado == 'cajero') {
       items = items.where((m) => !_idsOcultosParaCajero.contains(m.id)).toList();
+    } else if (widget.rolEmpleado == 'medida') {
+      items = items
+          .where((m) => !_permisoPorSeccion.containsKey(m.id) || !PerfilSesion.sinPermiso('medida', _permisoPorSeccion[m.id]!))
+          .toList();
     }
     if (!_negocioConCuota.restauranteActivo) {
       items = items.where((m) => m.id != 21).toList();
@@ -2370,7 +2382,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
             ),
               ),
               // La lista de clientes que traen de otro sistema (Excel, CSV, PDF...).
-              if (widget.rolEmpleado != 'cajero')
+              if (!PerfilSesion.sinPermiso(widget.rolEmpleado, 'clientes'))
                 IconButton(
                   key: GuiaClientes.importar,
                   tooltip: "Importar clientes de otro sistema (Excel, CSV o PDF)",

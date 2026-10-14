@@ -7,6 +7,7 @@ import 'package:printing/printing.dart';
 
 import 'api_service.dart';
 import 'formato.dart';
+import 'perfil_sesion.dart';
 import 'negocio.dart';
 import 'recorridos.dart';
 import 'widgets/recorrido_guiado.dart';
@@ -49,7 +50,7 @@ class _CajaScreenState extends State<CajaScreen> {
   bool _cargando = true;
   final _fondoCtrl = TextEditingController();
 
-  bool get _esCajero => widget.rolEmpleado == 'cajero';
+  bool get _esCajero => PerfilSesion.sinPermiso(widget.rolEmpleado, 'caja');
 
   @override
   void initState() {

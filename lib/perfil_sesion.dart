@@ -7,10 +7,23 @@ import 'package:flutter/material.dart';
 class PerfilSesion {
   static String? rol;
   static String? rolEmpleado;
+  // Secciones del colaborador 'A la medida' (ver PERMISOS_COLABORADOR en
+  // gestion/permissions.py).
+  static Set<String> permisosEmpleado = {};
 
-  static void fijar(String? nuevoRol, {String? empleado}) {
+  static void fijar(String? nuevoRol, {String? empleado, Iterable<String> permisos = const []}) {
     rol = nuevoRol;
     rolEmpleado = empleado;
+    permisosEmpleado = permisos.toSet();
+  }
+
+  /// True si [rolDeEmpleado] (el que se pasa a las pantallas; null = dueño)
+  /// no tiene esa sección: el cajero ninguna, 'completo' todas y 'medida'
+  /// las que eligió el dueño. El backend aplica lo mismo (sin_permiso).
+  static bool sinPermiso(String? rolDeEmpleado, String seccion) {
+    if (rolDeEmpleado == null || rolDeEmpleado == 'completo') return false;
+    if (rolDeEmpleado == 'medida') return !permisosEmpleado.contains(seccion);
+    return true;
   }
 
   static void limpiar() => fijar(null);
