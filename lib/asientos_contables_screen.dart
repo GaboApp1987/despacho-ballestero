@@ -5,6 +5,7 @@ import 'recorridos.dart';
 import 'widgets/recorrido_guiado.dart';
 
 import 'api_service.dart';
+import 'formato.dart';
 import 'asiento_contable.dart';
 import 'cuenta_contable.dart';
 import 'cuentas_contables_screen.dart';
@@ -165,6 +166,97 @@ class _LibroDiarioState extends State<_LibroDiario> {
     if (editado == true) _cargar();
   }
 
+  /// Pasa de 1106 Mercadería a 1110 Insumos lo que le falta a la 1110 para
+  /// tener el valor de hoy de los insumos (ver
+  /// contabilidad_auto.reclasificar_insumos). Muestra los montos antes.
+  Future<void> _reclasificarInsumos() async {
+    final url = '/asientos-contables/reclasificar-insumos/?negocio=${widget.negocio.id}';
+    Map<String, dynamic> datos;
+    try {
+      final r = await ApiService.get(url);
+      if (r.statusCode != 200) throw Exception(ApiService.mensajeError(r));
+      datos = json.decode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
+      return;
+    }
+    if (!mounted) return;
+    double n(String k) => double.tryParse('${datos[k]}') ?? 0;
+    final monto = n('monto');
+    var fecha = DateTime.now();
+    Widget fila(String t, double v, {bool fuerte = false}) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(children: [
+            Expanded(child: Text(t, style: TextStyle(color: TemaContador.textoFuerte, fontWeight: fuerte ? FontWeight.w700 : null))),
+            Text(formatearColones(v), style: TextStyle(color: TemaContador.textoFuerte, fontWeight: fuerte ? FontWeight.w800 : FontWeight.w600)),
+          ]),
+        );
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          backgroundColor: TemaContador.fondo,
+          title: const Text("Reclasificar insumos a la 1110", style: TextStyle(color: TemaContador.textoFuerte, fontSize: 16)),
+          content: SizedBox(
+            width: 420,
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text(
+                "Las compras de insumos de antes quedaron en 1106 Inventario de Mercancías. Esto pasa a la 1110 "
+                "lo que le falta para tener el valor de hoy de los insumos (existencia por costo promedio).",
+                style: TextStyle(color: TemaContador.textoFuerte, fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              fila("Valor de los insumos hoy", n('valor_insumos')),
+              fila("Saldo actual de la 1110", n('saldo_1110')),
+              fila("Saldo actual de la 1106", n('saldo_1106')),
+              const Divider(),
+              fila("Se pasa de 1106 a 1110", monto, fuerte: true),
+              if ((datos['aviso'] ?? '').toString().isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(datos['aviso'], style: const TextStyle(color: Colors.orange, fontSize: 12.5)),
+              ],
+              if (monto > 0) ...[
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () async {
+                    final elegida = await showDatePicker(
+                      context: ctx, initialDate: fecha, firstDate: DateTime(2020), lastDate: DateTime.now());
+                    if (elegida != null) setD(() => fecha = elegida);
+                  },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(labelText: "Fecha del asiento", border: OutlineInputBorder(), isDense: true),
+                    child: Text("${fecha.day.toString().padLeft(2, '0')}/${fecha.month.toString().padLeft(2, '0')}/${fecha.year}"),
+                  ),
+                ),
+              ],
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(monto > 0 ? "Cancelar" : "Cerrar")),
+            if (monto > 0)
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: TemaContador.acento, foregroundColor: Colors.white),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text("Crear asiento"),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+    try {
+      final r = await ApiService.post(url, {
+        'fecha': "${fecha.year}-${fecha.month.toString().padLeft(2, '0')}-${fecha.day.toString().padLeft(2, '0')}",
+      });
+      if (r.statusCode != 201) throw Exception(ApiService.mensajeError(r));
+      final numero = json.decode(utf8.decode(r.bodyBytes))['numero'];
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Listo: asiento #$numero creado.")));
+      _cargar();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
+    }
+  }
+
   Future<void> _generarAutomaticos() async {
     final confirmar = await showDialog<bool>(
       context: context,
@@ -298,6 +390,15 @@ class _LibroDiarioState extends State<_LibroDiario> {
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          FloatingActionButton.small(
+            heroTag: 'reclasificar-insumos',
+            tooltip: "Reclasificar insumos a la 1110",
+            onPressed: _reclasificarInsumos,
+            backgroundColor: TemaContador.fondo,
+            foregroundColor: TemaContador.textoFuerte,
+            child: const Icon(Icons.swap_horiz),
+          ),
+          const SizedBox(height: 10),
           FloatingActionButton.extended(
             heroTag: 'catalogo',
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => CuentasContablesScreen(negocioId: widget.negocio.id, negocioNombre: widget.negocio.nombreComercial))),
