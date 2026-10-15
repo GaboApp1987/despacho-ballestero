@@ -7,6 +7,8 @@ import 'crear_producto.dart';
 import 'movimientos_producto.dart';
 import 'negocio.dart';
 import 'producto.dart';
+import 'produccion.dart';
+import 'restaurante_insumos.dart';
 import 'formato.dart';
 import 'actualizar_precios_screen.dart' show PantallaActualizarPrecios;
 import 'carga_productos.dart';
@@ -43,7 +45,7 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this)..addListener(() => setState(() {}));
+    _tabController = TabController(length: 4, vsync: this)..addListener(() => setState(() {}));
     // Escuchar cambios en el buscador para filtrar en tiempo real
     _searchCtrl.addListener(() {
       setState(() {
@@ -310,6 +312,8 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
           child: TabBar(
             key: GuiaInventario.pestanas,
             controller: _tabController,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
             indicatorColor: AppColors.primary,
             indicatorWeight: 2,
             indicatorSize: TabBarIndicatorSize.label,
@@ -320,6 +324,8 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
             tabs: const [
               Tab(height: 38, text: "Productos"),
               Tab(height: 38, text: "Categorías"),
+              Tab(height: 38, text: "Insumos y recetas"),
+              Tab(height: 38, text: "Producción"),
             ],
           ),
         ),
@@ -354,9 +360,11 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
         children: [
           _buildVistaProductos(),
           _buildListaCategorias(),
+          InsumosRecetas(negocio: widget.negocio),
+          ProduccionTab(negocio: widget.negocio),
         ],
       ),
-      floatingActionButton: (_cargando || _error != null)
+      floatingActionButton: (_cargando || _error != null || _tabController.index >= 2)
           ? null
           : FloatingActionButton.extended(
               key: GuiaInventario.nuevo,
