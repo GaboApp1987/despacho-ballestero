@@ -1,3 +1,4 @@
+import 'planilla_screen.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
@@ -20,6 +21,11 @@ class Empleado {
   final String telefono;
   final String usuario;
   final String? horaEntrada; // 'HH:MM' o null
+  // Planilla (planilla_screen.dart).
+  final double salario;
+  final String cedula;
+  final int hijos;
+  final bool conyuge;
 
   Empleado({
     required this.id,
@@ -31,6 +37,10 @@ class Empleado {
     this.telefono = '',
     this.usuario = '',
     this.horaEntrada,
+    this.salario = 0,
+    this.cedula = '',
+    this.hijos = 0,
+    this.conyuge = false,
   });
 
   factory Empleado.fromJson(Map<String, dynamic> json) {
@@ -44,6 +54,10 @@ class Empleado {
       telefono: json['telefono'] ?? '',
       usuario: json['usuario_login'] ?? '',
       horaEntrada: (json['hora_entrada'] as String?)?.substring(0, 5),
+      salario: double.tryParse(json['salario']?.toString() ?? '') ?? 0,
+      cedula: json['cedula'] ?? '',
+      hijos: json['hijos'] ?? 0,
+      conyuge: json['conyuge'] == true,
     );
   }
 }
@@ -139,6 +153,7 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
   List<Empleado> _empleados = [];
   Map<String, dynamic>? _resumen;
   int _periodo = 2;
+  bool _verPlanilla = false;
 
   List<(String, String)> get _permisos {
     final lista = _resumen?['permisos_disponibles'] as List?;
@@ -370,7 +385,7 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
     final angosto = MediaQuery.sizeOf(context).width < 600;
     return Scaffold(
       backgroundColor: AppColors.background,
-      floatingActionButton: angosto
+      floatingActionButton: angosto && !_verPlanilla
           ? FloatingActionButton.extended(
               onPressed: () => _formulario(),
               icon: const Icon(Icons.person_add_alt_1_outlined),
@@ -392,6 +407,7 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                 const Expanded(
                   child: Text('Colaboradores', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 ),
+                if (!_verPlanilla)
                 DropdownButton<int>(
                   value: _periodo,
                   underline: const SizedBox(),
@@ -401,7 +417,7 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                     _cargar();
                   },
                 ),
-                if (!angosto) ...[
+                if (!angosto && !_verPlanilla) ...[
                   const SizedBox(width: 12),
                   FilledButton.icon(
                     onPressed: () => _formulario(),
@@ -412,6 +428,24 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
               ],
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment(value: false, icon: Icon(Icons.groups_outlined), label: Text('Equipo')),
+                  ButtonSegment(value: true, icon: Icon(Icons.payments_outlined), label: Text('Planilla')),
+                ],
+                selected: {_verPlanilla},
+                onSelectionChanged: (v) {
+                  setState(() => _verPlanilla = v.first);
+                  if (!_verPlanilla) _cargar();
+                },
+              ),
+            ),
+          ),
+          if (_verPlanilla) Expanded(child: PlanillaTab(negocio: widget.negocio)) else
           Expanded(
             child: _cargando && _resumen == null
                 ? const Center(child: CircularProgressIndicator())
@@ -506,6 +540,12 @@ class _FormularioColaboradorState extends State<_FormularioColaborador> {
   late final _telefono = TextEditingController(text: widget.empleado?.telefono ?? '');
   final _usuario = TextEditingController();
   final _clave = TextEditingController();
+  late final _salario = TextEditingController(
+    text: (widget.empleado?.salario ?? 0) == 0 ? '' : formatearNumero(widget.empleado!.salario, decimales: 0),
+  );
+  late final _cedula = TextEditingController(text: widget.empleado?.cedula ?? '');
+  late int _hijos = widget.empleado?.hijos ?? 0;
+  late bool _conyuge = widget.empleado?.conyuge ?? false;
   late final _comision = TextEditingController(
     text: (widget.empleado?.comision ?? 0) == 0
         ? ''
@@ -526,7 +566,7 @@ class _FormularioColaboradorState extends State<_FormularioColaborador> {
 
   @override
   void dispose() {
-    for (final c in [_nombre, _telefono, _usuario, _clave, _comision]) {
+    for (final c in [_nombre, _telefono, _usuario, _clave, _comision, _salario, _cedula]) {
       c.dispose();
     }
     super.dispose();
@@ -555,6 +595,11 @@ class _FormularioColaboradorState extends State<_FormularioColaborador> {
             ]
           : <String>[],
       'comision': comision.toStringAsFixed(2),
+      'salario': (double.tryParse(_salario.text.trim().replaceAll('.', '').replaceAll(',', '.').replaceAll('₡', '')) ?? 0)
+          .toStringAsFixed(2),
+      'cedula': _cedula.text.trim(),
+      'hijos': _hijos,
+      'conyuge': _conyuge,
       'hora_entrada': _horaEntrada == null ? null : '${_dosDigitos(_horaEntrada!.hour)}:${_dosDigitos(_horaEntrada!.minute)}',
       if (nuevo) ...{'username': _usuario.text.trim(), 'password': _clave.text},
     };
@@ -650,7 +695,38 @@ class _FormularioColaboradorState extends State<_FormularioColaborador> {
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: _deco('Comisión sobre sus ventas (%)', ayuda: 'Opcional. Se calcula sobre lo vendido sin IVA, menos notas de crédito.'),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
+              const Text('Planilla', style: TextStyle(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              Row(children: [
+                Expanded(
+                  child: TextField(
+                    controller: _salario,
+                    keyboardType: TextInputType.number,
+                    decoration: _deco('Salario mensual bruto (₡)', ayuda: 'Vacío = no va en la planilla'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(child: TextField(controller: _cedula, decoration: _deco('Cédula'))),
+              ]),
+              const SizedBox(height: 4),
+              Row(children: [
+                const Expanded(child: Text('Hijos (crédito del impuesto)', style: TextStyle(fontSize: 13.5))),
+                IconButton(
+                  icon: const Icon(Icons.remove_circle_outline),
+                  onPressed: _hijos == 0 ? null : () => setState(() => _hijos--),
+                ),
+                Text('$_hijos', style: const TextStyle(fontWeight: FontWeight.w700)),
+                IconButton(icon: const Icon(Icons.add_circle_outline), onPressed: () => setState(() => _hijos++)),
+              ]),
+              SwitchListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                value: _conyuge,
+                onChanged: (v) => setState(() => _conyuge = v),
+                title: const Text('Cónyuge (crédito del impuesto)', style: TextStyle(fontSize: 13.5)),
+              ),
+              const SizedBox(height: 8),
               InputDecorator(
                 decoration: _deco(
                   'Hora de entrada',
