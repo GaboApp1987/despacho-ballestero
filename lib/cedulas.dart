@@ -289,7 +289,8 @@ class _HojaCedulasState extends State<_HojaCedulas> {
   }
 }
 
-/// Usuario y contraseña de la otra cédula (una sola vez).
+/// Vincular desde la app: usuario y contraseña de la otra cédula y, después,
+/// el código que le llega al correo de esa cédula.
 class _DialogoVincular extends StatefulWidget {
   const _DialogoVincular();
 
@@ -300,18 +301,22 @@ class _DialogoVincular extends StatefulWidget {
 class _DialogoVincularState extends State<_DialogoVincular> {
   final _usuario = TextEditingController();
   final _clave = TextEditingController();
+  final _codigo = TextEditingController();
   bool _enviando = false;
   bool _verClave = false;
   String? _error;
+  // Paso 2: correo (oculto) al que se mandó el código.
+  String? _correo;
 
   @override
   void dispose() {
     _usuario.dispose();
     _clave.dispose();
+    _codigo.dispose();
     super.dispose();
   }
 
-  Future<void> _enviar() async {
+  Future<void> _pedirCodigo() async {
     if (_usuario.text.trim().isEmpty || _clave.text.isEmpty) {
       setState(() => _error = "Escribí el usuario y la contraseña de la otra cédula.");
       return;
@@ -324,6 +329,35 @@ class _DialogoVincularState extends State<_DialogoVincular> {
       final r = ApiService.verificar(
         await ApiService.post('/cedulas/vincular/', {'username': _usuario.text.trim(), 'password': _clave.text}),
       );
+      final datos = json.decode(utf8.decode(r.bodyBytes));
+      if (mounted) {
+        setState(() {
+          _correo = datos['correo'];
+          _codigo.clear();
+          _enviando = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = ApiService.textoError(e);
+          _enviando = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _confirmar() async {
+    if (_codigo.text.trim().length < 6) {
+      setState(() => _error = "Escribí los 6 números del código.");
+      return;
+    }
+    setState(() {
+      _enviando = true;
+      _error = null;
+    });
+    try {
+      final r = ApiService.verificar(await ApiService.post('/cedulas/vincular/confirmar/', {'codigo': _codigo.text.trim()}));
       if (mounted) Navigator.pop(context, _desdeRespuesta(utf8.decode(r.bodyBytes)));
     } catch (e) {
       if (mounted) {
@@ -337,41 +371,68 @@ class _DialogoVincularState extends State<_DialogoVincular> {
 
   @override
   Widget build(BuildContext context) {
+    final paso2 = _correo != null;
     return AlertDialog(
-      title: const Text("Vincular otra cédula"),
+      title: Text(paso2 ? "Revisá el correo" : "Vincular otra cédula"),
       content: SizedBox(
         width: 400,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              "Escribí el usuario y la contraseña con que entrás a la otra cédula. Se piden solo esta vez: "
-              "después te cambiás con un toque. Cada cédula sigue con su propio plan y su cobro.",
-              style: TextStyle(color: AppColors.textMuted, fontSize: 13),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: _usuario,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: "Usuario de la otra cédula", border: OutlineInputBorder()),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _clave,
-              obscureText: !_verClave,
-              onSubmitted: (_) => _enviar(),
-              decoration: InputDecoration(
-                labelText: "Contraseña",
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  icon: Icon(_verClave ? Icons.visibility_off_outlined : Icons.visibility_outlined),
-                  onPressed: () => setState(() => _verClave = !_verClave),
+            if (!paso2) ...[
+              Text(
+                "Escribí el usuario y la contraseña con que entrás a la otra cédula. Después te mandamos un código "
+                "al correo de esa cédula para confirmar. Se hace una sola vez: luego te cambiás con un toque. "
+                "Cada cédula sigue con su propio plan y su cobro.",
+                style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _usuario,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: "Usuario de la otra cédula", border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _clave,
+                obscureText: !_verClave,
+                onSubmitted: (_) => _pedirCodigo(),
+                decoration: InputDecoration(
+                  labelText: "Contraseña",
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: Icon(_verClave ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                    onPressed: () => setState(() => _verClave = !_verClave),
+                  ),
                 ),
               ),
-            ),
+            ] else ...[
+              Text(
+                "Te mandamos un código de 6 números a $_correo (el correo de esa cédula). Vence en 15 minutos.",
+                style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _codigo,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 24, letterSpacing: 8, fontWeight: FontWeight.w700),
+                onSubmitted: (_) => _confirmar(),
+                decoration: const InputDecoration(counterText: '', hintText: '000000', border: OutlineInputBorder()),
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: _enviando ? null : _pedirCodigo,
+                  child: const Text("No me llegó, mandarlo de nuevo"),
+                ),
+              ),
+            ],
             if (_error != null) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 6),
               Text(_error!, style: const TextStyle(color: Colors.red)),
             ],
           ],
@@ -380,12 +441,161 @@ class _DialogoVincularState extends State<_DialogoVincular> {
       actions: [
         TextButton(onPressed: _enviando ? null : () => Navigator.pop(context), child: const Text("Cancelar")),
         FilledButton(
-          onPressed: _enviando ? null : _enviar,
+          onPressed: _enviando ? null : (paso2 ? _confirmar : _pedirCodigo),
           child: _enviando
               ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Text("Vincular"),
+              : Text(paso2 ? "Vincular" : "Mandar código"),
         ),
       ],
+    );
+  }
+}
+
+/// El administrador de la plataforma vincula cédulas desde la lista de
+/// negocios, sin contraseñas ni código (POST /cedulas/vincular-admin/).
+/// [negocios]: los que puede elegir para vincular con [negocioId].
+Future<void> abrirVincularCedulasAdmin(
+  BuildContext context, {
+  required int negocioId,
+  required String nombre,
+  required List<(int, String, String)> negocios, // (id, nombre, cédula)
+}) async {
+  await showDialog(
+    context: context,
+    builder: (_) => _DialogoVincularAdmin(negocioId: negocioId, nombre: nombre, negocios: negocios),
+  );
+}
+
+class _DialogoVincularAdmin extends StatefulWidget {
+  final int negocioId;
+  final String nombre;
+  final List<(int, String, String)> negocios;
+  const _DialogoVincularAdmin({required this.negocioId, required this.nombre, required this.negocios});
+
+  @override
+  State<_DialogoVincularAdmin> createState() => _DialogoVincularAdminState();
+}
+
+class _DialogoVincularAdminState extends State<_DialogoVincularAdmin> {
+  List<Cedula>? _cedulas;
+  String _buscar = '';
+  bool _enviando = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargar();
+  }
+
+  Future<void> _cargar() async {
+    try {
+      final r = ApiService.verificar(await ApiService.get('/cedulas/?negocio=${widget.negocioId}'));
+      if (mounted) setState(() => _cedulas = _desdeRespuesta(utf8.decode(r.bodyBytes)));
+    } catch (e) {
+      if (mounted) setState(() => _error = ApiService.textoError(e));
+    }
+  }
+
+  Future<void> _accion(Future<dynamic> Function() llamada) async {
+    setState(() {
+      _enviando = true;
+      _error = null;
+    });
+    try {
+      final r = ApiService.verificar(await llamada());
+      if (mounted) setState(() => _cedulas = _desdeRespuesta(utf8.decode(r.bodyBytes)));
+    } catch (e) {
+      if (mounted) setState(() => _error = ApiService.textoError(e));
+    } finally {
+      if (mounted) setState(() => _enviando = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cedulas = _cedulas ?? [];
+    final vinculados = {for (final c in cedulas) c.negocioId};
+    final q = _buscar.toLowerCase();
+    final opciones = [
+      for (final n in widget.negocios)
+        if (n.$1 != widget.negocioId && !vinculados.contains(n.$1) && q.isNotEmpty &&
+            (n.$2.toLowerCase().contains(q) || n.$3.contains(q)))
+          n,
+    ].take(6).toList();
+    return AlertDialog(
+      title: Text("Cédulas de ${widget.nombre}"),
+      content: SizedBox(
+        width: 440,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Las cédulas vinculadas usan el mismo usuario: el cliente escoge con cuál trabajar al entrar y se cambia "
+                "desde la barra de arriba. Cada una sigue con su propio plan y su cobro.",
+                style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              if (_cedulas == null && _error == null)
+                const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator()))
+              else if (cedulas.length < 2)
+                Text("Todavía no tiene otras cédulas vinculadas.", style: TextStyle(color: AppColors.textMuted))
+              else
+                for (final c in cedulas)
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: _avatar(c, radio: 18),
+                    title: Text(c.nombre, style: const TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: Text('${c.tipo} ${c.cedula}${c.actual ? ' · este negocio' : ''}'),
+                    trailing: TextButton(
+                      onPressed: _enviando
+                          ? null
+                          : () => _accion(() => ApiService.post('/cedulas/desvincular/', {'usuario_id': c.usuarioId, 'negocio': widget.negocioId})),
+                      child: const Text("Desvincular"),
+                    ),
+                  ),
+              const Divider(height: 24),
+              const Text("Vincular con otro negocio", style: TextStyle(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              TextField(
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.search),
+                  hintText: "Buscar por nombre o cédula",
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (v) => setState(() => _buscar = v.trim()),
+              ),
+              for (final n in opciones)
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(n.$2),
+                  subtitle: Text(n.$3),
+                  trailing: FilledButton.tonal(
+                    onPressed: _enviando
+                        ? null
+                        : () => _accion(() => ApiService.post('/cedulas/vincular-admin/', {'negocio': widget.negocioId, 'otro_negocio': n.$1})),
+                    child: const Text("Vincular"),
+                  ),
+                ),
+              if (q.isNotEmpty && opciones.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text("Ningún otro negocio coincide.", style: TextStyle(color: AppColors.textMuted)),
+                ),
+              if (_error != null) ...[
+                const SizedBox(height: 8),
+                Text(_error!, style: const TextStyle(color: Colors.red)),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cerrar"))],
     );
   }
 }

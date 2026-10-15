@@ -6,6 +6,7 @@ import 'api_service.dart';
 import 'avatar_logo.dart';
 import 'chats_contador_screen.dart';
 import 'cortesia_dialog.dart';
+import 'cedulas.dart';
 import 'dashboard_despacho_widgets.dart';
 import 'negocio.dart';
 import 'onvo_cobro_automatico_screen.dart';
@@ -943,6 +944,13 @@ class _NegociosScreenState extends State<NegociosScreen> {
     }
   }
 
+  Future<void> _vincularCedulas(Negocio negocio) => abrirVincularCedulasAdmin(
+        context,
+        negocioId: negocio.id,
+        nombre: negocio.nombreComercial,
+        negocios: [for (final n in _negocios) (n.id, n.nombreComercial, n.cedula)],
+      );
+
   Future<void> _regalarFacturas(Negocio negocio) async {
     if (await abrirCortesia(context, negocio)) _cargarNegocios();
   }
@@ -1581,6 +1589,12 @@ class _NegociosScreenState extends State<NegociosScreen> {
                                 ),
                               if (widget.esSuperusuario)
                                 IconButton(
+                                  icon: Icon(Icons.swap_horiz, color: esContador ? _PaletaContador.textoTenue : null),
+                                  tooltip: "Vincular cédulas (mismo usuario)",
+                                  onPressed: () => _vincularCedulas(n),
+                                ),
+                              if (widget.esSuperusuario)
+                                IconButton(
                                   icon: Icon(Icons.card_giftcard, color: Colors.pink.shade400),
                                   tooltip: "Regalar facturas o consultas de IA",
                                   onPressed: () => _regalarFacturas(n),
@@ -1622,6 +1636,8 @@ class _NegociosScreenState extends State<NegociosScreen> {
       if (_puedeReasignar)
         const PopupMenuItem(value: 'reasignar', child: ListTile(leading: Icon(Icons.swap_horiz), title: Text("Reasignar a otro contador"))),
       if (widget.esSuperusuario)
+        const PopupMenuItem(value: 'cedulas', child: ListTile(leading: Icon(Icons.swap_horiz), title: Text("Vincular cédulas"))),
+      if (widget.esSuperusuario)
         const PopupMenuItem(value: 'cortesia', child: ListTile(leading: Icon(Icons.card_giftcard), title: Text("Regalar facturas"))),
       if (widget.esSuperusuario)
         const PopupMenuItem(value: 'renta', child: ListTile(leading: Icon(Icons.payments_outlined), title: Text("Renta de la plataforma"))),
@@ -1640,6 +1656,8 @@ class _NegociosScreenState extends State<NegociosScreen> {
             _cambiarPlan(n);
           case 'reasignar':
             _reasignarNegocio(n);
+          case 'cedulas':
+            _vincularCedulas(n);
           case 'cortesia':
             _regalarFacturas(n);
           case 'renta':
