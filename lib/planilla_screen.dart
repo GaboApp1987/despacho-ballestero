@@ -1,3 +1,4 @@
+import 'planilla_extra.dart';
 import 'dart:convert';
 
 import 'package:excel/excel.dart' hide Border, TextSpan;
@@ -196,6 +197,16 @@ class _PlanillaTabState extends State<PlanillaTab> {
               onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AguinaldoScreen(negocio: widget.negocio))),
               icon: const Icon(Icons.card_giftcard_outlined),
               label: const Text('Aguinaldo'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => VacacionesScreen(negocio: widget.negocio))),
+              icon: const Icon(Icons.beach_access_outlined),
+              label: const Text('Vacaciones'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ReporteCCSSScreen(negocio: widget.negocio))),
+              icon: const Icon(Icons.description_outlined),
+              label: const Text('Reporte CCSS'),
             ),
             OutlinedButton.icon(
               onPressed: _riesgos,
@@ -569,7 +580,7 @@ class _PlanillaDetalleScreenState extends State<PlanillaDetalleScreen> {
                   children: [
                     if (_ocupado) const LinearProgressIndicator(minHeight: 2),
                     Text(
-                      '${_cerrada ? 'Cerrada' : 'Borrador: tocá a cada colaborador para agregar horas extra, bonos o deducciones'} · '
+                      '${_cerrada ? 'Cerrada${p['gasto_id'] != null ? ' y registrada como gasto "Planilla y CCSS"' : ''}' : 'Borrador: tocá a cada colaborador para agregar horas extra, bonos o deducciones'} · '
                       'del ${_corta(p['desde'])} al ${_corta(p['hasta'])}',
                       style: TextStyle(color: AppColors.textMuted, fontSize: 13),
                     ),
@@ -604,6 +615,8 @@ class _PlanillaDetalleScreenState extends State<PlanillaDetalleScreen> {
                                         if (_n(l['horas_extra']) + _n(l['horas_dobles']) > 0)
                                           '${_num(l['horas_extra'])}${_n(l['horas_dobles']) > 0 ? ' + ${_num(l['horas_dobles'])} dobles' : ''} h extra',
                                         if ((l['detalle_deducciones'] ?? '').toString().isNotEmpty) l['detalle_deducciones'],
+                                        if (l['jornada'] == 'parcial') 'Jornada parcial',
+                                        if (l['bmc_aplicada'] == true) 'CCSS sobre la base mínima',
                                       ].join(' · '),
                                       style: TextStyle(fontSize: 12, color: AppColors.textMuted),
                                     ),
@@ -634,9 +647,11 @@ class _PlanillaDetalleScreenState extends State<PlanillaDetalleScreen> {
                       ),
                     const SizedBox(height: 8),
                     Text(
-                      'CCSS 2026: trabajador 10,83 % y patrono 26,83 %. Impuesto al salario según el Decreto 45333-H '
-                      '(exento hasta ₡918.000), con crédito de ₡1.710 por hijo y ₡2.590 por cónyuge. En una quincena se '
-                      'proyecta el mes y se retiene la mitad. Hora extra = salario mensual / 240 x 1,5.',
+                      'CCSS: trabajador ${formatearNumero(_n(p['tasas']?['ccss_trabajador_pct']), decimales: 2)} % y patrono '
+                      '${formatearNumero(_n(p['tasas']?['ccss_patrono_pct']), decimales: 2)} %. Con jornada completa, SEM e IVM se cobran como '
+                      'mínimo sobre la base mínima contributiva (SEM ${formatearColones(_n(p['tasas']?['bmc_sem']), decimales: 0)}, IVM '
+                      '${formatearColones(_n(p['tasas']?['bmc_ivm']), decimales: 0)}). En una quincena se proyecta el mes para el impuesto y '
+                      'se retiene la mitad. Hora extra = salario mensual / 240 x 1,5. Al cerrar, el costo total queda como gasto.',
                       style: TextStyle(fontSize: 11.5, color: AppColors.textMuted),
                     ),
                   ],

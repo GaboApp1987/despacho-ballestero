@@ -1,3 +1,4 @@
+import 'planilla_extra.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -489,6 +490,11 @@ class _DespachosScreenState extends State<DespachosScreen> {
         ]),
         SeccionMenu("CONFIGURACIÓN", [
           EntradaMenu(icono: Icons.workspace_premium_outlined, etiqueta: "Planes de suscripción", onTap: _abrirPlanes),
+          EntradaMenu(
+            icono: Icons.percent,
+            etiqueta: "Tasas de planilla",
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TasasPlanillaScreen())),
+          ),
         ]),
       ],
       nombreCuenta: "Administrador",

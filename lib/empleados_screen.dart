@@ -26,6 +26,9 @@ class Empleado {
   final String cedula;
   final int hijos;
   final bool conyuge;
+  final String jornada;
+  final int diasVacaciones;
+  final DateTime? fechaIngreso;
 
   Empleado({
     required this.id,
@@ -41,6 +44,9 @@ class Empleado {
     this.cedula = '',
     this.hijos = 0,
     this.conyuge = false,
+    this.jornada = 'completa',
+    this.diasVacaciones = 12,
+    this.fechaIngreso,
   });
 
   factory Empleado.fromJson(Map<String, dynamic> json) {
@@ -58,6 +64,9 @@ class Empleado {
       cedula: json['cedula'] ?? '',
       hijos: json['hijos'] ?? 0,
       conyuge: json['conyuge'] == true,
+      jornada: json['jornada'] ?? 'completa',
+      diasVacaciones: json['dias_vacaciones'] ?? 12,
+      fechaIngreso: json['fecha_ingreso'] == null ? null : DateTime.tryParse(json['fecha_ingreso']),
     );
   }
 }
@@ -546,6 +555,9 @@ class _FormularioColaboradorState extends State<_FormularioColaborador> {
   late final _cedula = TextEditingController(text: widget.empleado?.cedula ?? '');
   late int _hijos = widget.empleado?.hijos ?? 0;
   late bool _conyuge = widget.empleado?.conyuge ?? false;
+  late String _jornada = widget.empleado?.jornada ?? 'completa';
+  late int _diasVacaciones = widget.empleado?.diasVacaciones ?? 12;
+  late DateTime? _fechaIngreso = widget.empleado?.fechaIngreso;
   late final _comision = TextEditingController(
     text: (widget.empleado?.comision ?? 0) == 0
         ? ''
@@ -600,6 +612,9 @@ class _FormularioColaboradorState extends State<_FormularioColaborador> {
       'cedula': _cedula.text.trim(),
       'hijos': _hijos,
       'conyuge': _conyuge,
+      'jornada': _jornada,
+      'dias_vacaciones': _diasVacaciones,
+      'fecha_ingreso': _fechaIngreso == null ? null : _fecha(_fechaIngreso!),
       'hora_entrada': _horaEntrada == null ? null : '${_dosDigitos(_horaEntrada!.hour)}:${_dosDigitos(_horaEntrada!.minute)}',
       if (nuevo) ...{'username': _usuario.text.trim(), 'password': _clave.text},
     };
@@ -726,6 +741,55 @@ class _FormularioColaboradorState extends State<_FormularioColaborador> {
                 onChanged: (v) => setState(() => _conyuge = v),
                 title: const Text('Cónyuge (crédito del impuesto)', style: TextStyle(fontSize: 13.5)),
               ),
+              const SizedBox(height: 6),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'completa', label: Text('Jornada completa')),
+                  ButtonSegment(value: 'parcial', label: Text('Jornada parcial')),
+                ],
+                selected: {_jornada},
+                onSelectionChanged: (v) => setState(() => _jornada = v.first),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 4, bottom: 8),
+                child: Text(
+                  _jornada == 'completa'
+                      ? 'La CCSS se cobra como mínimo sobre la base mínima contributiva.'
+                      : 'Parcial: la CCSS se calcula sobre lo que gana. Coordiná con la CCSS la base reducida.',
+                  style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                ),
+              ),
+              Row(children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () async {
+                      final d = await showDatePicker(
+                        context: context,
+                        initialDate: _fechaIngreso ?? DateTime.now(),
+                        firstDate: DateTime(1980),
+                        lastDate: DateTime.now(),
+                      );
+                      if (d != null) setState(() => _fechaIngreso = d);
+                    },
+                    child: InputDecorator(
+                      decoration: _deco('Fecha de ingreso', ayuda: 'Para vacaciones'),
+                      child: Text(_fechaIngreso == null
+                          ? 'Sin fecha'
+                          : '${_fechaIngreso!.day}/${_fechaIngreso!.month}/${_fechaIngreso!.year}'),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                SizedBox(
+                  width: 140,
+                  child: TextFormField(
+                    initialValue: '$_diasVacaciones',
+                    keyboardType: TextInputType.number,
+                    decoration: _deco('Vacaciones/año', ayuda: 'Días'),
+                    onChanged: (t) => _diasVacaciones = int.tryParse(t.trim()) ?? _diasVacaciones,
+                  ),
+                ),
+              ]),
               const SizedBox(height: 8),
               InputDecorator(
                 decoration: _deco(
