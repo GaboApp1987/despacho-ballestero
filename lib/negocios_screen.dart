@@ -1,3 +1,4 @@
+import 'modulos.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1589,6 +1590,12 @@ class _NegociosScreenState extends State<NegociosScreen> {
                                 ),
                               if (widget.esSuperusuario)
                                 IconButton(
+                                  icon: Icon(Icons.widgets_outlined, color: esContador ? _PaletaContador.textoTenue : null),
+                                  tooltip: "Módulos de este negocio",
+                                  onPressed: () => abrirModulosNegocio(context, negocioId: n.id, nombre: n.nombreComercial),
+                                ),
+                              if (widget.esSuperusuario)
+                                IconButton(
                                   icon: Icon(Icons.swap_horiz, color: esContador ? _PaletaContador.textoTenue : null),
                                   tooltip: "Vincular cédulas (mismo usuario)",
                                   onPressed: () => _vincularCedulas(n),
@@ -1636,6 +1643,8 @@ class _NegociosScreenState extends State<NegociosScreen> {
       if (_puedeReasignar)
         const PopupMenuItem(value: 'reasignar', child: ListTile(leading: Icon(Icons.swap_horiz), title: Text("Reasignar a otro contador"))),
       if (widget.esSuperusuario)
+        const PopupMenuItem(value: 'modulos', child: ListTile(leading: Icon(Icons.widgets_outlined), title: Text("Módulos"))),
+      if (widget.esSuperusuario)
         const PopupMenuItem(value: 'cedulas', child: ListTile(leading: Icon(Icons.swap_horiz), title: Text("Vincular cédulas"))),
       if (widget.esSuperusuario)
         const PopupMenuItem(value: 'cortesia', child: ListTile(leading: Icon(Icons.card_giftcard), title: Text("Regalar facturas"))),
@@ -1656,6 +1665,8 @@ class _NegociosScreenState extends State<NegociosScreen> {
             _cambiarPlan(n);
           case 'reasignar':
             _reasignarNegocio(n);
+          case 'modulos':
+            abrirModulosNegocio(context, negocioId: n.id, nombre: n.nombreComercial);
           case 'cedulas':
             _vincularCedulas(n);
           case 'cortesia':

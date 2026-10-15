@@ -776,6 +776,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
                         ),
                         secondary: const Icon(Icons.auto_mode_outlined),
                       ),
+                      if (widget.negocio.tieneModulo('restaurante'))
                       SwitchListTile(
                         value: _restauranteActivo,
                         onChanged: _guardandoRestaurante ? null : _cambiarRestaurante,
@@ -785,6 +786,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
                         ),
                         secondary: const Icon(Icons.restaurant_outlined),
                       ),
+                      if (widget.negocio.tieneModulo('prestamos'))
                       SwitchListTile(
                         value: _prestamosActivo,
                         onChanged: _guardandoPrestamos ? null : _cambiarPrestamos,
@@ -794,6 +796,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
                         ),
                         secondary: const Icon(Icons.handshake_outlined),
                       ),
+                      if (widget.negocio.tieneModulo('vehiculos'))
                       SwitchListTile(
                         value: _vehiculosActivo,
                         onChanged: _guardandoVehiculos ? null : _cambiarVehiculos,

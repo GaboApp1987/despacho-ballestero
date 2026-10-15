@@ -1,3 +1,4 @@
+import 'modulos.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -342,6 +343,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
           .where((m) => !_permisoPorSeccion.containsKey(m.id) || !PerfilSesion.sinPermiso('medida', _permisoPorSeccion[m.id]!))
           .toList();
     }
+    // Módulos que trae el plan (ver modulos.dart).
+    items = items.where((m) => !moduloPorSeccion.containsKey(m.id) || _negocioConCuota.tieneModulo(moduloPorSeccion[m.id]!)).toList();
     if (!_negocioConCuota.restauranteActivo) {
       items = items.where((m) => m.id != 21).toList();
     }

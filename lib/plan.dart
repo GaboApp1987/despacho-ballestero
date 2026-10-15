@@ -20,6 +20,8 @@ class Plan {
   final double? recargaPrecio;
   final int? recargaConsultasIa;
   final double? recargaConsultasIaPrecio;
+  /// Módulos que trae (gestion/modulos.py); null = todos.
+  final List<String>? modulos;
   final bool destacado;
   final int orden;
 
@@ -40,6 +42,7 @@ class Plan {
     this.recargaPrecio,
     this.recargaConsultasIa,
     this.recargaConsultasIaPrecio,
+    this.modulos,
     this.destacado = false,
     this.orden = 0,
   });
@@ -64,6 +67,7 @@ class Plan {
       recargaPrecio: _dec(json['recarga_precio']),
       recargaConsultasIa: json['recarga_consultas_ia'],
       recargaConsultasIaPrecio: _dec(json['recarga_consultas_ia_precio']),
+      modulos: json['modulos'] is List ? [for (final m in json['modulos']) m.toString()] : null,
       destacado: json['destacado'] ?? false,
       orden: json['orden'] ?? 0,
     );

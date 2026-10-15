@@ -86,6 +86,8 @@ class Negocio {
   // Módulo de préstamos (ventas a plazo y préstamos personales).
   final bool prestamosActivo;
   final bool vehiculosActivo;
+  /// Módulos que trae su plan (gestion/modulos.py); null = todos.
+  final List<String>? modulosActivos;
   final String regimen;
   final double? factorRtsRenta;
   final double? factorRtsIva13;
@@ -120,6 +122,7 @@ class Negocio {
     this.restauranteActivo = false,
     this.prestamosActivo = false,
     this.vehiculosActivo = false,
+    this.modulosActivos,
     this.regimen = 'tradicional',
     this.factorRtsRenta,
     this.factorRtsIva13,
@@ -170,6 +173,7 @@ class Negocio {
       restauranteActivo: json['restaurante_activo'] == true,
       prestamosActivo: json['prestamos_activo'] == true,
       vehiculosActivo: json['vehiculos_activo'] == true,
+      modulosActivos: json['modulos_activos'] is List ? [for (final m in json['modulos_activos']) m.toString()] : null,
       regimen: json['regimen'] ?? 'tradicional',
       factorRtsRenta: double.tryParse(json['factor_rts_renta']?.toString() ?? ''),
       factorRtsIva13: double.tryParse(json['factor_rts_iva_13']?.toString() ?? ''),
@@ -193,4 +197,6 @@ class Negocio {
       ultimoConsecutivoNotaCredito: json['ultimo_consecutivo_nota_credito'] ?? 0,
     );
   }
+
+  bool tieneModulo(String modulo) => modulosActivos == null || modulosActivos!.contains(modulo);
 }

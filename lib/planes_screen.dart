@@ -1,3 +1,4 @@
+import 'modulos.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
@@ -17,11 +18,15 @@ class PlanesScreen extends StatefulWidget {
 class _PlanesScreenState extends State<PlanesScreen> {
   bool _isLoading = true;
   List<Plan> _planes = [];
+  List<(String, String)> _catalogoModulos = [];
 
   @override
   void initState() {
     super.initState();
     _cargarPlanes();
+    cargarCatalogoModulos().then((c) {
+      if (mounted) setState(() => _catalogoModulos = c);
+    });
   }
 
   Future<void> _cargarPlanes() async {
@@ -69,6 +74,8 @@ class _PlanesScreenState extends State<PlanesScreen> {
     // Un plan que cobra el documento extra (ej. Empresa) no vende recarga de
     // documentos (ver Plan.paquetes_recarga en el backend).
     final cobraExtra = planExistente?.precioDocumentoExtra != null;
+    // Módulos del plan (modulos.dart); null = todos.
+    Set<String>? modulos = planExistente?.modulos?.toSet();
     bool activo = planExistente?.activo ?? true;
     bool guardando = false;
     // Vacío ya no quiere decir ilimitado: se guarda el mínimo. Ilimitado es
@@ -153,6 +160,25 @@ class _PlanesScreenState extends State<PlanesScreen> {
                     controller: descripcionCtrl,
                     decoration: const InputDecoration(labelText: "Descripción", border: OutlineInputBorder()),
                   ),
+                  const SizedBox(height: 14),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text("Módulos que trae", style: TextStyle(fontWeight: FontWeight.w700, color: Colors.grey.shade800)),
+                  ),
+                  const SizedBox(height: 2),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      "Dashboard, Clientes, Facturas y Ajustes los tienen todos los planes.",
+                      style: TextStyle(fontSize: 11.5, color: Colors.grey),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SelectorModulos(
+                    catalogo: _catalogoModulos,
+                    elegidos: modulos,
+                    onCambio: (v) => setStateDialog(() => modulos = v),
+                  ),
                   const SizedBox(height: 10),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
@@ -197,6 +223,7 @@ class _PlanesScreenState extends State<PlanesScreen> {
                         'recarga_precio': recargaDocs.$2,
                         'recarga_consultas_ia': recargaIa.$1,
                         'recarga_consultas_ia_precio': recargaIa.$2,
+                        'modulos': modulos?.toList(),
                         'precio_mensual': precioCtrl.text.trim(),
                         'descripcion': descripcionCtrl.text.trim(),
                         'activo': activo.toString(),
