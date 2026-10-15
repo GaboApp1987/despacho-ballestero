@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:url_launcher/url_launcher.dart';
 import 'theme/app_theme.dart';
+import 'widgets/aviso_hacienda.dart';
 import 'factura.dart';
 import 'export_service.dart';
 import 'formato.dart';
@@ -384,45 +384,7 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (factura.motivoRechazo != null && factura.motivoRechazo!.isNotEmpty) ...[
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: Colors.red.withOpacity(0.08),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: Colors.red.withOpacity(0.3)),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    const Icon(Icons.error_outline, color: Colors.red, size: 18),
-                                    const SizedBox(width: 6),
-                                    Expanded(
-                                      child: Text(
-                                        factura.estadoHacienda == '5' ? "Motivo del error" : "Motivo del rechazo",
-                                        style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 13),
-                                      ),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.copy, size: 18, color: Colors.red),
-                                      tooltip: "Copiar",
-                                      visualDensity: VisualDensity.compact,
-                                      onPressed: () {
-                                        Clipboard.setData(ClipboardData(text: factura.motivoRechazo!));
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text("Motivo copiado al portapapeles")),
-                                        );
-                                      },
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-                                SelectableText(factura.motivoRechazo!, style: const TextStyle(fontSize: 13, color: Colors.black87)),
-                              ],
-                            ),
-                          ),
+                          MotivoHacienda(motivo: factura.motivoRechazo!, esError: factura.estadoHacienda == '5'),
                           const SizedBox(height: 20),
                         ],
                         Row(
