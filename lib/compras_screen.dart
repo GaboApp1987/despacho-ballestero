@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'api_service.dart';
 import 'compra_model.dart';
 import 'formulario_compra.dart';
+import 'ordenes_compra.dart';
 import 'impuesto.dart';
 import 'importar_externo_dialog.dart';
 import 'negocio.dart';
@@ -546,6 +547,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
     final nombreCtrl = TextEditingController(text: proveedorExistente?.nombre ?? '');
     final cedulaCtrl = TextEditingController(text: proveedorExistente?.cedula ?? '');
     final correoCtrl = TextEditingController(text: proveedorExistente?.correo ?? '');
+    final telefonoCtrl = TextEditingController(text: proveedorExistente?.telefono ?? '');
     final senasCtrl = TextEditingController(text: proveedorExistente?.otrasSenas ?? '');
     String tipoCedula = proveedorExistente?.tipoCedula ?? '01';
     String regimen = proveedorExistente?.regimen ?? '';
@@ -588,6 +590,16 @@ class _ComprasScreenState extends State<ComprasScreen> {
                 TextField(
                   controller: correoCtrl,
                   decoration: const InputDecoration(labelText: "Correo (Opcional)", border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: telefonoCtrl,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: "Teléfono / WhatsApp (Opcional)",
+                    helperText: "Para mandarle las órdenes de compra",
+                    border: OutlineInputBorder(),
+                  ),
                 ),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
@@ -644,6 +656,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
                         'nombre': nombreCtrl.text.trim(),
                         'cedula_juridica': cedulaCtrl.text.trim(),
                         'correo': correoCtrl.text.trim(),
+                        'telefono': telefonoCtrl.text.trim(),
                         'tipo_cedula': tipoCedula,
                         'regimen': regimen,
                         'provincia': provincia ?? '',
@@ -712,7 +725,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
           title: Text(_modoSeleccion ? "${_comprasSeleccionadas.length} seleccionadas" : "Compras"),
@@ -756,6 +769,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
             tabs: const [
               Tab(icon: Icon(Icons.receipt_long), text: "Historial"),
               Tab(icon: Icon(Icons.local_shipping_outlined), text: "Proveedores"),
+              Tab(icon: Icon(Icons.assignment_outlined), text: "Órdenes"),
             ],
           ),
         ),
@@ -765,12 +779,15 @@ class _ComprasScreenState extends State<ComprasScreen> {
                 children: [
                   _buildHistorial(),
                   _buildProveedores(),
+                  OrdenesCompraTab(negocio: widget.negocio),
                 ],
               ),
         floatingActionButton: Builder(
           builder: (ctx) {
             if (_modoSeleccion) return const SizedBox.shrink();
             final tabIndex = DefaultTabController.of(ctx).index;
+            // Órdenes trae su propio botón.
+            if (tabIndex == 2) return const SizedBox.shrink();
             if (tabIndex == 1) {
               return FloatingActionButton.extended(
                 heroTag: 'fab_proveedores',

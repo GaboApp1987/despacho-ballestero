@@ -8,6 +8,7 @@ import 'api_service.dart';
 import 'compra_model.dart';
 import 'impuesto.dart';
 import 'negocio.dart';
+import 'ordenes_compra.dart';
 import 'recorridos.dart';
 import 'widgets/recorrido_guiado.dart';
 import 'producto.dart';
@@ -23,7 +24,9 @@ class FormularioCompra extends StatefulWidget {
   // de la lista de pendientes una vez que la compra se guarda de verdad.
   final Map<String, dynamic>? datosPrecarga;
   final int? correoId;
-  const FormularioCompra({super.key, required this.negocio, this.datosPrecarga, this.correoId});
+  // Abierta desde una orden de compra: queda ligada y precarga lo pendiente.
+  final int? ordenId;
+  const FormularioCompra({super.key, required this.negocio, this.datosPrecarga, this.correoId, this.ordenId});
 
   @override
   State<FormularioCompra> createState() => _FormularioCompraState();
@@ -39,6 +42,10 @@ class _FormularioCompraState extends State<FormularioCompra> {
 
   Proveedor? _proveedorSeleccionado;
   Producto? _productoSeleccionado;
+  // Órdenes de compra abiertas del negocio y la que esta factura cumple
+  // (ver ordenes_compra.dart): con ella se comparan cantidades y precios.
+  List<OrdenCompra> _ordenesAbiertas = [];
+  OrdenCompra? _orden;
   String _condicionCompra = "01"; // "01" = Contado, "02" = Crédito
   // Antes esta compra siempre se guardaba con la fecha de HOY, sin importar
   // que el XML/foto/factura del proveedor fuera de otro día -- ahora se
@@ -505,6 +512,7 @@ class _FormularioCompraState extends State<FormularioCompra> {
         ApiService.get('/productos/?negocio=${widget.negocio.id}'),
         ApiService.get('/impuestos/'),
         ApiService.get('/insumos/?negocio=${widget.negocio.id}'),
+        ApiService.get('/ordenes-compra/?negocio=${widget.negocio.id}&abiertas=true'),
       ]);
 
       if (responses[0].statusCode == 200 && responses[1].statusCode == 200) {
@@ -522,8 +530,19 @@ class _FormularioCompraState extends State<FormularioCompra> {
             if (responses[3].statusCode == 200) {
               _listaInsumos = [for (final j in json.decode(utf8.decode(responses[3].bodyBytes)) as List) InsumoCompra.fromJson(j)];
             }
+            if (responses[4].statusCode == 200) {
+              _ordenesAbiertas = [for (final j in json.decode(utf8.decode(responses[4].bodyBytes)) as List) OrdenCompra.fromJson(j)];
+            }
             _isLoading = false;
           });
+          final ordenInicial = _ordenesAbiertas.where((o) => o.id == widget.ordenId).firstOrNull;
+          if (ordenInicial != null) {
+            setState(() {
+              _proveedorSeleccionado = _listaProveedores.where((p) => p.id == ordenInicial.proveedorId).firstOrNull;
+              _orden = ordenInicial;
+            });
+            if (widget.datosPrecarga == null) _cargarPendientesDeOrden();
+          }
           ofrecerRecorrido(context, clave: GuiaCompra.clave, titulo: "se registra una compra", iniciar: () => GuiaCompra.mostrar(context));
           if (widget.datosPrecarga != null) {
             await _aplicarDatosParseados(widget.datosPrecarga!);
@@ -719,6 +738,43 @@ class _FormularioCompraState extends State<FormularioCompra> {
     );
   }
 
+  void _cargarPendientesDeOrden() {
+    if (_orden == null) return;
+    setState(() => _carritoCompra.addAll(lineasPendientesDeOrden(_orden!, _listaProductos, _listaInsumos)));
+  }
+
+  List<OrdenCompra> get _ordenesDelProveedor =>
+      _ordenesAbiertas.where((o) => o.proveedorId == _proveedorSeleccionado?.id).toList();
+
+  /// Si la factura no cuadra con la orden y se va a aceptar ante Hacienda,
+  /// se pregunta antes: una vez aceptada ya no se puede rechazar.
+  Future<bool> _confirmarDiferencias() async {
+    if (_orden == null || _claveHacienda == null || !_aceptarEnHacienda) return true;
+    final alertas = compararConOrden(_orden!, _carritoCompra).where((d) => d.alerta).toList();
+    if (alertas.isEmpty) return true;
+    final opcion = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("La factura no cuadra con la orden"),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            for (final d in alertas) Padding(padding: const EdgeInsets.only(bottom: 6), child: Text("• ${d.texto}")),
+            const SizedBox(height: 6),
+            const Text("Si la aceptás ante Hacienda ya no se puede rechazar. Podés guardarla sin responder y "
+                "aceptarla o rechazarla después desde el Historial."),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Revisar")),
+          TextButton(onPressed: () => Navigator.pop(ctx, 'sin'), child: const Text("Guardar sin responder")),
+          FilledButton(onPressed: () => Navigator.pop(ctx, 'aceptar'), child: const Text("Guardar y aceptar")),
+        ],
+      ),
+    );
+    if (opcion == 'sin') setState(() => _aceptarEnHacienda = false);
+    return opcion != null;
+  }
+
   double get _subtotal => _carritoCompra.fold(0.0, (s, l) => s + redondear2(l.subtotal));
   double get _iva => _carritoCompra.fold(0.0, (s, l) => s + redondear2(l.iva));
 
@@ -729,6 +785,7 @@ class _FormularioCompraState extends State<FormularioCompra> {
       );
       return;
     }
+    if (!await _confirmarDiferencias()) return;
 
     setState(() => _isSaving = true);
 
@@ -748,6 +805,7 @@ class _FormularioCompraState extends State<FormularioCompra> {
         'total_compra': redondear2(_subtotal + _iva),
         'detalles_compra': _carritoCompra.map((item) => item.toJson()).toList(),
         if (_claveHacienda != null) 'clave_hacienda': _claveHacienda,
+        if (_orden != null) 'orden_compra': _orden!.id,
       };
 
       final res = await ApiService.post('/compras/', body);
@@ -846,7 +904,10 @@ class _FormularioCompraState extends State<FormularioCompra> {
                         items: _listaProveedores
                             .map((p) => DropdownMenuItem(value: p, child: Text(p.nombre)))
                             .toList(),
-                        onChanged: (val) => setState(() => _proveedorSeleccionado = val),
+                        onChanged: (val) => setState(() {
+                          _proveedorSeleccionado = val;
+                          if (_orden?.proveedorId != val?.id) _orden = null;
+                        }),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -857,6 +918,24 @@ class _FormularioCompraState extends State<FormularioCompra> {
                     ),
                   ],
                 ),
+                if (_ordenesDelProveedor.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<int?>(
+                    value: _orden?.id,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: "Orden de compra",
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.assignment_outlined),
+                    ),
+                    items: [
+                      const DropdownMenuItem<int?>(value: null, child: Text("Sin orden")),
+                      for (final o in _ordenesDelProveedor)
+                        DropdownMenuItem<int?>(value: o.id, child: Text("${o.codigo} · ${formatearColones(o.total)} · ${textoEstadoOrden(o.estado)}")),
+                    ],
+                    onChanged: (id) => setState(() => _orden = _ordenesDelProveedor.where((o) => o.id == id).firstOrNull),
+                  ),
+                ],
                 const SizedBox(height: 10),
                 InkWell(
                   onTap: () async {
@@ -1034,6 +1113,18 @@ class _FormularioCompraState extends State<FormularioCompra> {
                       }
                     },
                   ),
+                ],
+                if (_orden != null) ...[
+                  const SizedBox(height: 10),
+                  if (_carritoCompra.isEmpty)
+                    OutlinedButton.icon(
+                      onPressed: _cargarPendientesDeOrden,
+                      icon: const Icon(Icons.playlist_add),
+                      label: Text("Cargar lo pendiente de ${_orden!.codigo}"),
+                      style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 45)),
+                    )
+                  else
+                    PanelDiferenciasOrden(orden: _orden!, diferencias: compararConOrden(_orden!, _carritoCompra)),
                 ],
                 const SizedBox(height: 10),
                 // El carrito iba en un Expanded/ListView aparte, con una

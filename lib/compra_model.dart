@@ -5,6 +5,7 @@ class Proveedor {
   final String nombre;
   final String? cedula;
   final String? correo;
+  final String telefono;
   // Para la Factura Electrónica de Compra (régimen simplificado).
   final String tipoCedula;
   final String regimen; // '', 'tradicional' o 'simplificado'
@@ -18,6 +19,7 @@ class Proveedor {
     required this.nombre,
     this.cedula,
     this.correo,
+    this.telefono = '',
     this.tipoCedula = '01',
     this.regimen = '',
     this.provincia = '',
@@ -34,6 +36,7 @@ class Proveedor {
       nombre: json['nombre'],
       cedula: json['cedula_juridica'],
       correo: json['correo'],
+      telefono: json['telefono'] ?? '',
       tipoCedula: json['tipo_cedula'] ?? '01',
       regimen: json['regimen'] ?? '',
       provincia: json['provincia'] ?? '',
