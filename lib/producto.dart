@@ -58,6 +58,8 @@ class Producto {
   final int? categoriaId;
   final String? nombreCategoria;
   final int stock;
+  // Avisar y sugerir pedirlo cuando quede esto o menos (0 = no avisar).
+  final int stockMinimo;
   final Impuesto? impuesto; // Usa la clase del archivo importado
   final String? imagenUrl;
   final List<PresentacionProducto> presentaciones;
@@ -79,6 +81,7 @@ class Producto {
     this.categoriaId,
     this.nombreCategoria,
     required this.stock,
+    this.stockMinimo = 0,
     this.impuesto,
     this.imagenUrl,
     this.presentaciones = const [],
@@ -98,6 +101,7 @@ class Producto {
       categoriaId: json['categoria'],
       nombreCategoria: json['nombre_categoria'],
       stock: json['stock'] ?? 0,
+      stockMinimo: json['stock_minimo'] ?? 0,
       // Mapeamos usando los datos que vienen de Django
       impuesto: json['impuesto_detalle'] != null
           ? Impuesto.fromJson(json['impuesto_detalle'])
@@ -123,6 +127,7 @@ class Producto {
       'margen_ganancia': margenGanancia,
       'categoria': categoriaId,
       'stock': stock,
+      'stock_minimo': stockMinimo,
       'tipo': tipo,
       'moneda_precio': monedaPrecio,
       if (impuesto != null) 'impuesto': impuesto!.id, // Si Impuesto tiene un campo 'id'

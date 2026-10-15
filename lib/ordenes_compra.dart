@@ -372,8 +372,8 @@ class _OrdenesCompraTabState extends State<OrdenesCompraTab> {
               child: ListTile(
                 leading: const Icon(Icons.inventory_2_outlined, color: Colors.orange),
                 title: Text(_sugerencias == 1
-                    ? "1 insumo está en su mínimo"
-                    : "$_sugerencias insumos están en su mínimo"),
+                    ? "1 producto o insumo está en su mínimo"
+                    : "$_sugerencias productos o insumos están en su mínimo"),
                 subtitle: const Text("Armá el pedido con lo que falta, ya agrupado por proveedor."),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => _abrir(SugerenciasCompraScreen(negocio: widget.negocio)),
@@ -1243,8 +1243,10 @@ class _SugerenciasCompraScreenState extends State<SugerenciasCompraScreen> {
         'items': [
           for (final s in elegidas)
             {
-              'insumo': s.datos['insumo'],
-              'cantidad': (_leer(s.cantidad.text) ?? 0).toStringAsFixed(3),
+              if (s.datos['producto'] != null) 'producto': s.datos['producto'] else 'insumo': s.datos['insumo'],
+              'cantidad': s.datos['producto'] != null
+                  ? (_leer(s.cantidad.text) ?? 0).round().toString()
+                  : (_leer(s.cantidad.text) ?? 0).toStringAsFixed(3),
               'proveedor': s.proveedorId,
               // El último precio solo sirve si es del mismo proveedor.
               'precio': s.proveedorId == s.datos['proveedor'] ? s.datos['precio'] : '0',
@@ -1282,10 +1284,10 @@ class _SugerenciasCompraScreenState extends State<SugerenciasCompraScreen> {
       body: _cargando
           ? const Center(child: CircularProgressIndicator())
           : _items.isEmpty
-              ? const Center(child: Text("Ningún insumo está en su mínimo."))
+              ? const Center(child: Text("Nada está en su mínimo."))
               : ListView(padding: const EdgeInsets.all(16), children: [
                   Text(
-                    "Estos insumos están en su mínimo o por debajo. La cantidad sugerida llega al doble del mínimo; "
+                    "Estos productos e insumos están en su mínimo o por debajo. La cantidad sugerida llega al doble del mínimo; "
                     "el proveedor es el de la última compra.",
                     style: TextStyle(color: AppColors.textMuted, fontSize: 12.5),
                   ),

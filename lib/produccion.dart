@@ -91,6 +91,31 @@ class _ProduccionTabState extends State<ProduccionTab> {
     }
   }
 
+  Future<void> _dejarDeProducir(Map<String, dynamic> p) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Dejar de producir por lotes"),
+        content: Text("Desde ahora, al vender ${p['nombre']} se rebajan otra vez los insumos de la receta. "
+            "Lo que quede producido sigue en existencia."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Volver")),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Cambiar")),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      final r = await ApiService.patch('/productos/${p['producto']}/', {'produccion_por_lote': false});
+      if (r.statusCode != 200) throw Exception(ApiService.mensajeError(r));
+      _cargar();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo cambiar: ${ApiService.textoError(e)}")));
+      }
+    }
+  }
+
   Future<void> _nuevoLote() async {
     if (_recetas.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -242,6 +267,20 @@ class _ProduccionTabState extends State<ProduccionTab> {
                   ),
                 ),
               ),
+          if (!_cargando && _recetas.any((p) => p['por_lote'] == true)) ...[
+            const SizedBox(height: 16),
+            Text("Se venden desde lo producido", style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 4),
+            Text("Al venderlos se rebaja el producto, no los insumos.",
+                style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+            for (final p in _recetas.where((p) => p['por_lote'] == true))
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.inventory_2_outlined),
+                title: Text(p['nombre'] ?? ''),
+                trailing: TextButton(onPressed: () => _dejarDeProducir(p), child: const Text("Dejar de producir")),
+              ),
+          ],
         ],
       ),
     );
@@ -261,6 +300,8 @@ class _DetalleLoteScreenState extends State<DetalleLoteScreen> {
   String? _error;
   bool _ocupado = false;
   final _producida = TextEditingController();
+  final _otros = TextEditingController();
+  final _detalleOtros = TextEditingController();
   final Map<int, TextEditingController> _reales = {};
 
   @override
@@ -272,6 +313,9 @@ class _DetalleLoteScreenState extends State<DetalleLoteScreen> {
   void _usar(Map<String, dynamic> lote) {
     _lote = lote;
     _producida.text = '${lote['cantidad_producida'] ?? lote['cantidad_planificada']}';
+    final otros = _num(lote['otros_costos']);
+    _otros.text = otros > 0 ? otros.toStringAsFixed(2) : '';
+    _detalleOtros.text = (lote['detalle_otros_costos'] ?? '').toString();
     _reales
       ..clear()
       ..addAll({
@@ -298,7 +342,7 @@ class _DetalleLoteScreenState extends State<DetalleLoteScreen> {
       final real = _leer(_reales[c['insumo']]?.text ?? '') ?? 0;
       total += real * _num(c['costo_actual']);
     }
-    return total;
+    return total + (_leer(_otros.text) ?? 0);
   }
 
   Future<void> _terminar() async {
@@ -337,6 +381,8 @@ class _DetalleLoteScreenState extends State<DetalleLoteScreen> {
     if (ok != true) return;
     await _accion('terminar', {
       'cantidad_producida': producida,
+      'otros_costos': (_leer(_otros.text) ?? 0).toStringAsFixed(2),
+      'detalle_otros_costos': _detalleOtros.text.trim(),
       'consumos': [
         for (final e in _reales.entries) {'insumo': e.key, 'cantidad_real': (_leer(e.value.text) ?? 0).toStringAsFixed(3)}
       ],
@@ -430,6 +476,9 @@ class _DetalleLoteScreenState extends State<DetalleLoteScreen> {
                     if (l['estado'] == 'terminada') ...[
                       const SizedBox(height: 10),
                       _dato("Costo del lote", formatearColones(_num(l['costo_total']))),
+                      if (_num(l['otros_costos']) > 0)
+                        _dato("  incluye ${(l['detalle_otros_costos'] ?? '').toString().isEmpty ? 'otros costos' : l['detalle_otros_costos']}",
+                            formatearColones(_num(l['otros_costos']))),
                       _dato("Costo por unidad", formatearColones(_num(l['costo_unitario']))),
                       if (l['tiene_asiento'] == true)
                         Text("Ya tiene su asiento contable.", style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
@@ -488,6 +537,31 @@ class _DetalleLoteScreenState extends State<DetalleLoteScreen> {
                     helperText: "Si salieron menos (merma del proceso), el costo por unidad sube.",
                     border: OutlineInputBorder(),
                   ),
+                ),
+                const SizedBox(height: 12),
+                Row(children: [
+                  SizedBox(
+                    width: 150,
+                    child: TextField(
+                      controller: _otros,
+                      onChanged: (_) => setState(() {}),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(labelText: "Otros costos", prefixText: "₡ ", border: OutlineInputBorder()),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: _detalleOtros,
+                      decoration: const InputDecoration(
+                          labelText: "De qué (opcional)", hintText: "Mano de obra, gas...", border: OutlineInputBorder()),
+                    ),
+                  ),
+                ]),
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, left: 4),
+                  child: Text("Lo que no es insumo y querés que forme parte del costo del producto.",
+                      style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
                 ),
                 const SizedBox(height: 12),
                 Builder(builder: (_) {

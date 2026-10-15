@@ -34,6 +34,7 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
   late TextEditingController _margenCtrl;
   late TextEditingController _precioCtrl;
   late TextEditingController _stockCtrl;
+  late TextEditingController _minimoCtrl;
 
   List<Categoria> _categorias = [];
   List<Impuesto> _impuestos = [];
@@ -66,6 +67,7 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
     _margenCtrl = TextEditingController(text: (p?.margenGanancia ?? 30).toStringAsFixed(0));
     _precioCtrl = TextEditingController(text: p != null ? p.precioUnitario.toString() : '');
     _stockCtrl = TextEditingController(text: p != null ? p.stock.toString() : '0');
+    _minimoCtrl = TextEditingController(text: p != null && p.stockMinimo > 0 ? p.stockMinimo.toString() : '');
     _categoriaSeleccionada = p?.categoriaId;
     // Una unidad válida que no está en la lista corta se respeta (antes se
     // cambiaba a "Unid" en silencio al editar el producto).
@@ -148,6 +150,7 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
     _margenCtrl.dispose();
     _precioCtrl.dispose();
     _stockCtrl.dispose();
+    _minimoCtrl.dispose();
     super.dispose();
   }
 
@@ -346,6 +349,7 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
       'costo': double.tryParse(_costoCtrl.text.replaceAll(',', '.').trim()) ?? 0,
       'margen_ganancia': double.tryParse(_margenCtrl.text.replaceAll(',', '.').trim()) ?? 30,
       'stock': int.tryParse(_stockCtrl.text.trim()) ?? 0,
+      'stock_minimo': int.tryParse(_minimoCtrl.text.trim()) ?? 0,
       'categoria': _categoriaSeleccionada,
       'impuesto': _impuestoSeleccionado?.id,
     };
@@ -680,6 +684,17 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _minimoCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: "Avisar cuando queden (opcional)",
+                  helperText: "Mínimo: en Compras › Órdenes se sugiere pedirlo",
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.notifications_active_outlined),
+                ),
               ),
               const SizedBox(height: 16),
 
