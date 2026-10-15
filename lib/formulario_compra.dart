@@ -33,7 +33,9 @@ class _FormularioCompraState extends State<FormularioCompra> {
   final TextEditingController _facturaProveedorController = TextEditingController();
   List<Proveedor> _listaProveedores = [];
   List<Producto> _listaProductos = [];
+  List<InsumoCompra> _listaInsumos = [];
   final List<LineaCompra> _carritoCompra = [];
+  InsumoCompra? _insumoSeleccionado;
 
   Proveedor? _proveedorSeleccionado;
   Producto? _productoSeleccionado;
@@ -243,13 +245,15 @@ class _FormularioCompraState extends State<FormularioCompra> {
             break;
           }
         }
-        if (producto != null) {
+        if (producto != null && (linea['cantidad'] as num) % 1 == 0) {
           final productoLinea = producto;
           setState(() {
             _carritoCompra.add(LineaCompra(
               producto: productoLinea,
-              cantidad: (linea['cantidad'] as num).toInt(),
+              cantidad: (linea['cantidad'] as num).toDouble(),
               precioCosto: redondear2((linea['precio_unitario'] as num) * tipoCambioAplicar),
+              tarifa: (linea['tarifa'] as num?)?.toDouble() ?? productoLinea.impuesto?.porcentaje,
+              descripcion: (linea['detalle'] ?? '').toString(),
             ));
           });
         } else if (mounted) {
@@ -272,10 +276,15 @@ class _FormularioCompraState extends State<FormularioCompra> {
   Future<void> _resolverLineaSinProducto(Map linea, {double tipoCambio = 1.0}) async {
     final cabys = linea['codigo_cabys'] as String? ?? '';
     final detalle = linea['detalle'] as String? ?? 'Producto sin nombre';
-    final cantidad = ((linea['cantidad'] as num?) ?? 1).toInt();
+    final cantidad = ((linea['cantidad'] as num?) ?? 1).toDouble();
     final precio = ((linea['precio_unitario'] as num?) ?? 0).toDouble() * tipoCambio;
     final tarifaLinea = (linea['tarifa'] as num?)?.toDouble();
 
+    // Materia prima (papa, aceite...) va como insumo: suma existencias con
+    // decimales y su costo promedio, sin digitarlo dos veces.
+    bool comoInsumo = cantidad % 1 != 0;
+    InsumoCompra? insumoExistente;
+    String unidadNueva = 'kg';
     Producto? productoExistente;
     final nombreCtrl = TextEditingController(text: detalle);
     final cabysCtrl = TextEditingController(text: cabys);
@@ -307,6 +316,46 @@ class _FormularioCompraState extends State<FormularioCompra> {
                   Text("CABYS del XML: ${cabys.isNotEmpty ? cabys : '(no incluido)'}",
                       style: const TextStyle(color: Colors.grey)),
                   const SizedBox(height: 10),
+                  SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment(value: false, label: Text("Producto (mercadería)")),
+                      ButtonSegment(value: true, label: Text("Insumo (materia prima)")),
+                    ],
+                    selected: {comoInsumo},
+                    onSelectionChanged: (v) => setStateDialog(() => comoInsumo = v.first),
+                  ),
+                  const SizedBox(height: 10),
+                  if (comoInsumo) ...[
+                    DropdownButtonFormField<InsumoCompra?>(
+                      value: insumoExistente,
+                      decoration: const InputDecoration(labelText: "Insumo", border: OutlineInputBorder()),
+                      items: [
+                        const DropdownMenuItem<InsumoCompra?>(value: null, child: Text("Crear insumo nuevo")),
+                        ..._listaInsumos.map((i) => DropdownMenuItem<InsumoCompra?>(value: i, child: Text("${i.nombre} (${i.unidadTexto})"))),
+                      ],
+                      onChanged: (v) => setStateDialog(() => insumoExistente = v),
+                    ),
+                    if (insumoExistente == null) ...[
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: nombreCtrl,
+                        decoration: const InputDecoration(labelText: "Nombre del insumo", border: OutlineInputBorder()),
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        value: unidadNueva,
+                        decoration: const InputDecoration(labelText: "Se mide en", border: OutlineInputBorder()),
+                        items: const [
+                          DropdownMenuItem(value: 'kg', child: Text('kg')),
+                          DropdownMenuItem(value: 'g', child: Text('g')),
+                          DropdownMenuItem(value: 'l', child: Text('litros')),
+                          DropdownMenuItem(value: 'ml', child: Text('ml')),
+                          DropdownMenuItem(value: 'unid', child: Text('unidades')),
+                        ],
+                        onChanged: (v) => setStateDialog(() => unidadNueva = v ?? 'kg'),
+                      ),
+                    ],
+                  ] else
                   DropdownButtonFormField<Producto?>(
                     value: productoExistente,
                     decoration: const InputDecoration(labelText: "Vincular a producto existente", border: OutlineInputBorder()),
@@ -316,7 +365,7 @@ class _FormularioCompraState extends State<FormularioCompra> {
                     ],
                     onChanged: (v) => setStateDialog(() => productoExistente = v),
                   ),
-                  if (productoExistente == null) ...[
+                  if (!comoInsumo && productoExistente == null) ...[
                     const Divider(height: 24),
                     TextField(
                       controller: nombreCtrl,
@@ -352,6 +401,41 @@ class _FormularioCompraState extends State<FormularioCompra> {
                   ? null
                   : () async {
                       setStateDialog(() => guardando = true);
+                      if (comoInsumo) {
+                        InsumoCompra? insumoFinal = insumoExistente;
+                        if (insumoFinal == null) {
+                          if (nombreCtrl.text.trim().isEmpty) {
+                            setStateDialog(() => guardando = false);
+                            return;
+                          }
+                          final res = await ApiService.post('/insumos/', {
+                            'negocio': widget.negocio.id,
+                            'nombre': nombreCtrl.text.trim(),
+                            'unidad': unidadNueva,
+                            'codigo_cabys': cabys,
+                          });
+                          if (res.statusCode != 201) {
+                            setStateDialog(() => guardando = false);
+                            if (ctx.mounted) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("No se pudo crear el insumo: ${ApiService.mensajeError(res)}")));
+                            }
+                            return;
+                          }
+                          insumoFinal = InsumoCompra.fromJson(json.decode(utf8.decode(res.bodyBytes)));
+                          setState(() => _listaInsumos.add(insumoFinal!));
+                        }
+                        setState(() {
+                          _carritoCompra.add(LineaCompra(
+                            insumo: insumoFinal,
+                            cantidad: cantidad,
+                            precioCosto: redondear2(double.tryParse(precioCtrl.text.trim()) ?? precio),
+                            tarifa: tarifaLinea,
+                            descripcion: detalle,
+                          ));
+                        });
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        return;
+                      }
                       Producto? productoFinal = productoExistente;
                       if (productoFinal == null) {
                         if (nombreCtrl.text.trim().isEmpty) {
@@ -383,8 +467,10 @@ class _FormularioCompraState extends State<FormularioCompra> {
                       setState(() {
                         _carritoCompra.add(LineaCompra(
                           producto: productoFinal!,
-                          cantidad: cantidad,
+                          cantidad: cantidad.roundToDouble(),
                           precioCosto: redondear2(double.tryParse(precioCtrl.text.trim()) ?? precio),
+                          tarifa: tarifaLinea ?? productoFinal.impuesto?.porcentaje,
+                          descripcion: detalle,
                         ));
                       });
                       if (ctx.mounted) Navigator.pop(ctx);
@@ -418,6 +504,7 @@ class _FormularioCompraState extends State<FormularioCompra> {
         ApiService.get('/proveedores/?negocio=${widget.negocio.id}'),
         ApiService.get('/productos/?negocio=${widget.negocio.id}'),
         ApiService.get('/impuestos/'),
+        ApiService.get('/insumos/?negocio=${widget.negocio.id}'),
       ]);
 
       if (responses[0].statusCode == 200 && responses[1].statusCode == 200) {
@@ -432,6 +519,9 @@ class _FormularioCompraState extends State<FormularioCompra> {
             _listaProveedores = proveedoresData.map((j) => Proveedor.fromJson(j)).toList();
             _listaProductos = productosData.map((j) => Producto.fromJson(j)).toList();
             _listaImpuestos = impuestosData.map((j) => Impuesto.fromJson(j)).toList();
+            if (responses[3].statusCode == 200) {
+              _listaInsumos = [for (final j in json.decode(utf8.decode(responses[3].bodyBytes)) as List) InsumoCompra.fromJson(j)];
+            }
             _isLoading = false;
           });
           ofrecerRecorrido(context, clave: GuiaCompra.clave, titulo: "se registra una compra", iniciar: () => GuiaCompra.mostrar(context));
@@ -510,13 +600,77 @@ class _FormularioCompraState extends State<FormularioCompra> {
     );
   }
 
+  /// Selector del % de IVA de una línea (13, 4, 2, 1, 0...).
+  Widget _selectorTarifa(double? tarifa, ValueChanged<double?> onCambio) {
+    final tarifas = {13.0, 4.0, 2.0, 1.0, 0.5, 0.0, if (tarifa != null) tarifa}.toList()..sort((a, b) => b.compareTo(a));
+    return DropdownButtonFormField<double?>(
+      value: tarifa,
+      decoration: const InputDecoration(labelText: "IVA de la línea"),
+      items: [
+        const DropdownMenuItem<double?>(value: null, child: Text("Sin IVA / no sé")),
+        for (final t in tarifas) DropdownMenuItem<double?>(value: t, child: Text("${formatearNumero(t, decimales: t % 1 == 0 ? 0 : 1)} %")),
+      ],
+      onChanged: onCambio,
+    );
+  }
+
+  void _agregarInsumoACompra(InsumoCompra insumo) {
+    final cantCtrl = TextEditingController(text: "1");
+    final costoCtrl = TextEditingController(text: insumo.costo > 0 ? insumo.costo.toStringAsFixed(2) : '');
+    double? tarifa = 13;
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setD) => AlertDialog(
+          title: Text("Compra de ${insumo.nombre}"),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(
+              controller: cantCtrl,
+              decoration: InputDecoration(labelText: "Cantidad (${insumo.unidadTexto})", helperText: "Con decimales, ej. 50,5"),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            ),
+            TextField(
+              controller: costoCtrl,
+              decoration: InputDecoration(labelText: "Costo por ${insumo.unidadTexto} sin IVA (₡)"),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            ),
+            _selectorTarifa(tarifa, (v) => setD(() => tarifa = v)),
+          ]),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                setState(() => _insumoSeleccionado = null);
+              },
+              child: const Text("Cancelar"),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final cantidad = double.tryParse(cantCtrl.text.replaceAll(',', '.')) ?? 0;
+                final costo = double.tryParse(costoCtrl.text.replaceAll(',', '.')) ?? 0;
+                if (cantidad <= 0) return;
+                setState(() {
+                  _carritoCompra.add(LineaCompra(insumo: insumo, cantidad: cantidad, precioCosto: costo, tarifa: tarifa));
+                  _insumoSeleccionado = null;
+                });
+                Navigator.pop(context);
+              },
+              child: const Text("Agregar"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _agregarProductoACompra(Producto prod) {
     final cantCtrl = TextEditingController(text: "1");
     final costoCtrl = TextEditingController(text: prod.precioUnitario.toString());
+    double? tarifa = prod.impuesto?.porcentaje;
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => StatefulBuilder(builder: (context, setD) => AlertDialog(
         title: Text("Ingreso de ${prod.nombre}"),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -528,9 +682,10 @@ class _FormularioCompraState extends State<FormularioCompra> {
             ),
             TextField(
               controller: costoCtrl,
-              decoration: const InputDecoration(labelText: "Precio de costo (₡)"),
+              decoration: const InputDecoration(labelText: "Precio de costo sin IVA (₡)"),
               keyboardType: TextInputType.number,
             ),
+            _selectorTarifa(tarifa, (v) => setD(() => tarifa = v)),
           ],
         ),
         actions: [
@@ -544,13 +699,14 @@ class _FormularioCompraState extends State<FormularioCompra> {
           ElevatedButton(
             onPressed: () {
               final cantidad = int.tryParse(cantCtrl.text) ?? 1;
-              final costo = double.tryParse(costoCtrl.text) ?? prod.precioUnitario;
+              final costo = double.tryParse(costoCtrl.text.replaceAll(',', '.')) ?? prod.precioUnitario;
 
               setState(() {
                 _carritoCompra.add(LineaCompra(
                   producto: prod,
-                  cantidad: cantidad,
+                  cantidad: cantidad.toDouble(),
                   precioCosto: costo,
+                  tarifa: tarifa,
                 ));
                 _productoSeleccionado = null;
               });
@@ -559,9 +715,12 @@ class _FormularioCompraState extends State<FormularioCompra> {
             child: const Text("Aumentar Inventario"),
           )
         ],
-      ),
+      )),
     );
   }
+
+  double get _subtotal => _carritoCompra.fold(0.0, (s, l) => s + redondear2(l.subtotal));
+  double get _iva => _carritoCompra.fold(0.0, (s, l) => s + redondear2(l.iva));
 
   Future<void> _guardarCompra() async {
     if (_proveedorSeleccionado == null || _carritoCompra.isEmpty) {
@@ -582,12 +741,12 @@ class _FormularioCompraState extends State<FormularioCompra> {
         'fecha_compra': "${_fecha.year}-${_fecha.month.toString().padLeft(2, '0')}-${_fecha.day.toString().padLeft(2, '0')}",
         'moneda': _moneda,
         'tipo_cambio': double.tryParse(_tipoCambioController.text.trim().replaceAll(',', '.')) ?? 1.0,
-        'total_compra': redondear2(_carritoCompra.fold(0.0, (sum, item) => sum + item.subtotal)),
-        'detalles_compra': _carritoCompra.map((item) => {
-          'producto': item.producto.id,
-          'cantidad': item.cantidad,
-          'precio_costo': redondear2(item.precioCosto),
-        }).toList(),
+        // Total = lo que se le debe o se le pagó al proveedor, con IVA (el
+        // IVA va aparte como crédito fiscal en el asiento).
+        'subtotal_compra': redondear2(_subtotal),
+        'iva_compra': redondear2(_iva),
+        'total_compra': redondear2(_subtotal + _iva),
+        'detalles_compra': _carritoCompra.map((item) => item.toJson()).toList(),
         if (_claveHacienda != null) 'clave_hacienda': _claveHacienda,
       };
 
@@ -645,6 +804,14 @@ class _FormularioCompraState extends State<FormularioCompra> {
       if (mounted) setState(() => _isSaving = false);
     }
   }
+
+  Widget _filaTotal(String texto, double monto, {bool fuerte = false}) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(children: [
+      Expanded(child: Text(texto, style: TextStyle(fontWeight: fuerte ? FontWeight.w800 : FontWeight.normal))),
+      Text(formatearColones(monto), style: TextStyle(fontWeight: fuerte ? FontWeight.w800 : FontWeight.w600)),
+    ]),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -722,6 +889,7 @@ class _FormularioCompraState extends State<FormularioCompra> {
                 DropdownButtonFormField<String>(
                   key: GuiaCompra.condicion,
                   value: _condicionCompra,
+                  isExpanded: true,
                   decoration: InputDecoration(
                     labelText: "Condición",
                     isDense: true,
@@ -849,6 +1017,24 @@ class _FormularioCompraState extends State<FormularioCompra> {
                     }
                   },
                 ),
+                if (_listaInsumos.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<InsumoCompra>(
+                    value: _insumoSeleccionado,
+                    decoration: const InputDecoration(
+                      labelText: "Agregar insumo (materia prima)",
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.kitchen_outlined),
+                    ),
+                    items: _listaInsumos.map((i) => DropdownMenuItem(value: i, child: Text("${i.nombre} (${i.unidadTexto})"))).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() => _insumoSeleccionado = val);
+                        _agregarInsumoACompra(val);
+                      }
+                    },
+                  ),
+                ],
                 const SizedBox(height: 10),
                 // El carrito iba en un Expanded/ListView aparte, con una
                 // altura fija sobrante debajo de todo este encabezado -- al
@@ -863,10 +1049,15 @@ class _FormularioCompraState extends State<FormularioCompra> {
                   itemCount: _carritoCompra.length,
                   itemBuilder: (context, i) {
                     final item = _carritoCompra[i];
+                    final unidad = item.insumo != null ? item.insumo!.unidadTexto : 'unid.';
                     return ListTile(
-                      leading: Icon(Icons.arrow_upward, color: AppColors.primary),
-                      title: Text(item.producto.nombre),
-                      subtitle: Text("Entran: ${formatearNumero(item.cantidad, decimales: 0)} unidades | Costo: ${formatearColones(item.precioCosto)}"),
+                      leading: Icon(item.insumo != null ? Icons.kitchen_outlined : Icons.arrow_upward, color: AppColors.primary),
+                      title: Text(item.nombre),
+                      subtitle: Text(
+                        "Entran: ${formatearNumero(item.cantidad, decimales: item.cantidad % 1 == 0 ? 0 : 3)} $unidad · "
+                        "Costo: ${formatearColones(item.precioCosto)} · "
+                        "${item.tarifa == null ? 'sin IVA' : 'IVA ${formatearNumero(item.tarifa!, decimales: item.tarifa! % 1 == 0 ? 0 : 1)} %'}",
+                      ),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete),
                         onPressed: () => setState(() => _carritoCompra.removeAt(i)),
@@ -879,6 +1070,16 @@ class _FormularioCompraState extends State<FormularioCompra> {
               ),
             ),
           ),
+          if (_carritoCompra.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+              decoration: BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
+              child: Column(children: [
+                _filaTotal("Subtotal", _subtotal),
+                _filaTotal("IVA (crédito fiscal)", _iva),
+                _filaTotal("Total de la factura", _subtotal + _iva, fuerte: true),
+              ]),
+            ),
           if (_claveHacienda != null)
             CheckboxListTile(
               key: GuiaCompra.aceptar,

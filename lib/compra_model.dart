@@ -44,23 +44,64 @@ class Proveedor {
   }
 }
 
+/// Insumo (materia prima) para elegir en una compra (ver
+/// restaurante_insumos.dart y gestion/compras_inventario.py).
+class InsumoCompra {
+  final int id;
+  final String nombre;
+  final String unidad;
+  final double costo;
+
+  InsumoCompra({required this.id, required this.nombre, required this.unidad, this.costo = 0});
+
+  factory InsumoCompra.fromJson(Map<String, dynamic> j) => InsumoCompra(
+    id: j['id'],
+    nombre: j['nombre'] ?? '',
+    unidad: j['unidad'] ?? 'kg',
+    costo: double.tryParse(j['costo_unitario']?.toString() ?? '') ?? 0,
+  );
+
+  String get unidadTexto => const {'l': 'L', 'unid': 'unid.'}[unidad] ?? unidad;
+}
+
+/// Una línea de la compra: un producto (unidades enteras) o un insumo (con
+/// decimales). [precioCosto] es el precio unitario SIN IVA y [tarifa] el %
+/// de IVA de la línea (el del XML del proveedor o el del producto).
 class LineaCompra {
-  final Producto producto;
-  int cantidad;
+  final Producto? producto;
+  final InsumoCompra? insumo;
+  double cantidad;
   double precioCosto;
+  double? tarifa;
+  String descripcion;
 
   LineaCompra({
-    required this.producto,
+    this.producto,
+    this.insumo,
     required this.cantidad,
     required this.precioCosto,
-  });
+    this.tarifa,
+    this.descripcion = '',
+  }) : assert((producto == null) != (insumo == null));
 
+  String get nombre => insumo?.nombre ?? producto!.nombre;
   double get subtotal => cantidad * precioCosto;
+  double get iva => tarifa == null ? 0 : subtotal * tarifa! / 100;
+
+  Map<String, dynamic> toJson() => {
+    if (producto != null) 'producto': producto!.id,
+    if (insumo != null) 'insumo': insumo!.id,
+    'cantidad': insumo != null ? cantidad.toStringAsFixed(3) : cantidad.round(),
+    'precio_costo': (precioCosto * 100).round() / 100,
+    if (tarifa != null) 'tarifa_iva': tarifa,
+    if (tarifa != null) 'monto_iva': (iva * 100).round() / 100,
+    if (descripcion.isNotEmpty) 'descripcion': descripcion,
+  };
 }
 
 class DetalleCompraItem {
   final String nombreProducto;
-  final int cantidad;
+  final double cantidad; // con decimales si es un insumo (kg, L)
   final double precioCosto;
   // IVA estimado de esta línea y la tarifa usada (según el impuesto
   // asignado al producto) -- null si el producto no tiene impuesto
@@ -81,7 +122,7 @@ class DetalleCompraItem {
   factory DetalleCompraItem.fromJson(Map<String, dynamic> json) {
     return DetalleCompraItem(
       nombreProducto: json['nombre_producto'] ?? '',
-      cantidad: json['cantidad'] ?? 0,
+      cantidad: double.tryParse(json['cantidad']?.toString() ?? '') ?? 0,
       precioCosto: double.tryParse(json['precio_costo'].toString()) ?? 0,
       montoIva: json['monto_iva'] != null ? double.tryParse(json['monto_iva'].toString()) : null,
       tarifa: json['tarifa'] != null ? double.tryParse(json['tarifa'].toString()) : null,
