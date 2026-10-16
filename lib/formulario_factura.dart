@@ -154,6 +154,10 @@ class _FormularioFacturaState extends State<FormularioFactura> {
   ActividadEconomica? _actividadSeleccionada;
 
   Cliente? _clienteSeleccionado;
+  final _clienteCtrl = TextEditingController();
+  final _clienteFoco = FocusNode();
+
+  String _textoCliente(Cliente c) => c.cedula.isNotEmpty ? "${c.nombre} · ${c.cedula}" : c.nombre;
   bool _isLoading = true;
   bool _isSaving = false;
 
@@ -262,6 +266,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
       _plazoCreditoController.text = '${p.plazoCredito}';
       _clienteSeleccionado = _listaClientes.where((c) => c.id == p.clienteId).firstOrNull ??
           _listaClientes.where((c) => c.cedula.isNotEmpty && c.cedula == p.receptorCedula).firstOrNull;
+      _clienteCtrl.text = _clienteSeleccionado == null ? '' : _textoCliente(_clienteSeleccionado!);
       _actividadSeleccionada = _actividades.where((a) => a.codigoActividad == p.codigoActividad).firstOrNull;
       _carrito.clear();
       for (final d in p.detalles) {
@@ -347,6 +352,8 @@ class _FormularioFacturaState extends State<FormularioFactura> {
   @override
   void dispose() {
     _consecutivoController.dispose();
+    _clienteCtrl.dispose();
+    _clienteFoco.dispose();
     _plazoCreditoController.dispose();
     _busquedaCtrl.dispose();
     _tipoCambioController.dispose();
@@ -370,7 +377,8 @@ class _FormularioFacturaState extends State<FormularioFactura> {
 
         if (mounted) {
           setState(() {
-            _listaClientes = clientesData.map((j) => Cliente.fromJson(j)).toList();
+            _listaClientes = clientesData.map((j) => Cliente.fromJson(j)).toList()
+              ..sort((a, b) => a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()));
             _listaProductos = productosData.map((j) => Producto.fromJson(j)).toList();
             _actividades = actividadesData.map((j) => ActividadEconomica.fromJson(j)).toList();
             _isLoading = false;
@@ -1413,23 +1421,56 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                 ),
               ],
               const SizedBox(height: 12),
-              DropdownButtonFormField<Cliente>(
+              // Buscador en vez de lista: filtra por nombre o cédula mientras se escribe.
+              Autocomplete<Cliente>(
                 key: GuiaFactura.cliente,
-                value: _clienteSeleccionado,
-                decoration: InputDecoration(
-                  labelText: _esTiquete ? "Cliente (opcional)" : "Cliente *",
-                  isDense: true,
-                  prefixIcon: const Icon(Icons.person_outline, size: 20),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                items: _listaClientes.map((c) => DropdownMenuItem(value: c, child: Text(c.nombre, overflow: TextOverflow.ellipsis))).toList(),
-                onChanged: (v) {
+                textEditingController: _clienteCtrl,
+                focusNode: _clienteFoco,
+                displayStringForOption: _textoCliente,
+                optionsMaxHeight: 320,
+                optionsBuilder: (v) {
+                  final b = v.text.trim().toLowerCase();
+                  if (_clienteSeleccionado != null && v.text == _textoCliente(_clienteSeleccionado!)) return _listaClientes;
+                  return _listaClientes.where((c) => b.isEmpty || c.nombre.toLowerCase().contains(b) || c.cedula.contains(b));
+                },
+                onSelected: (c) {
                   setState(() {
-                    _clienteSeleccionado = v;
+                    _clienteSeleccionado = c;
                     _ultimoPrecioPorProducto = {};
                   });
-                  if (v != null) _cargarUltimosPreciosDe(v);
+                  _cargarUltimosPreciosDe(c);
                 },
+                fieldViewBuilder: (ctx, ctrl, foco, alEnviar) => TextField(
+                  controller: ctrl,
+                  focusNode: foco,
+                  onChanged: (texto) {
+                    // Si se cambia el texto, el cliente elegido deja de valer.
+                    if (_clienteSeleccionado != null && texto != _textoCliente(_clienteSeleccionado!)) {
+                      setState(() {
+                        _clienteSeleccionado = null;
+                        _ultimoPrecioPorProducto = {};
+                      });
+                    }
+                  },
+                  decoration: InputDecoration(
+                    labelText: _esTiquete ? "Cliente (opcional)" : "Cliente *",
+                    hintText: "Buscar por nombre o cédula",
+                    isDense: true,
+                    prefixIcon: const Icon(Icons.person_search_outlined, size: 20),
+                    suffixIcon: ctrl.text.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.clear, size: 18),
+                            tooltip: "Quitar cliente",
+                            onPressed: () => setState(() {
+                              ctrl.clear();
+                              _clienteSeleccionado = null;
+                              _ultimoPrecioPorProducto = {};
+                            }),
+                          ),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
               ),
               if (_esTiquete) ...[
                 const SizedBox(height: 4),
