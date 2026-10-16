@@ -429,8 +429,53 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
 
   Future<void> _enviarEnlacePassword() async {
     setState(() => _enviandoEnlace = true);
+    Map<String, dynamic> opciones;
     try {
-      final r = await ApiService.post('/recuperar-password/enviar-enlace/', {'negocio': widget.negocioId});
+      final r = await ApiService.get('/recuperar-password/enviar-enlace/?negocio=${widget.negocioId}');
+      opciones = json.decode(utf8.decode(r.bodyBytes));
+      if (r.statusCode != 200) throw Exception(opciones['detail'] ?? 'No se pudo preparar el enlace');
+    } catch (e) {
+      if (mounted) {
+        setState(() => _enviandoEnlace = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
+      }
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _enviandoEnlace = false);
+    final correo = (opciones['correo'] ?? '').toString();
+    final whatsapp = (opciones['whatsapp'] ?? '').toString();
+    final whatsappListo = opciones['whatsapp_disponible'] == true;
+    final canal = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text("¿Cómo se lo mandamos?"),
+        children: [
+          ListTile(
+            leading: const Icon(Icons.email_outlined),
+            title: const Text("Por correo"),
+            subtitle: Text(correo.isNotEmpty ? correo : "El negocio no tiene correo registrado"),
+            enabled: correo.isNotEmpty,
+            onTap: () => Navigator.pop(ctx, 'correo'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.chat_outlined),
+            title: const Text("Por WhatsApp"),
+            subtitle: Text(!whatsappListo
+                ? "Todavía no está disponible"
+                : whatsapp.isNotEmpty
+                    ? whatsapp
+                    : "Sin WhatsApp vinculado ni número en Ajustes"),
+            enabled: whatsappListo && whatsapp.isNotEmpty,
+            onTap: () => Navigator.pop(ctx, 'whatsapp'),
+          ),
+        ],
+      ),
+    );
+    if (canal == null || !mounted) return;
+    setState(() => _enviandoEnlace = true);
+    try {
+      final r = await ApiService.post('/recuperar-password/enviar-enlace/', {'negocio': widget.negocioId, 'canal': canal});
       final data = json.decode(utf8.decode(r.bodyBytes));
       if (r.statusCode != 200) throw Exception(data['detail'] ?? 'No se pudo enviar el enlace');
       if (mounted) {
@@ -458,7 +503,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
           Text("Contraseña de ${widget.nombre}", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
           const Text(
-            "Le mandamos al correo del negocio un enlace para que escoja su contraseña nueva. Vos no la ves. "
+            "Le mandamos al negocio, por correo o WhatsApp, un enlace para que escoja su contraseña nueva. Vos no la ves. "
             "Tu contraseña de contador la cambiás desde tu propio perfil.",
             style: TextStyle(fontSize: 13, color: Colors.grey),
           ),
