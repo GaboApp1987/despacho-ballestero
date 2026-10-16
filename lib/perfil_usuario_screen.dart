@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'theme/app_theme.dart';
 
 import 'api_service.dart';
+import 'perfil_sesion.dart';
 import 'avatar_logo.dart';
 import 'firmante_contador.dart';
 import 'login.dart';
@@ -419,6 +420,63 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
     }
   }
 
+  // El contador adentro de un cliente: la contraseña de abajo sería la
+  // SUYA, no la del negocio. En vez de eso le manda al negocio un enlace
+  // para que escoja la suya (backend: recuperar-password/enviar-enlace/).
+  bool get _cuentaAjena => widget.negocioId != null && PerfilSesion.rol != 'negocio';
+  bool _enviandoEnlace = false;
+
+  Future<void> _enviarEnlacePassword() async {
+    setState(() => _enviandoEnlace = true);
+    try {
+      final r = await ApiService.post('/recuperar-password/enviar-enlace/', {'negocio': widget.negocioId});
+      final data = json.decode(utf8.decode(r.bodyBytes));
+      if (r.statusCode != 200) throw Exception(data['detail'] ?? 'No se pudo enviar el enlace');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['detail'].toString()), backgroundColor: Colors.green));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
+    } finally {
+      if (mounted) setState(() => _enviandoEnlace = false);
+    }
+  }
+
+  Widget _tarjetaEnlacePassword() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _colorSuperficie,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _colorBorde),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("Contraseña de ${widget.nombre}", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 10),
+          const Text(
+            "Le mandamos al correo del negocio un enlace para que escoja su contraseña nueva. Vos no la ves. "
+            "Tu contraseña de contador la cambiás desde tu propio perfil.",
+            style: TextStyle(fontSize: 13, color: Colors.grey),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _enviandoEnlace ? null : _enviarEnlacePassword,
+              icon: _enviandoEnlace
+                  ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.mark_email_read_outlined),
+              label: const Text("Enviarle enlace para cambiar contraseña"),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _vincularWhatsApp() async {
     setState(() => _whatsappCargando = true);
     try {
@@ -561,6 +619,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
               ),
             ),
             const SizedBox(height: 20),
+            if (_cuentaAjena) _tarjetaEnlacePassword() else
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
