@@ -98,6 +98,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
     } else {
       _cargandoDatosCpa = false;
     }
+    _cargarInvitacion();
   }
 
   @override
@@ -477,6 +478,71 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
     );
   }
 
+  // Invitación por WhatsApp (backend: whatsapp/invitar/): Equilibra le
+  // escribe al número de Ajustes y queda vinculado con el botón "Activar
+  // asistente", sin copiar ningún código.
+  bool _invitacionDisponible = false;
+  String _telefonoRegistrado = '';
+
+  Map<String, dynamic> get _cuerpoNegocio => {if (widget.negocioId != null) 'negocio': widget.negocioId};
+
+  Future<void> _cargarInvitacion() async {
+    try {
+      final r = await ApiService.get('/whatsapp/invitar/${widget.negocioId != null ? '?negocio=${widget.negocioId}' : ''}');
+      if (r.statusCode != 200 || !mounted) return;
+      final data = json.decode(utf8.decode(r.bodyBytes));
+      setState(() {
+        _invitacionDisponible = data['disponible'] == true;
+        _telefonoRegistrado = (data['telefono_registrado'] ?? '').toString();
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _invitarWhatsApp({String? telefono}) async {
+    setState(() => _whatsappCargando = true);
+    try {
+      final r = await ApiService.post('/whatsapp/invitar/', {..._cuerpoNegocio, if (telefono != null) 'telefono': telefono});
+      final data = json.decode(utf8.decode(r.bodyBytes));
+      if (r.statusCode != 200) throw Exception(data['detail'] ?? 'No se pudo mandar la invitación');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['detail'].toString()), backgroundColor: Colors.green, duration: const Duration(seconds: 6)),
+        );
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
+    } finally {
+      if (mounted) setState(() => _whatsappCargando = false);
+    }
+  }
+
+  Future<void> _invitarOtroNumero() async {
+    final ctrl = TextEditingController();
+    final telefono = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("¿A qué número?"),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          keyboardType: TextInputType.phone,
+          decoration: const InputDecoration(
+            labelText: "WhatsApp",
+            hintText: "8888-7777",
+            helperText: "8 dígitos en Costa Rica, o con el código de país.",
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text("Enviar invitación")),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    if (telefono != null && telefono.isNotEmpty) await _invitarWhatsApp(telefono: telefono);
+  }
+
   Future<void> _vincularWhatsApp() async {
     setState(() => _whatsappCargando = true);
     try {
@@ -723,16 +789,52 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                       style: const TextStyle(fontSize: 13, color: Colors.grey),
                     ),
                     const SizedBox(height: 14),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: _whatsappCargando ? null : _vincularWhatsApp,
-                        icon: _whatsappCargando
-                            ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                            : const Icon(Icons.link),
-                        label: const Text("Vincular WhatsApp"),
+                    if (_invitacionDisponible) ...[
+                      if (_telefonoRegistrado.isNotEmpty)
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: _whatsappCargando ? null : () => _invitarWhatsApp(),
+                            icon: const Icon(Icons.send_to_mobile),
+                            label: Text(_cuentaAjena
+                                ? "Enviarle la invitación al $_telefonoRegistrado"
+                                : "Enviarme la invitación al $_telefonoRegistrado"),
+                          ),
+                        )
+                      else
+                        const Text(
+                          "Guardá el número de WhatsApp en Ajustes para mandar la invitación con un toque, o escribilo abajo.",
+                          style: TextStyle(fontSize: 12.5, color: Colors.grey),
+                        ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        "Le llega un mensaje del asistente con el botón \"Activar asistente\": con tocarlo queda vinculado.",
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
                       ),
-                    ),
+                      Wrap(
+                        spacing: 4,
+                        children: [
+                          TextButton(
+                            onPressed: _whatsappCargando ? null : _invitarOtroNumero,
+                            child: const Text("A otro número"),
+                          ),
+                          TextButton(
+                            onPressed: _whatsappCargando ? null : _vincularWhatsApp,
+                            child: const Text("Vincular con código"),
+                          ),
+                        ],
+                      ),
+                    ] else
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _whatsappCargando ? null : _vincularWhatsApp,
+                          icon: _whatsappCargando
+                              ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.link),
+                          label: const Text("Vincular WhatsApp"),
+                        ),
+                      ),
                   ] else if (_whatsappResultado!['telefono'] != null) ...[
                     Row(
                       children: [
