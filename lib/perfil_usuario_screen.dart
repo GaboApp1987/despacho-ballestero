@@ -18,6 +18,9 @@ class PerfilUsuarioScreen extends StatefulWidget {
   final String logoEndpoint; // ej: '/despachos/1/', '/socios/3/', '/negocios/5/'
   final String? logoUrlInicial;
   final bool esContador;
+  // Perfil de un negocio: el WhatsApp se vincula a la cuenta de ESE negocio
+  // (aunque entre su contador), no a la de quien está logueado.
+  final int? negocioId;
 
   const PerfilUsuarioScreen({
     super.key,
@@ -26,6 +29,7 @@ class PerfilUsuarioScreen extends StatefulWidget {
     required this.logoEndpoint,
     this.logoUrlInicial,
     this.esContador = false,
+    this.negocioId,
   });
 
   @override
@@ -418,7 +422,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
   Future<void> _vincularWhatsApp() async {
     setState(() => _whatsappCargando = true);
     try {
-      final response = await ApiService.post('/whatsapp/generar-codigo/', {});
+      final response = await ApiService.post('/whatsapp/generar-codigo/', {if (widget.negocioId != null) 'negocio': widget.negocioId});
       final data = json.decode(utf8.decode(response.bodyBytes));
       if (response.statusCode == 200) {
         setState(() => _whatsappResultado = data);
@@ -453,7 +457,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
     if (confirmar != true) return;
     setState(() => _whatsappCargando = true);
     try {
-      final response = await ApiService.post('/whatsapp/desvincular/', {});
+      final response = await ApiService.post('/whatsapp/desvincular/', {if (widget.negocioId != null) 'negocio': widget.negocioId});
       if (response.statusCode != 200) throw Exception(ApiService.mensajeError(response));
       if (!mounted) return;
       setState(() => _whatsappResultado = null);
@@ -653,9 +657,11 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                   ),
                   const SizedBox(height: 10),
                   if (_whatsappResultado == null) ...[
-                    const Text(
-                      "Vinculá tu WhatsApp para recibir avisos y consultarle cosas al asistente directamente desde ahí.",
-                      style: TextStyle(fontSize: 13, color: Colors.grey),
+                    Text(
+                      widget.negocioId != null
+                          ? "Vinculá el WhatsApp de ${widget.nombre}: desde ese número el asistente atiende como este negocio (facturas, cotizaciones, clientes...)."
+                          : "Vinculá tu WhatsApp para recibir avisos y consultarle cosas al asistente directamente desde ahí.",
+                      style: const TextStyle(fontSize: 13, color: Colors.grey),
                     ),
                     const SizedBox(height: 14),
                     SizedBox(

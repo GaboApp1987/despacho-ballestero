@@ -1442,6 +1442,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
                 subtitulo: "Negocio",
                 logoEndpoint: '/negocios/${widget.negocio.id}/',
                 logoUrlInicial: _negocioConCuota.logoUrl,
+                negocioId: widget.negocio.id,
               ),
             ),
           );
