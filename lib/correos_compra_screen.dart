@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import 'api_service.dart';
+import 'compras_screen.dart';
 import 'negocio.dart';
 import 'formulario_compra.dart';
 
@@ -22,6 +23,9 @@ class _CorreosCompraScreenState extends State<CorreosCompraScreen> {
   bool _cargando = true;
   List<dynamic> _correos = [];
   bool _soloPendientes = false;
+  // "Aceptar seleccionadas": las pendientes marcadas (ver aceptarCorreosEnLote).
+  final Set<int> _seleccionados = {};
+  String? _progresoLote;
 
   @override
   void initState() {
@@ -36,7 +40,12 @@ class _CorreosCompraScreenState extends State<CorreosCompraScreen> {
       final res = await ApiService.get('/correos-compra-recibidos/?negocio=${widget.negocio.id}$query');
       if (res.statusCode == 200) {
         final data = json.decode(utf8.decode(res.bodyBytes)) as List;
-        if (mounted) setState(() => _correos = data);
+        if (mounted) {
+          setState(() {
+            _correos = data;
+            _seleccionados.removeWhere((id) => !data.any((c) => c['id'] == id && _esPendiente(c)));
+          });
+        }
       }
     } catch (_) {
     } finally {
@@ -83,6 +92,21 @@ class _CorreosCompraScreenState extends State<CorreosCompraScreen> {
     }
   }
 
+  bool _esPendiente(Map correo) => correo['compra'] == null && correoAceptable(correo);
+
+  Future<void> _aceptarSeleccionados() async {
+    await aceptarCorreosEnLote(
+      context,
+      negocioId: widget.negocio.id,
+      correos: _correos.where((c) => _seleccionados.contains(c['id'])).toList(),
+      onProgreso: (p) => setState(() {
+        _progresoLote = p;
+        if (p == null) _seleccionados.clear();
+      }),
+      recargar: _cargar,
+    );
+  }
+
   ({IconData icono, Color color, String texto}) _estado(Map correo) {
     final tieneError = (correo['error'] ?? '').toString().isNotEmpty;
     final confirmado = correo['compra'] != null;
@@ -125,7 +149,39 @@ class _CorreosCompraScreenState extends State<CorreosCompraScreen> {
             "(${widget.negocio.cedula}@facturas.equilibracr.com). Revisalas para confirmarlas como compra.",
             style: const TextStyle(fontSize: 12.5, color: Colors.grey),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
+          if (_correos.any((c) => _esPendiente(c)))
+            Row(
+              children: [
+                TextButton(
+                  onPressed: _progresoLote != null
+                      ? null
+                      : () => setState(() {
+                            final pendientes = _correos.where((c) => _esPendiente(c)).map<int>((c) => c['id'] as int);
+                            if (pendientes.every(_seleccionados.contains)) {
+                              _seleccionados.clear();
+                            } else {
+                              _seleccionados.addAll(pendientes);
+                            }
+                          }),
+                  child: Text(_correos.where((c) => _esPendiente(c)).every((c) => _seleccionados.contains(c['id']))
+                      ? "Quitar selección"
+                      : "Seleccionar todas las pendientes"),
+                ),
+                const Spacer(),
+                if (_progresoLote != null) ...[
+                  const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                  const SizedBox(width: 10),
+                  Text(_progresoLote!),
+                ] else if (_seleccionados.isNotEmpty)
+                  ElevatedButton.icon(
+                    onPressed: _aceptarSeleccionados,
+                    icon: const Icon(Icons.done_all),
+                    label: Text("Aceptar seleccionadas (${_seleccionados.length})"),
+                  ),
+              ],
+            ),
+          const SizedBox(height: 4),
           Expanded(
             child: _cargando
                 ? const Center(child: CircularProgressIndicator())
@@ -141,7 +197,16 @@ class _CorreosCompraScreenState extends State<CorreosCompraScreen> {
                           return Card(
                             margin: const EdgeInsets.only(bottom: 8),
                             child: ListTile(
-                              leading: Icon(estado.icono, color: estado.color),
+                              leading: _esPendiente(correo)
+                                  ? Checkbox(
+                                      value: _seleccionados.contains(correo['id']),
+                                      onChanged: _progresoLote != null
+                                          ? null
+                                          : (v) => setState(() => v == true
+                                              ? _seleccionados.add(correo['id'] as int)
+                                              : _seleccionados.remove(correo['id'])),
+                                    )
+                                  : Icon(estado.icono, color: estado.color),
                               title: Text(correo['remitente']?.toString().isNotEmpty == true ? correo['remitente'].toString() : "Remitente desconocido"),
                               subtitle: Text(
                                 [
