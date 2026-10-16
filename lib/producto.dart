@@ -60,6 +60,9 @@ class Producto {
   final int stock;
   // Avisar y sugerir pedirlo cuando quede esto o menos (0 = no avisar).
   final int stockMinimo;
+  // false = oculto: está en facturas/compras (no se puede borrar) pero no
+  // se quiere ver más. Solo sale en Inventario con "Ver ocultos".
+  final bool activo;
   final Impuesto? impuesto; // Usa la clase del archivo importado
   final String? imagenUrl;
   final List<PresentacionProducto> presentaciones;
@@ -82,6 +85,7 @@ class Producto {
     this.nombreCategoria,
     required this.stock,
     this.stockMinimo = 0,
+    this.activo = true,
     this.impuesto,
     this.imagenUrl,
     this.presentaciones = const [],
@@ -102,6 +106,7 @@ class Producto {
       nombreCategoria: json['nombre_categoria'],
       stock: json['stock'] ?? 0,
       stockMinimo: json['stock_minimo'] ?? 0,
+      activo: json['activo'] ?? true,
       // Mapeamos usando los datos que vienen de Django
       impuesto: json['impuesto_detalle'] != null
           ? Impuesto.fromJson(json['impuesto_detalle'])
@@ -128,6 +133,7 @@ class Producto {
       'categoria': categoriaId,
       'stock': stock,
       'stock_minimo': stockMinimo,
+      'activo': activo,
       'tipo': tipo,
       'moneda_precio': monedaPrecio,
       if (impuesto != null) 'impuesto': impuesto!.id, // Si Impuesto tiene un campo 'id'

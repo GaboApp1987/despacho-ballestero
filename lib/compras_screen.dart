@@ -357,7 +357,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
                   ],
                   const SizedBox(height: 12),
                   const Text(
-                    "Las que no se puedan aceptar (otra moneda, montos que no cuadran, otra cédula) quedan por revisar con el motivo.",
+                    "Las que no se puedan aceptar (dólares sin tipo de cambio, montos que no cuadran, otra cédula) quedan por revisar con el motivo.",
                     style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                 ],

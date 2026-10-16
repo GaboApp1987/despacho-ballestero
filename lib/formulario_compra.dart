@@ -76,6 +76,22 @@ class _FormularioCompraState extends State<FormularioCompra> {
   // editable por si el que trae el XML/foto no es el que se quiere usar.
   String _moneda = 'CRC';
   final TextEditingController _tipoCambioController = TextEditingController(text: '1.00');
+  // De dónde salió el tipo de cambio de una factura en dólares: 'factura'
+  // (el que trae el comprobante, el que vale) o 'bccr' (no lo traía, se
+  // usó el del día). null = no vino de un comprobante.
+  String? _origenTipoCambio;
+
+  /// El usuario cambió el tipo de cambio: las líneas que vinieron de la
+  /// factura en dólares se recalculan en colones con el nuevo.
+  void _recalcularConTipoCambio(String texto) {
+    final tc = double.tryParse(texto.trim().replaceAll(',', '.'));
+    if (tc == null || tc <= 0) return;
+    setState(() {
+      for (final l in _carritoCompra) {
+        if (l.precioDolares != null) l.precioCosto = redondear2(l.precioDolares! * tc);
+      }
+    });
+  }
 
   Future<double> _obtenerTipoCambioDelDia() async {
     try {
@@ -185,8 +201,10 @@ class _FormularioCompraState extends State<FormularioCompra> {
       double tipoCambioAplicar = 1.0;
       if ((datos['moneda'] as String?)?.toUpperCase() == 'USD') {
         final tcExtraido = (datos['tipo_cambio'] as num?)?.toDouble();
-        tipoCambioAplicar = (tcExtraido != null && tcExtraido > 0) ? tcExtraido : await _obtenerTipoCambioDelDia();
+        final traeTipoCambio = tcExtraido != null && tcExtraido > 0;
+        tipoCambioAplicar = traeTipoCambio ? tcExtraido : await _obtenerTipoCambioDelDia();
         setState(() {
+          _origenTipoCambio = traeTipoCambio ? 'factura' : 'bccr';
           _moneda = 'USD';
           _tipoCambioController.text = tipoCambioAplicar.toStringAsFixed(2);
         });
@@ -265,6 +283,13 @@ class _FormularioCompraState extends State<FormularioCompra> {
           });
         } else if (mounted) {
           await _resolverLineaSinProducto(linea, tipoCambio: tipoCambioAplicar);
+        }
+      }
+      // Se recuerda el precio en dólares de lo que vino en la factura, para
+      // recalcular si después se corrige el tipo de cambio.
+      if (_moneda == 'USD' && tipoCambioAplicar > 0) {
+        for (final l in _carritoCompra) {
+          l.precioDolares ??= l.precioCosto / tipoCambioAplicar;
         }
       }
     } catch (e) {
@@ -1060,6 +1085,7 @@ class _FormularioCompraState extends State<FormularioCompra> {
                       Expanded(
                         child: TextField(
                           controller: _tipoCambioController,
+                          onChanged: _recalcularConTipoCambio,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           decoration: InputDecoration(
                             labelText: "Tipo de cambio",
@@ -1074,9 +1100,18 @@ class _FormularioCompraState extends State<FormularioCompra> {
                 if (_moneda == 'USD') ...[
                   const SizedBox(height: 6),
                   Text(
-                    "Los precios de las líneas siguen en colones -- este dato es solo para llevar registro "
-                    "de que la factura del proveedor venía en dólares y a qué tipo de cambio.",
-                    style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                    switch (_origenTipoCambio) {
+                      'factura' => "Tipo de cambio que indica la factura del proveedor. Los precios de las líneas "
+                          "están en colones con este tipo de cambio; si lo corregís, se recalculan.",
+                      'bccr' => "La factura no indica el tipo de cambio: se usó el del día (BCCR). Ponés el que "
+                          "corresponda y los precios de las líneas se recalculan.",
+                      _ => "Los precios de las líneas van en colones -- este dato es para llevar registro "
+                          "de que la factura del proveedor venía en dólares y a qué tipo de cambio.",
+                    },
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: _origenTipoCambio == 'bccr' ? Colors.orange[800] : Colors.grey[600],
+                    ),
                   ),
                 ],
                 const SizedBox(height: 10),

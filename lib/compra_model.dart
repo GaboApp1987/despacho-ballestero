@@ -79,6 +79,9 @@ class LineaCompra {
   double? tarifa;
   String descripcion;
   String codigoCabys;
+  // Precio unitario en dólares si la línea vino de una factura en dólares:
+  // al cambiar el tipo de cambio, precioCosto se recalcula desde acá.
+  double? precioDolares;
 
   LineaCompra({
     this.producto,

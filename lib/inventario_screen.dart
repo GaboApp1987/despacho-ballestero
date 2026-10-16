@@ -32,6 +32,8 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
   // Controlador para el buscador
   final TextEditingController _searchCtrl = TextEditingController();
   String _filtro = "";
+  // Mostrar también los productos ocultos (ver _ocultarProducto).
+  bool _verOcultos = false;
 
   // Antes "Crear Nuevo Producto"/"Actualizar Precios"/"Cargar Productos
   // Masivamente"/"Crear Nueva Categoría" eran botones enteros apilados
@@ -70,7 +72,7 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
     });
 
     try {
-      final resProd = await ApiService.get('/productos/?negocio=${widget.negocio.id}');
+      final resProd = await ApiService.get('/productos/?negocio=${widget.negocio.id}${_verOcultos ? '&incluir_ocultos=true' : ''}');
       final resCat = await ApiService.get('/categorias/?negocio=${widget.negocio.id}');
 
       if (resProd.statusCode == 200 && resCat.statusCode == 200) {
@@ -216,6 +218,25 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
     });
   }
 
+  /// Oculta (activo=false) o vuelve a mostrar un producto.
+  Future<void> _cambiarVisible(Producto producto, bool visible) async {
+    try {
+      ApiService.verificar(await ApiService.patch('/productos/${producto.id}/', {'activo': visible}));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(visible ? "\"${producto.nombre}\" se muestra de nuevo" : "\"${producto.nombre}\" quedó oculto"),
+        backgroundColor: Colors.green,
+      ));
+      _cargarDatos();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("No se pudo cambiar: ${ApiService.textoError(e)}"), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   void _eliminarProducto(Producto producto) {
     Future.microtask(() async {
       if (!mounted) return;
@@ -251,10 +272,29 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
           }
         } else {
           String mensaje = "No se pudo eliminar el producto.";
+          bool puedeOcultar = false;
           try {
             final data = json.decode(utf8.decode(response.bodyBytes));
             if (data is Map && data['detail'] != null) mensaje = data['detail'];
+            puedeOcultar = data is Map && data['puede_ocultar'] == true;
           } catch (_) {}
+          // Ya está en facturas o compras: no se puede borrar, se ofrece ocultarlo.
+          if (puedeOcultar && mounted && producto.activo) {
+            final ocultar = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text("No se puede borrar"),
+                content: Text("$mensaje\n\nOculto no aparece en el inventario, al facturar ni en las compras. "
+                    "Lo podés volver a mostrar con \"Ver ocultos\"."),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
+                  ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Ocultar")),
+                ],
+              ),
+            );
+            if (ocultar == true) await _cambiarVisible(producto, false);
+            return;
+          }
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(mensaje), backgroundColor: Colors.red),
@@ -415,7 +455,16 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 4),
+              IconButton(
+                tooltip: _verOcultos ? "Esconder los ocultos" : "Ver ocultos",
+                icon: Icon(_verOcultos ? Icons.visibility : Icons.visibility_off_outlined,
+                    color: _verOcultos ? AppColors.primary : AppColors.textMuted),
+                onPressed: () {
+                  setState(() => _verOcultos = !_verOcultos);
+                  _cargarDatos();
+                },
+              ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
@@ -469,7 +518,12 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
                         : Icon(Icons.inventory_2_outlined, color: AppColors.primary, size: 20),
                   ),
                 ),
-                title: Text(p.nombre, style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                title: Text(
+                  p.activo ? p.nombre : "${p.nombre} (oculto)",
+                  style: TextStyle(fontWeight: FontWeight.bold, color: p.activo ? null : AppColors.textMuted),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 subtitle: Text(
                   "${p.monedaPrecio == 'USD' ? formatearDolares(p.precioUnitario) : formatearColones(p.precioUnitario)} · ${p.nombreCategoria ?? 'Sin Categoría'}",
                   maxLines: 1,
@@ -509,15 +563,18 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
                               MaterialPageRoute(builder: (context) => MovimientosProductoScreen(producto: p)),
                             );
                           });
+                        } else if (valor == 'ocultar') {
+                          _cambiarVisible(p, !p.activo);
                         } else if (valor == 'eliminar') {
                           _eliminarProducto(p);
                         }
                       },
-                      itemBuilder: (context) => const [
-                        PopupMenuItem(value: 'editar', child: Text("Editar producto")),
-                        PopupMenuItem(value: 'stock', child: Text("Editar solo stock")),
-                        PopupMenuItem(value: 'movimientos', child: Text("Movimientos")),
-                        PopupMenuItem(value: 'eliminar', child: Text("Eliminar")),
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(value: 'editar', child: Text("Editar producto")),
+                        const PopupMenuItem(value: 'stock', child: Text("Editar solo stock")),
+                        const PopupMenuItem(value: 'movimientos', child: Text("Movimientos")),
+                        PopupMenuItem(value: 'ocultar', child: Text(p.activo ? "Ocultar" : "Volver a mostrar")),
+                        const PopupMenuItem(value: 'eliminar', child: Text("Eliminar")),
                       ],
                     ),
                   ],
