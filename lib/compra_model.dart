@@ -67,8 +67,9 @@ class InsumoCompra {
   String get unidadTexto => const {'l': 'L', 'unid': 'unid.'}[unidad] ?? unidad;
 }
 
-/// Una línea de la compra: un producto (unidades enteras) o un insumo (con
-/// decimales). [precioCosto] es el precio unitario SIN IVA y [tarifa] el %
+/// Una línea de la compra: un producto (unidades enteras), un insumo (con
+/// decimales) o ninguno -- una línea que no entra al inventario (solo
+/// [descripcion] y [codigoCabys], va a gasto). [precioCosto] es el precio unitario SIN IVA y [tarifa] el %
 /// de IVA de la línea (el del XML del proveedor o el del producto).
 class LineaCompra {
   final Producto? producto;
@@ -77,6 +78,7 @@ class LineaCompra {
   double precioCosto;
   double? tarifa;
   String descripcion;
+  String codigoCabys;
 
   LineaCompra({
     this.producto,
@@ -85,9 +87,11 @@ class LineaCompra {
     required this.precioCosto,
     this.tarifa,
     this.descripcion = '',
-  }) : assert((producto == null) != (insumo == null));
+    this.codigoCabys = '',
+  }) : assert(producto == null || insumo == null);
 
-  String get nombre => insumo?.nombre ?? producto!.nombre;
+  bool get sinInventario => producto == null && insumo == null;
+  String get nombre => insumo?.nombre ?? producto?.nombre ?? descripcion;
   double get subtotal => cantidad * precioCosto;
   double get iva => tarifa == null ? 0 : subtotal * tarifa! / 100;
 
@@ -99,6 +103,7 @@ class LineaCompra {
     if (tarifa != null) 'tarifa_iva': tarifa,
     if (tarifa != null) 'monto_iva': (iva * 100).round() / 100,
     if (descripcion.isNotEmpty) 'descripcion': descripcion,
+    if (sinInventario && codigoCabys.isNotEmpty) 'codigo_cabys': codigoCabys,
   };
 }
 

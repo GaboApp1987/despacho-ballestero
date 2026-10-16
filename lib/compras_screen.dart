@@ -163,6 +163,9 @@ class _ComprasScreenState extends State<ComprasScreen> {
   String _filtroHacienda = 'todas';
   List<Proveedor> _proveedores = [];
   List<dynamic> _correosPendientes = [];
+  // "Aceptar seleccionadas" en las facturas por revisar (ver _aceptarCorreosEnLote).
+  final Set<int> _correosSeleccionados = {};
+  String? _progresoLote;
   bool _guiaOfrecida = false;
   bool _modoSeleccion = false;
   final Set<int> _comprasSeleccionadas = {};
@@ -204,6 +207,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
           _compras = comprasData.map((j) => Compra.fromJson(j)).toList();
           _proveedores = proveedoresData.map((j) => Proveedor.fromJson(j)).toList();
           _correosPendientes = correosData;
+          _correosSeleccionados.removeWhere((id) => !correosData.any((c) => c['id'] == id));
           _cargando = false;
         });
         _consultarMensajesEnviados();
@@ -254,6 +258,182 @@ class _ComprasScreenState extends State<ComprasScreen> {
       await _cargarDatos();
       // Si se aceptó ante Hacienda al confirmar, Hacienda lo procesa en
       // unos segundos: se vuelve a consultar para que pase a "Aceptadas".
+      await Future.delayed(const Duration(seconds: 6));
+      if (mounted) await _consultarMensajesEnviados();
+    }
+  }
+
+  bool _correoAceptable(Map correo) => (correo['error'] ?? '').toString().isEmpty;
+
+  /// Registra y acepta ante Hacienda las facturas seleccionadas de una vez
+  /// (ver aceptar_lote en el backend). Las líneas que coinciden por CABYS
+  /// suman a su producto; de las demás se pregunta cuáles agregar al
+  /// inventario (se crean como producto) y el resto entra sin inventario
+  /// (gasto). Se mandan de a 5 para no pasarse del tiempo límite del servidor.
+  Future<void> _aceptarCorreosEnLote() async {
+    final ids = _correosPendientes
+        .where((c) => _correosSeleccionados.contains(c['id']) && _correoAceptable(c))
+        .map<int>((c) => c['id'] as int)
+        .toList();
+    if (ids.isEmpty) return;
+    // Líneas que no están en el inventario (mismo criterio que el backend:
+    // producto_id vigente o mismo CABYS que un producto del negocio).
+    final idsProductos = <int>{};
+    final cabysProductos = <String>{};
+    try {
+      final r = ApiService.verificar(await ApiService.get('/productos/?negocio=${widget.negocio.id}'));
+      for (final p in json.decode(utf8.decode(r.bodyBytes)) as List) {
+        idsProductos.add(p['id'] as int);
+        final cabys = (p['codigo_cabys'] ?? '').toString().trim();
+        if (cabys.isNotEmpty) cabysProductos.add(cabys);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudieron cargar los productos: ${ApiService.textoError(e)}")));
+      }
+      return;
+    }
+    final nuevas = <({int correoId, int indice, String proveedor, String detalle, num cantidad, bool entera})>[];
+    for (final c in _correosPendientes.where((c) => ids.contains(c['id']))) {
+      final datos = c['datos_parseados'] as Map? ?? {};
+      final lineas = (datos['lineas'] as List?) ?? [];
+      for (var i = 0; i < lineas.length; i++) {
+        final l = lineas[i] as Map;
+        final cabys = (l['codigo_cabys'] ?? '').toString().trim();
+        if (idsProductos.contains(l['producto_id']) || cabysProductos.contains(cabys)) continue;
+        final cantidad = (l['cantidad'] as num?) ?? 0;
+        nuevas.add((
+          correoId: c['id'] as int,
+          indice: i,
+          proveedor: (datos['proveedor_nombre'] ?? c['remitente'] ?? '').toString(),
+          detalle: (l['detalle'] ?? cabys).toString(),
+          cantidad: cantidad,
+          entera: cantidad % 1 == 0,
+        ));
+      }
+    }
+    if (!mounted) return;
+    // Apagado por defecto: casi nunca hace falta un producto nuevo por línea.
+    final marcadas = <int>{};
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setStateDialog) => AlertDialog(
+          title: Text("¿Aceptar ${ids.length} factura${ids.length == 1 ? '' : 's'}?"),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Cada factura se registra como compra y se acepta ante Hacienda. Las líneas que coinciden por CABYS "
+                    "con un producto tuyo suman a su inventario. Si el proveedor es nuevo, se crea solo.",
+                  ),
+                  if (nuevas.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      "${nuevas.length} línea${nuevas.length == 1 ? '' : 's'} no ${nuevas.length == 1 ? 'está' : 'están'} en tu inventario. "
+                      "Marcá las que querés agregar como producto nuevo; las demás entran como gasto.",
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    ...nuevas.asMap().entries.map((e) {
+                      final n = e.value;
+                      return CheckboxListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        value: marcadas.contains(e.key),
+                        onChanged: n.entera
+                            ? (v) => setStateDialog(() => v == true ? marcadas.add(e.key) : marcadas.remove(e.key))
+                            : null,
+                        title: Text(n.detalle),
+                        subtitle: Text(n.entera
+                            ? "${n.proveedor} · ${formatearNumero(n.cantidad, decimales: 0)} unid."
+                            : "${n.proveedor} · cantidad con decimales: entra como gasto (para insumos, usá Revisar)"),
+                      );
+                    }),
+                  ],
+                  const SizedBox(height: 12),
+                  const Text(
+                    "Las que no se puedan aceptar (otra moneda, montos que no cuadran, otra cédula) quedan por revisar con el motivo.",
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
+            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Aceptar")),
+          ],
+        ),
+      ),
+    );
+    if (confirmar != true || !mounted) return;
+    final agregar = <String, List<int>>{};
+    for (final k in marcadas) {
+      agregar.putIfAbsent(nuevas[k].correoId.toString(), () => []).add(nuevas[k].indice);
+    }
+    final resultados = <Map>[];
+    try {
+      for (var i = 0; i < ids.length; i += 5) {
+        final fin = (i + 5).clamp(0, ids.length);
+        setState(() => _progresoLote = "Aceptando ${i + 1}-$fin de ${ids.length}...");
+        final r = ApiService.verificar(await ApiService.post(
+          '/correos-compra-recibidos/aceptar-lote/',
+          {'ids': ids.sublist(i, fin), 'agregar': agregar},
+        ));
+        resultados.addAll((json.decode(utf8.decode(r.bodyBytes))['resultados'] as List).cast<Map>());
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al aceptar: ${ApiService.textoError(e)}")));
+      }
+    }
+    if (!mounted) return;
+    // El nombre del proveedor se toma antes de recargar (las aceptadas salen de la lista).
+    final nombres = {
+      for (final c in _correosPendientes)
+        c['id']: ((c['datos_parseados'] as Map?)?['proveedor_nombre'] ?? c['remitente'] ?? 'Factura').toString(),
+    };
+    setState(() {
+      _progresoLote = null;
+      _correosSeleccionados.clear();
+    });
+    final aceptadas = resultados.where((r) => r['ok'] == true).length;
+    final fallidas = resultados.where((r) => r['ok'] != true).toList();
+    await _cargarDatos();
+    if (!mounted || resultados.isEmpty) return;
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text("$aceptadas de ${resultados.length} aceptada${resultados.length == 1 ? '' : 's'}"),
+        content: fallidas.isEmpty
+            ? const Text("Todas quedaron registradas y aceptadas ante Hacienda.")
+            : ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 480),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("Con problema:", style: TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 6),
+                      ...fallidas.map((r) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text("• ${nombres[r['id']] ?? 'Factura'}: ${r['detalle']}"),
+                          )),
+                    ],
+                  ),
+                ),
+              ),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Entendido"))],
+      ),
+    );
+    // Hacienda procesa los Mensajes Receptor en unos segundos.
+    if (aceptadas > 0) {
       await Future.delayed(const Duration(seconds: 6));
       if (mounted) await _consultarMensajesEnviados();
     }
@@ -849,15 +1029,33 @@ class _ComprasScreenState extends State<ComprasScreen> {
             children: [
               const Icon(Icons.mark_email_unread_outlined, color: Colors.amber),
               const SizedBox(width: 8),
-              Text(
-                "${_correosPendientes.length} factura${_correosPendientes.length == 1 ? '' : 's'} de proveedor por revisar",
-                style: const TextStyle(fontWeight: FontWeight.bold),
+              Expanded(
+                child: Text(
+                  "${_correosPendientes.length} factura${_correosPendientes.length == 1 ? '' : 's'} de proveedor por revisar",
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
+              if (_correosPendientes.any((c) => _correoAceptable(c)))
+                TextButton(
+                  onPressed: _progresoLote != null
+                      ? null
+                      : () => setState(() {
+                            final aceptables = _correosPendientes.where((c) => _correoAceptable(c)).map<int>((c) => c['id'] as int);
+                            if (aceptables.every(_correosSeleccionados.contains)) {
+                              _correosSeleccionados.clear();
+                            } else {
+                              _correosSeleccionados.addAll(aceptables);
+                            }
+                          }),
+                  child: Text(_correosPendientes.where((c) => _correoAceptable(c)).every((c) => _correosSeleccionados.contains(c['id']))
+                      ? "Quitar selección"
+                      : "Seleccionar todas"),
+                ),
             ],
           ),
           const SizedBox(height: 4),
           const Text(
-            "Llegaron al correo de facturas de compra. Revísalas y confirmá para registrarlas.",
+            "Llegaron al correo de facturas de compra. Revisalas una por una o marcá varias y aceptalas de una vez.",
             style: TextStyle(fontSize: 12, color: Colors.grey),
           ),
           const SizedBox(height: 8),
@@ -867,7 +1065,16 @@ class _ComprasScreenState extends State<ComprasScreen> {
               margin: const EdgeInsets.only(bottom: 6),
               child: ListTile(
                 dense: true,
-                leading: Icon(tieneError ? Icons.error_outline : Icons.description_outlined, color: tieneError ? Colors.red : AppColors.primary),
+                leading: tieneError
+                    ? const Icon(Icons.error_outline, color: Colors.red)
+                    : Checkbox(
+                        value: _correosSeleccionados.contains(correo['id']),
+                        onChanged: _progresoLote != null
+                            ? null
+                            : (v) => setState(() => v == true
+                                ? _correosSeleccionados.add(correo['id'] as int)
+                                : _correosSeleccionados.remove(correo['id'])),
+                      ),
                 title: Text(correo['remitente']?.toString().isNotEmpty == true ? correo['remitente'].toString() : "Remitente desconocido"),
                 subtitle: Text(
                   tieneError
@@ -877,7 +1084,8 @@ class _ComprasScreenState extends State<ComprasScreen> {
                           // Si la aceptación automática está encendida y esta no
                           // cumplió las condiciones, se dice por qué quedó acá.
                           if ((correo['datos_parseados'] as Map?)?['aceptacion_automatica'] is Map)
-                            "No se aceptó sola: ${(correo['datos_parseados']['aceptacion_automatica'] as Map)['detalle']}",
+                            "${(correo['datos_parseados']['aceptacion_automatica'] as Map)['en_lote'] == true ? 'No se pudo aceptar' : 'No se aceptó sola'}: "
+                                "${(correo['datos_parseados']['aceptacion_automatica'] as Map)['detalle']}",
                         ].join('\n'),
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
@@ -901,6 +1109,24 @@ class _ComprasScreenState extends State<ComprasScreen> {
               ),
             );
           }),
+          if (_progresoLote != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Row(children: [
+                const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                const SizedBox(width: 10),
+                Text(_progresoLote!),
+              ]),
+            )
+          else if (_correosSeleccionados.isNotEmpty)
+            Align(
+              alignment: Alignment.centerRight,
+              child: ElevatedButton.icon(
+                onPressed: _aceptarCorreosEnLote,
+                icon: const Icon(Icons.done_all),
+                label: Text("Aceptar seleccionadas (${_correosSeleccionados.length})"),
+              ),
+            ),
         ],
       ),
     );

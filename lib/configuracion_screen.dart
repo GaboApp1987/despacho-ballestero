@@ -749,8 +749,9 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
                         title: const Text("Aceptar compras automáticamente"),
                         subtitle: const Text(
                           "Las facturas que llegan al correo de compras se registran y se aceptan ante Hacienda solas, "
-                          "solo si son de un proveedor con el que ya compraste, a tu cédula, con todos los productos "
-                          "reconocidos y montos que cuadran. Si no, quedan por revisar como siempre.",
+                          "solo si son de un proveedor con el que ya compraste, a tu cédula y con montos que cuadran. "
+                          "Las líneas que no coinciden con un producto entran sin inventario (gasto). "
+                          "Si no, quedan por revisar como siempre.",
                         ),
                         secondary: const Icon(Icons.auto_mode_outlined),
                       ),

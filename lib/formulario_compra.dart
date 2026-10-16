@@ -277,7 +277,10 @@ class _FormularioCompraState extends State<FormularioCompra> {
   }
 
   /// Cuando una línea del XML no coincide con ningún producto ya registrado
-  /// (por CABYS), se pide vincularla a uno existente o crear uno nuevo.
+  /// (por CABYS), se pregunta qué hacer con ella. Por defecto entra a la
+  /// compra SIN tocar el inventario (va a gasto, no crea producto): casi
+  /// nunca hace falta un producto nuevo por cada línea del proveedor. Con
+  /// "Agregar al inventario" se vincula a un producto/insumo o se crea uno.
   /// [tipoCambio] ya viene aplicado sobre el precio si el comprobante venía
   /// en dólares (ver _aplicarDatosParseados) -- acá se recibe listo en colones.
   Future<void> _resolverLineaSinProducto(Map linea, {double tipoCambio = 1.0}) async {
@@ -289,6 +292,7 @@ class _FormularioCompraState extends State<FormularioCompra> {
 
     // Materia prima (papa, aceite...) va como insumo: suma existencias con
     // decimales y su costo promedio, sin digitarlo dos veces.
+    bool agregarInventario = false;
     bool comoInsumo = cantidad % 1 != 0;
     InsumoCompra? insumoExistente;
     String unidadNueva = 'kg';
@@ -312,7 +316,7 @@ class _FormularioCompraState extends State<FormularioCompra> {
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setStateDialog) => AlertDialog(
-          title: Text("Vincular: $detalle"),
+          title: Text("Revisar línea: $detalle"),
           content: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: 420),
             child: SingleChildScrollView(
@@ -322,7 +326,35 @@ class _FormularioCompraState extends State<FormularioCompra> {
                 children: [
                   Text("CABYS del XML: ${cabys.isNotEmpty ? cabys : '(no incluido)'}",
                       style: const TextStyle(color: Colors.grey)),
-                  const SizedBox(height: 10),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: agregarInventario,
+                    onChanged: guardando ? null : (v) => setStateDialog(() => agregarInventario = v ?? false),
+                    title: const Text("Agregar al inventario"),
+                    subtitle: Text(agregarInventario
+                        ? "Se vincula a un producto o insumo (o se crea uno) y suma existencias."
+                        : "Entra a la compra como gasto: no crea producto ni mueve existencias."),
+                  ),
+                  if (!agregarInventario) ...[
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: nombreCtrl,
+                      decoration: const InputDecoration(labelText: "Descripción", border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: cabysCtrl,
+                      decoration: const InputDecoration(labelText: "Código CABYS", border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<Impuesto>(
+                      value: impuestoSeleccionado,
+                      decoration: const InputDecoration(labelText: "Impuesto (opcional)", border: OutlineInputBorder()),
+                      items: _listaImpuestos.map((i) => DropdownMenuItem(value: i, child: Text(i.toString()))).toList(),
+                      onChanged: (v) => setStateDialog(() => impuestoSeleccionado = v),
+                    ),
+                  ] else ...[
+                  const SizedBox(height: 4),
                   SegmentedButton<bool>(
                     segments: const [
                       ButtonSegment(value: false, label: Text("Producto (mercadería)")),
@@ -391,6 +423,7 @@ class _FormularioCompraState extends State<FormularioCompra> {
                       onChanged: (v) => setStateDialog(() => impuestoSeleccionado = v),
                     ),
                   ],
+                  ],
                   const SizedBox(height: 10),
                   TextField(
                     controller: precioCtrl,
@@ -407,6 +440,20 @@ class _FormularioCompraState extends State<FormularioCompra> {
               onPressed: guardando
                   ? null
                   : () async {
+                      if (!agregarInventario) {
+                        final descripcion = nombreCtrl.text.trim().isEmpty ? detalle : nombreCtrl.text.trim();
+                        setState(() {
+                          _carritoCompra.add(LineaCompra(
+                            cantidad: cantidad,
+                            precioCosto: redondear2(double.tryParse(precioCtrl.text.trim()) ?? precio),
+                            tarifa: impuestoSeleccionado?.porcentaje ?? tarifaLinea,
+                            descripcion: descripcion.length > 200 ? descripcion.substring(0, 200) : descripcion,
+                            codigoCabys: cabysCtrl.text.trim(),
+                          ));
+                        });
+                        Navigator.pop(ctx);
+                        return;
+                      }
                       setStateDialog(() => guardando = true);
                       if (comoInsumo) {
                         InsumoCompra? insumoFinal = insumoExistente;
@@ -841,9 +888,12 @@ class _FormularioCompraState extends State<FormularioCompra> {
             ));
           }
         }
+        // Vino de un correo: se liga a la compra (sale de "por revisar") y
+        // el backend le adjunta el PDF de la factura que traía el correo.
         if (widget.correoId != null) {
           try {
-            await ApiService.delete('/correos-compra-recibidos/${widget.correoId}/');
+            final resLigar = await ApiService.post('/correos-compra-recibidos/${widget.correoId}/ligar-compra/', {'compra': compraId});
+            if (resLigar.statusCode != 200) await ApiService.delete('/correos-compra-recibidos/${widget.correoId}/');
           } catch (_) {}
         }
         if (mounted) {
@@ -1142,10 +1192,14 @@ class _FormularioCompraState extends State<FormularioCompra> {
                     final item = _carritoCompra[i];
                     final unidad = item.insumo != null ? item.insumo!.unidadTexto : 'unid.';
                     return ListTile(
-                      leading: Icon(item.insumo != null ? Icons.kitchen_outlined : Icons.arrow_upward, color: AppColors.primary),
+                      leading: Icon(
+                        item.sinInventario ? Icons.receipt_long_outlined : item.insumo != null ? Icons.kitchen_outlined : Icons.arrow_upward,
+                        color: item.sinInventario ? Colors.grey : AppColors.primary,
+                      ),
                       title: Text(item.nombre),
                       subtitle: Text(
-                        "Entran: ${formatearNumero(item.cantidad, decimales: item.cantidad % 1 == 0 ? 0 : 3)} $unidad · "
+                        "${item.sinInventario ? 'Sin inventario · Cantidad' : 'Entran'}: "
+                        "${formatearNumero(item.cantidad, decimales: item.cantidad % 1 == 0 ? 0 : 3)} $unidad · "
                         "Costo: ${formatearColones(item.precioCosto)} · "
                         "${item.tarifa == null ? 'sin IVA' : 'IVA ${formatearNumero(item.tarifa!, decimales: item.tarifa! % 1 == 0 ? 0 : 1)} %'}",
                       ),
