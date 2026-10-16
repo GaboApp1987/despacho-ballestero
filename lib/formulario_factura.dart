@@ -655,6 +655,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
   void _editarLineaCarrito(int index) {
     final item = _carrito[index];
     final cantidadCtrl = TextEditingController(text: item.cantidad.toString());
+    final detalleCtrl = TextEditingController(text: item.descripcion.isNotEmpty ? item.descripcion : item.producto.nombre);
     final precioCtrl = TextEditingController(
       text: (item.monedaPrecio == _moneda ? item.precioBase : _enMonedaFactura(item.precioUnitario)).toStringAsFixed(2),
     );
@@ -689,6 +690,18 @@ class _FormularioFacturaState extends State<FormularioFactura> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              TextField(
+                controller: detalleCtrl,
+                maxLength: 200,
+                minLines: 1,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: "Detalle (como sale en la factura)",
+                  border: OutlineInputBorder(),
+                  helperText: "Podés agregar color, talla, número de serie, el trabajo hecho, etc.",
+                ),
+              ),
+              const SizedBox(height: 4),
               TextField(
                 controller: cantidadCtrl,
                 keyboardType: TextInputType.number,
@@ -889,6 +902,9 @@ class _FormularioFacturaState extends State<FormularioFactura> {
               }
               setState(() {
                 item.cantidad = nuevaCantidad;
+                // Igual al nombre del producto o vacío = sin detalle propio.
+                final detalle = detalleCtrl.text.trim();
+                item.descripcion = detalle == item.producto.nombre ? '' : detalle;
                 item.fijarPrecio(precioEscrito!, _moneda);
                 item.montoDescuento = nuevoDescuento;
                 item.naturalezaDescuento = nuevoDescuento > 0 ? naturalezaCtrl.text.trim() : '';
@@ -1668,7 +1684,14 @@ class _FormularioFacturaState extends State<FormularioFactura> {
             children: [
               Text(item.descripcion.isNotEmpty ? item.descripcion : item.producto.nombre,
                   style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-              const SizedBox(height: 2),
+              InkWell(
+                onTap: () => _editarLineaCarrito(i),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Text(item.descripcion.isNotEmpty ? "Editar detalle" : "+ Agregar detalle",
+                      style: TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w600)),
+                ),
+              ),
               Text(
                 _esInterno
                     ? "${_fmt(item.precioUnitario)} c/u · Sin impuesto (interno)"
@@ -1715,7 +1738,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                   const Spacer(),
                   IconButton(
                     icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.grey),
-                    tooltip: "Editar precio y cantidad",
+                    tooltip: "Editar detalle, precio y cantidad",
                     onPressed: () => _editarLineaCarrito(i),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
