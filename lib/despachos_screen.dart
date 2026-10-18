@@ -17,6 +17,7 @@ import 'widgets/menu_lateral.dart';
 import 'whatsapp_bandeja_screen.dart';
 import 'estadisticas_screen.dart';
 import 'crm_screen.dart';
+import 'crm_maps_screen.dart';
 import 'admin_contadores_screen.dart';
 import 'perfil_sesion.dart';
 import 'widgets/calculadora.dart';
@@ -455,6 +456,7 @@ class _DespachosScreenState extends State<DespachosScreen> {
   }
 
   void _abrirCrm() => Navigator.push(context, MaterialPageRoute(builder: (_) => const CrmScreen()));
+  void _abrirBuscarProspectos() => Navigator.push(context, MaterialPageRoute(builder: (_) => const BuscarMapsScreen()));
   void _abrirEstadisticas() => Navigator.push(context, MaterialPageRoute(builder: (_) => const EstadisticasScreen()));
   void _abrirPlanes() => Navigator.push(context, MaterialPageRoute(builder: (_) => const PlanesScreen()));
   void _abrirContadores() => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminContadoresScreen()));
@@ -486,6 +488,7 @@ class _DespachosScreenState extends State<DespachosScreen> {
         ]),
         SeccionMenu("CRECIMIENTO", [
           EntradaMenu(icono: Icons.filter_alt_outlined, etiqueta: "Clientes potenciales", insignia: "CRM", onTap: _abrirCrm),
+          EntradaMenu(icono: Icons.travel_explore, etiqueta: "Buscar prospectos", insignia: "Maps", onTap: _abrirBuscarProspectos),
           EntradaMenu(icono: Icons.chat_outlined, etiqueta: "Bandeja de WhatsApp", aviso: _whatsappPendientes, onTap: _abrirBandejaWhatsApp),
           EntradaMenu(icono: Icons.insights_outlined, etiqueta: "Estadísticas del landing", onTap: _abrirEstadisticas),
         ]),
@@ -530,7 +533,8 @@ class _DespachosScreenState extends State<DespachosScreen> {
             saludo: "Panel de administrador",
             secciones: const {
               'whatsapp': 'Bandeja de WhatsApp: conversaciones de clientes nuevos y respuestas del equipo',
-              'crm': 'Clientes potenciales (CRM): embudo de prospectos por etapa y correos de seguimiento automáticos',
+              'crm': 'Clientes potenciales (CRM): embudo de prospectos por etapa, correos de seguimiento y WhatsApp a uno o varios prospectos',
+              'buscar_prospectos': 'Buscar prospectos: buscar negocios en Google Maps (ej. ferreterías en Cartago) y agregarlos al CRM',
               'estadisticas': 'Estadísticas del landing: visitas, registros y conversión',
               'planes': 'Planes de suscripción: precios y límites',
               'negocios': 'Negocios: todos los negocios de la plataforma',
@@ -541,6 +545,8 @@ class _DespachosScreenState extends State<DespachosScreen> {
                   await _abrirBandejaWhatsApp();
                 case 'crm':
                   _abrirCrm();
+                case 'buscar_prospectos':
+                  _abrirBuscarProspectos();
                 case 'estadisticas':
                   _abrirEstadisticas();
                 case 'planes':
@@ -556,6 +562,7 @@ class _DespachosScreenState extends State<DespachosScreen> {
             ],
             sugerencias: const [
               (Icons.filter_alt_outlined, "Clientes potenciales"),
+              (Icons.travel_explore, "Buscar prospectos"),
               (Icons.chat_outlined, "Bandeja de WhatsApp"),
               (Icons.insights_outlined, "Estadísticas"),
             ],

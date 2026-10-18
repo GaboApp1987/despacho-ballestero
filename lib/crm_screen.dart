@@ -682,8 +682,13 @@ class _CrmScreenState extends State<CrmScreen> {
       appBar: AppBar(
         title: const Text("Clientes potenciales"),
         actions: [
-          IconButton(tooltip: "Buscar prospectos en Google Maps", icon: const Icon(Icons.travel_explore), onPressed: _buscarEnMaps),
-          IconButton(tooltip: "WhatsApp a varios", icon: const Icon(Icons.forum_outlined), onPressed: _whatsappAVarios),
+          if (MediaQuery.sizeOf(context).width >= 700) ...[
+            TextButton.icon(onPressed: _buscarEnMaps, icon: const Icon(Icons.travel_explore), label: const Text("Buscar en Google Maps")),
+            TextButton.icon(onPressed: _whatsappAVarios, icon: const Icon(Icons.forum_outlined), label: const Text("WhatsApp a varios")),
+          ] else ...[
+            IconButton(tooltip: "Buscar en Google Maps", icon: const Icon(Icons.travel_explore), onPressed: _buscarEnMaps),
+            IconButton(tooltip: "WhatsApp a varios", icon: const Icon(Icons.forum_outlined), onPressed: _whatsappAVarios),
+          ],
           IconButton(tooltip: "Recargar", icon: const Icon(Icons.refresh), onPressed: _cargar),
         ],
       ),
