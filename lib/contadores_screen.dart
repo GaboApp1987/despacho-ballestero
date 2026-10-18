@@ -17,6 +17,7 @@ import 'widgets/bloqueo_salida_raiz.dart';
 import 'widgets/soporte_chat.dart';
 import 'widgets/asistente_ia_bar.dart';
 import 'perfil_sesion.dart';
+import 'widgets/calculadora.dart';
 
 class ContadoresScreen extends StatefulWidget {
   const ContadoresScreen({super.key});
@@ -337,6 +338,7 @@ class _ContadoresScreenState extends State<ContadoresScreen> {
               ),
             ),
           ),
+          BotonCalculadora(constructor: (abrir) => accionAppBar(icono: Icons.calculate_outlined, tooltip: "Calculadora", onPressed: abrir)),
           accionAppBar(
             icono: Icons.refresh_rounded,
             tooltip: "Recargar",

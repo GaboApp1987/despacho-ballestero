@@ -56,6 +56,7 @@ import 'importar_externo_dialog.dart';
 import 'prestamos_screen.dart';
 import 'vehiculos_screen.dart';
 import 'widgets/recorrido_guiado.dart';
+import 'widgets/calculadora.dart';
 
 /// Envuelve a un hijo y le avisa a [builder] si el cursor está encima
 /// (hover) -- solo tiene efecto real con mouse (escritorio/web), en touch no
@@ -1238,6 +1239,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
           // periodo, comunicacion, cuenta) mas refresh/tema, bastante mas
           // compacto y ordenado; el scroll horizontal se deja igual como
           // red de seguridad para pantallas muy angostas.
+          const BotonCalculadora(),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: "Actualizar",

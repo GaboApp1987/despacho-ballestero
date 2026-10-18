@@ -30,6 +30,7 @@ import 'perfil_sesion.dart';
 import 'widgets/asistente_flotante.dart';
 import 'recorridos.dart';
 import 'widgets/recorrido_guiado.dart';
+import 'widgets/calculadora.dart';
 
 /// Paleta "Blanco & Cobalto" -- solo para cuando esta pantalla la ve un
 /// CONTADOR viendo su propia cartera (widget.puedeCrear), a propósito
@@ -1105,11 +1106,16 @@ class _NegociosScreenState extends State<NegociosScreen> {
         actions: esContador
             ? [
                 _accionAppBarClara(icono: Icons.auto_awesome, tooltip: "Asistente Equilibra", onPressed: _abrirAsistenteContador),
+                BotonCalculadora(constructor: (abrir) => _accionAppBarClara(icono: Icons.calculate_outlined, tooltip: "Calculadora", onPressed: abrir)),
                 _accionAppBarClara(icono: Icons.refresh_rounded, tooltip: "Recargar", onPressed: _recargarTodo),
                 BotonGuia(iniciar: () => GuiaPanelContador.mostrar(context), color: _PaletaContador.textoFuerte),
                 const SizedBox(width: 4),
               ]
             : [
+          if (esContador)
+            BotonCalculadora(constructor: (abrir) => _accionAppBarClara(icono: Icons.calculate_outlined, tooltip: "Calculadora", onPressed: abrir)),
+          if (!esContador)
+            BotonCalculadora(constructor: (abrir) => accionAppBar(icono: Icons.calculate_outlined, tooltip: "Calculadora", onPressed: abrir)),
           if (esContador)
             _accionAppBarClara(icono: Icons.refresh_rounded, tooltip: "Recargar", onPressed: _recargarTodo)
           else
@@ -1324,6 +1330,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
                         style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _PaletaContador.textoFuerte),
                       ),
                       const Spacer(),
+                      BotonCalculadora(constructor: (abrir) => _accionAppBarClara(icono: Icons.calculate_outlined, tooltip: "Calculadora", onPressed: abrir)),
                       _accionAppBarClara(icono: Icons.refresh_rounded, tooltip: "Recargar", onPressed: _recargarTodo),
                       BotonGuia(iniciar: () => GuiaPanelContador.mostrar(context), color: _PaletaContador.textoFuerte),
                     ],

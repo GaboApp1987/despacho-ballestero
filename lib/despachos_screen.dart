@@ -19,6 +19,7 @@ import 'estadisticas_screen.dart';
 import 'crm_screen.dart';
 import 'admin_contadores_screen.dart';
 import 'perfil_sesion.dart';
+import 'widgets/calculadora.dart';
 
 /// Pantalla de nivel plataforma: solo la ve un superusuario (el dueño del programa).
 /// Desde acá se dan de alta los despachos contables (cada uno con su propio dueño/login),
@@ -517,6 +518,7 @@ class _DespachosScreenState extends State<DespachosScreen> {
             child: Row(
               children: [
                 Expanded(child: Text("Despachos", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textStrong))),
+                const BotonCalculadora(),
                 IconButton(tooltip: "Recargar", icon: const Icon(Icons.refresh), onPressed: _cargarDespachos),
               ],
             ),
@@ -627,7 +629,7 @@ class _DespachosScreenState extends State<DespachosScreen> {
                     const Text("Despachos"),
                   ],
                 ),
-                actions: [IconButton(tooltip: "Recargar", icon: const Icon(Icons.refresh), onPressed: _cargarDespachos)],
+                actions: [const BotonCalculadora(), IconButton(tooltip: "Recargar", icon: const Icon(Icons.refresh), onPressed: _cargarDespachos)],
               ),
         body: esAncho
             ? Row(children: [_menu(superpuesto: false), Expanded(child: _contenido(conEncabezado: true))])
