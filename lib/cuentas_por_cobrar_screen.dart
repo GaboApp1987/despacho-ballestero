@@ -7,6 +7,7 @@ import 'negocio.dart';
 import 'factura.dart';
 import 'export_service.dart'; // 👈 Importamos el servicio de exportación
 import 'formato.dart';
+import 'saldos_iniciales_dialog.dart';
 import 'widgets/pagos_en_linea.dart';
 import 'recorridos.dart';
 import 'widgets/recorrido_guiado.dart';
@@ -169,6 +170,11 @@ class _CuentasPorCobrarScreenState extends State<CuentasPorCobrarScreen> {
                       icon: const Icon(Icons.table_chart, color: Colors.green),
                       tooltip: "Exportar Excel",
                       onPressed: _saldosClientes.isEmpty ? null : () => ExportService.exportSaldosToExcel(_saldosClientes),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => mostrarSaldosIniciales(context, widget.negocio, _cargarSaldos),
+                      icon: const Icon(Icons.playlist_add),
+                      label: const Text("Saldos iniciales"),
                     ),
                     IconButton(
                       icon: const Icon(Icons.refresh),
@@ -619,6 +625,8 @@ class _DetalleCuentaClienteScreenState extends State<DetalleCuentaClienteScreen>
                       final String tipo = entry['tipo'];
                       final bool esFactura = tipo == 'FACTURA';
                       final bool esNotaCredito = tipo == 'NOTA_CREDITO';
+                      // Lo que debía antes de Equilibra (Cliente.saldo_inicial).
+                      final bool esSaldoInicial = entry['es_saldo_inicial'] == true;
 
                       final IconData icono = esFactura
                           ? Icons.description_outlined
@@ -626,7 +634,9 @@ class _DetalleCuentaClienteScreenState extends State<DetalleCuentaClienteScreen>
                               ? Icons.assignment_return_outlined
                               : Icons.payments_outlined;
                       final Color color = esFactura ? Colors.orange : (esNotaCredito ? Colors.blue : Colors.green);
-                      final String titulo = esFactura
+                      final String titulo = esSaldoInicial
+                          ? "Saldo inicial${(entry['nota'] ?? '').toString().isNotEmpty ? ' · ${entry['nota']}' : ''}"
+                          : esFactura
                           ? "Factura #${entry['numero']}"
                           : esNotaCredito
                               ? "Nota de Crédito NC-${entry['numero']}"

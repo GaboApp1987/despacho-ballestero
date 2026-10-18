@@ -1912,8 +1912,10 @@ class ExportService {
           headers: const ['Fecha', 'Tipo', 'Detalle', 'Monto'],
           data: historial.map((item) => [
             item['fecha'],
-            item['tipo'],
-            item['tipo'] == 'FACTURA' ? 'F-${item['numero']}' : 'Recibo de Abono',
+            item['es_saldo_inicial'] == true ? 'Saldo inicial' : item['tipo'],
+            item['es_saldo_inicial'] == true
+                ? ((item['nota'] ?? '').toString().isNotEmpty ? item['nota'].toString() : 'Antes de Equilibra')
+                : item['tipo'] == 'FACTURA' ? 'F-${item['numero']}' : 'Recibo de Abono',
             '${item['tipo'] == 'FACTURA' ? '+' : '-'} ${formatearColones(double.parse(item['monto'].toString()))}',
           ]).toList(),
         ),
@@ -1954,8 +1956,10 @@ class ExportService {
             saldoAcumulado += esFactura ? monto : -monto;
             return <CellValue>[
               TextCellValue(item['fecha']?.toString() ?? ''),
-              TextCellValue(esFactura ? 'Factura' : 'Abono'),
-              TextCellValue(esFactura ? 'F-${item['numero']}' : 'Recibo de abono'),
+              TextCellValue(item['es_saldo_inicial'] == true ? 'Saldo inicial' : (esFactura ? 'Factura' : 'Abono')),
+              TextCellValue(item['es_saldo_inicial'] == true
+                  ? ((item['nota'] ?? '').toString().isNotEmpty ? item['nota'].toString() : 'Antes de Equilibra')
+                  : (esFactura ? 'F-${item['numero']}' : 'Recibo de abono')),
               DoubleCellValue(esFactura ? monto : 0),
               DoubleCellValue(esFactura ? 0 : monto),
               DoubleCellValue(saldoAcumulado),
