@@ -402,6 +402,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
   void initState() {
     super.initState();
     AsistenteFlotante.registrar(_asistenteFlotante);
+    cambiosDesdeChat.addListener(_alCambiarDesdeChat);
     DateTime ahora = DateTime.now();
     _fechaInicio = DateTime(ahora.year, ahora.month, 1);
     _fechaFin = DateTime(ahora.year, ahora.month + 1, 0);
@@ -438,6 +439,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
   @override
   void dispose() {
     AsistenteFlotante.quitar(_asistenteFlotante);
+    cambiosDesdeChat.removeListener(_alCambiarDesdeChat);
     _busquedaClientesCtrl.dispose();
     _pillTabsScrollController.dispose();
     _overlayCategoria?.remove();
@@ -556,6 +558,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
       // Si falla, se queda con el valor por defecto "Usuario".
     }
   }
+
+  void _alCambiarDesdeChat() => _recargarDatos(clientes: true);
 
   void _recargarDatos({bool facturas = true, bool clientes = false}) {
     if (!mounted) return;

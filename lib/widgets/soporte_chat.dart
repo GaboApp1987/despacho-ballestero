@@ -10,6 +10,12 @@ import '../factura.dart';
 import 'adjuntos_ia.dart';
 import 'asistente_flotante.dart';
 
+/// Sube cada vez que el chat crea algo de verdad (factura, producto, cliente,
+/// cotización...). Las pantallas abiertas detrás del chat lo escuchan para
+/// recargarse: antes la factura hecha por el chat no aparecía en la lista
+/// hasta salir y volver a entrar (2026-10-17).
+final ValueNotifier<int> cambiosDesdeChat = ValueNotifier(0);
+
 /// Abre el chat de soporte con IA en una hoja modal -- se puede llamar desde
 /// cualquier pantalla (login, o ya adentro de la app). `contexto` cambia el
 /// tono del asistente ('visitante' antes de iniciar sesión, 'usuario' ya
@@ -591,6 +597,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
       final response = await ApiService.post('/facturas/', body);
       if (response.statusCode == 201 || response.statusCode == 200) {
         setState(() => mensaje.estadoPropuesta = 'creada');
+        cambiosDesdeChat.value++;
         _mensajes.add(_ChatMensaje('assistant', propuesta.esTiquete ? '¡Listo! Tiquete emitido y enviado a Hacienda.' : '¡Listo! Factura creada y enviada a Hacienda.'));
         setState(() {});
       } else {
@@ -629,6 +636,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
       });
       if (response.statusCode == 201 || response.statusCode == 200) {
         setState(() => mensaje.estadoPropuestaProducto = 'creada');
+        cambiosDesdeChat.value++;
         _mensajes.add(_ChatMensaje('assistant', '¡Listo! Producto "${propuesta.nombre}" agregado al catálogo.'));
         setState(() {});
       } else {
@@ -909,6 +917,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
           mensaje.estadoAccion = 'creada';
           _mensajes.add(_ChatMensaje('assistant', exito));
         });
+        cambiosDesdeChat.value++;
       } else {
         throw Exception(ApiService.mensajeError(response));
       }
