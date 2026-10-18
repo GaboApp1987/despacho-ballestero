@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'api_service.dart';
+import 'crm_maps_screen.dart';
 import 'theme/app_theme.dart';
 
 /// CRM de la plataforma (solo superusuario): las personas interesadas en
@@ -230,6 +231,87 @@ class _CrmScreenState extends State<CrmScreen> {
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo agregar: ${ApiService.textoError(e)}")));
     }
+  }
+
+  Future<void> _buscarEnMaps() async {
+    final cambio = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const BuscarMapsScreen()));
+    if (cambio == true) _cargar();
+  }
+
+  /// Escoger varios prospectos (con teléfono) y mandarles el mismo mensaje.
+  Future<void> _whatsappAVarios() async {
+    final conTelefono = _prospectos.where((p) => (p['telefono'] ?? '').toString().isNotEmpty && p['no_contactar'] != true).toList();
+    final elegidos = <int>{};
+    String etapa = 'todas';
+    final ids = await showDialog<List<int>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) {
+          final visibles = conTelefono.where((p) => etapa == 'todas' || p['etapa'] == etapa).toList();
+          return AlertDialog(
+            title: const Text("WhatsApp a varios prospectos"),
+            content: SizedBox(
+              width: 480,
+              height: 460,
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      DropdownButton<String>(
+                        value: etapa,
+                        items: [
+                          const DropdownMenuItem(value: 'todas', child: Text("Todas las etapas")),
+                          for (final e in ['conversando', 'seguimiento', 'registrado', 'en_prueba', 'perdido'])
+                            DropdownMenuItem(value: e, child: Text(_conteoEtapa(e))),
+                        ],
+                        onChanged: (v) => setD(() => etapa = v!),
+                      ),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () => setD(() {
+                          final todos = visibles.map((p) => p['id'] as int).toSet();
+                          elegidos.containsAll(todos) ? elegidos.removeAll(todos) : elegidos.addAll(todos.take(50));
+                        }),
+                        child: const Text("Todos"),
+                      ),
+                    ],
+                  ),
+                  Expanded(
+                    child: ListView(
+                      children: [
+                        for (final p in visibles)
+                          CheckboxListTile(
+                            dense: true,
+                            value: elegidos.contains(p['id']),
+                            onChanged: (v) => setD(() => v == true ? elegidos.add(p['id'] as int) : elegidos.remove(p['id'])),
+                            title: Text((p['nombre'] ?? '').toString().isEmpty ? p['telefono'] : p['nombre']),
+                            subtitle: Text("${p['telefono']} · ${p['etapa_texto'] ?? ''}"),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Text("Como mucho 50 por envío, para cuidar el número de WhatsApp.", style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
+              FilledButton(
+                onPressed: elegidos.isEmpty || elegidos.length > 50 ? null : () => Navigator.pop(ctx, elegidos.toList()),
+                child: Text("Siguiente (${elegidos.length})"),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (ids == null || ids.isEmpty || !mounted) return;
+    if (await enviarWhatsAppProspectos(context, ids)) _cargar();
+  }
+
+  String _conteoEtapa(String etapa) {
+    const nombres = {'conversando': 'Conversó', 'seguimiento': 'En seguimiento', 'registrado': 'Registrado', 'en_prueba': 'En prueba', 'perdido': 'Perdido'};
+    return nombres[etapa] ?? etapa;
   }
 
   Widget _chip(String texto, {Color? color}) {
@@ -599,10 +681,18 @@ class _CrmScreenState extends State<CrmScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text("Clientes potenciales"),
-        actions: [IconButton(tooltip: "Recargar", icon: const Icon(Icons.refresh), onPressed: _cargar)],
+        actions: [
+          IconButton(tooltip: "Buscar prospectos en Google Maps", icon: const Icon(Icons.travel_explore), onPressed: _buscarEnMaps),
+          IconButton(tooltip: "WhatsApp a varios", icon: const Icon(Icons.forum_outlined), onPressed: _whatsappAVarios),
+          IconButton(tooltip: "Recargar", icon: const Icon(Icons.refresh), onPressed: _cargar),
+        ],
       ),
       body: cuerpo,
-      floatingActionButton: FloatingActionButton.extended(onPressed: _agregarProspecto, icon: const Icon(Icons.person_add_alt_1), label: const Text("Agregar prospecto")),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _agregarProspecto,
+        icon: const Icon(Icons.person_add_alt_1),
+        label: const Text("Agregar prospecto"),
+      ),
     );
   }
 }
@@ -686,7 +776,10 @@ class _FichaProspectoState extends State<_FichaProspecto> {
     return AlertDialog(
       // Mismo fondo que la pantalla: los textos usan AppColors (tema claro u oscuro).
       backgroundColor: AppColors.surface,
-      title: Text((p['nombre'] ?? '').toString().trim().isNotEmpty ? p['nombre'] : (correo.isNotEmpty ? correo : telefono), style: TextStyle(color: AppColors.textStrong)),
+      title: Text(
+        (p['nombre'] ?? '').toString().trim().isNotEmpty ? p['nombre'] : (correo.isNotEmpty ? correo : telefono),
+        style: TextStyle(color: AppColors.textStrong),
+      ),
       content: SizedBox(
         width: 560,
         child: SingleChildScrollView(
@@ -783,6 +876,14 @@ class _FichaProspectoState extends State<_FichaProspecto> {
         ),
       ),
       actions: [
+        if ((p['telefono'] ?? '').toString().isNotEmpty && !_noContactar)
+          TextButton.icon(
+            onPressed: () async {
+              if (await enviarWhatsAppProspectos(context, [p['id'] as int], nombre: p['nombre']) && context.mounted) Navigator.pop(context, true);
+            },
+            icon: const Icon(Icons.chat_outlined, size: 18),
+            label: const Text("WhatsApp"),
+          ),
         TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cerrar")),
         FilledButton(onPressed: _guardando ? null : _guardar, child: const Text("Guardar")),
       ],
