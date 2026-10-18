@@ -13,6 +13,7 @@ import '../formato.dart';
 class BotonCalculadora extends StatelessWidget {
   /// Color del ícono (blanco en las barras de color).
   final Color? color;
+
   /// Si se da, se usa en vez del IconButton (para las barras con su propio
   /// estilo de botones, ver accionAppBar).
   final Widget Function(VoidCallback abrir)? constructor;
@@ -33,18 +34,129 @@ class BotonCalculadora extends StatelessWidget {
 /// Para las pruebas: evalúa como la calculadora (null si es inválida).
 double? evaluarCalculadora(String expresion) => _CalculadoraState.evaluar(expresion);
 
+/// Ventana flotante (no modal) para poder seguir viendo y usando el programa:
+/// abre a la derecha, se arrastra desde la barra de arriba y se minimiza a un
+/// botón. Una sola a la vez; si ya está abierta, la vuelve a mostrar.
+OverlayEntry? _ventanaAbierta;
+final _claveVentana = GlobalKey<_VentanaCalculadoraState>();
+
 void abrirCalculadora(BuildContext context) {
-  showDialog(
-    context: context,
-    builder: (_) => const Dialog(
-      insetPadding: EdgeInsets.all(16),
-      child: _Calculadora(),
+  if (_ventanaAbierta != null) {
+    _claveVentana.currentState?.restaurar();
+    return;
+  }
+  late final OverlayEntry entrada;
+  entrada = OverlayEntry(
+    builder: (_) => _VentanaCalculadora(
+      key: _claveVentana,
+      onCerrar: () {
+        entrada.remove();
+        _ventanaAbierta = null;
+      },
     ),
   );
+  _ventanaAbierta = entrada;
+  Overlay.of(context, rootOverlay: true).insert(entrada);
+}
+
+class _VentanaCalculadora extends StatefulWidget {
+  final VoidCallback onCerrar;
+  const _VentanaCalculadora({super.key, required this.onCerrar});
+
+  @override
+  State<_VentanaCalculadora> createState() => _VentanaCalculadoraState();
+}
+
+class _VentanaCalculadoraState extends State<_VentanaCalculadora> {
+  // Se recuerda mientras la app está abierta, para que vuelva donde se dejó.
+  static Offset? _posicionGuardada;
+  static const _ancho = 360.0;
+  static const _margen = 16.0;
+
+  Offset? _posicion;
+  bool _minimizada = false;
+
+  void restaurar() => setState(() => _minimizada = false);
+
+  Offset _limitar(Offset p, Size pantalla, double ancho) {
+    final maxX = (pantalla.width - ancho - 8).clamp(8.0, double.infinity);
+    final maxY = (pantalla.height - 60).clamp(8.0, double.infinity);
+    return Offset(p.dx.clamp(8.0, maxX), p.dy.clamp(8.0, maxY));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pantalla = MediaQuery.sizeOf(context);
+    final ancho = _ancho.clamp(0.0, pantalla.width - 2 * _margen);
+    _posicion ??= _posicionGuardada ?? Offset(pantalla.width - ancho - _margen, 72);
+    final pos = _limitar(_posicion!, pantalla, _minimizada ? 160 : ancho);
+
+    void mover(Offset delta) => setState(() {
+      _posicion = _limitar(pos + delta, pantalla, _minimizada ? 160 : ancho);
+      _posicionGuardada = _posicion;
+    });
+
+    final esquema = Theme.of(context).colorScheme;
+    return Stack(
+      children: [
+        Positioned(
+          left: pos.dx,
+          top: pos.dy,
+          child: Material(
+            elevation: 10,
+            color: esquema.surface,
+            borderRadius: BorderRadius.circular(_minimizada ? 28 : 16),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Minimizada: un botón que se puede mover; tocarlo la abre.
+                if (_minimizada)
+                  GestureDetector(
+                    onPanUpdate: (d) => mover(d.delta),
+                    child: InkWell(
+                      onTap: restaurar,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 6, 4, 6),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.calculate_outlined, color: esquema.primary),
+                            const SizedBox(width: 8),
+                            const Text("Calculadora", style: TextStyle(fontWeight: FontWeight.w600)),
+                            IconButton(
+                              tooltip: "Cerrar",
+                              visualDensity: VisualDensity.compact,
+                              icon: const Icon(Icons.close, size: 18),
+                              onPressed: widget.onCerrar,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                // Se oculta en vez de quitarse, para no perder la operación.
+                Offstage(
+                  offstage: _minimizada,
+                  child: SizedBox(
+                    width: ancho,
+                    child: _Calculadora(onCerrar: widget.onCerrar, onMinimizar: () => setState(() => _minimizada = true), onArrastrar: mover),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _Calculadora extends StatefulWidget {
-  const _Calculadora();
+  final VoidCallback onCerrar;
+  final VoidCallback onMinimizar;
+  final ValueChanged<Offset> onArrastrar;
+  const _Calculadora({required this.onCerrar, required this.onMinimizar, required this.onArrastrar});
 
   @override
   State<_Calculadora> createState() => _CalculadoraState();
@@ -79,16 +191,19 @@ class _CalculadoraState extends State<_Calculadora> {
       final prefs = await SharedPreferences.getInstance();
       final lista = json.decode(prefs.getString(_claveHistorial) ?? '[]') as List;
       if (!mounted) return;
-      setState(() => _historial = [
-            for (final h in lista) (expresion: h['e'].toString(), resultado: h['r'].toString()),
-          ]);
+      setState(() => _historial = [for (final h in lista) (expresion: h['e'].toString(), resultado: h['r'].toString())]);
     } catch (_) {}
   }
 
   Future<void> _guardarHistorial() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_claveHistorial, json.encode([for (final h in _historial) {'e': h.expresion, 'r': h.resultado}]));
+      await prefs.setString(
+        _claveHistorial,
+        json.encode([
+          for (final h in _historial) {'e': h.expresion, 'r': h.resultado},
+        ]),
+      );
     } catch (_) {}
   }
 
@@ -173,12 +288,14 @@ class _CalculadoraState extends State<_Calculadora> {
 
   /// Expresión para mostrar: números con miles y coma decimal.
   static String mostrar(String expr) {
-    return expr.replaceAllMapped(RegExp(r'\d+(\.\d*)?'), (m) {
-      final texto = m.group(0)!;
-      final partes = texto.split('.');
-      final entero = formatearNumero(int.parse(partes[0]), decimales: 0);
-      return partes.length > 1 ? '$entero,${partes[1]}' : entero;
-    }).replaceAll('-', '−');
+    return expr
+        .replaceAllMapped(RegExp(r'\d+(\.\d*)?'), (m) {
+          final texto = m.group(0)!;
+          final partes = texto.split('.');
+          final entero = formatearNumero(int.parse(partes[0]), decimales: 0);
+          return partes.length > 1 ? '$entero,${partes[1]}' : entero;
+        })
+        .replaceAll('-', '−');
   }
 
   // --- Teclas ------------------------------------------------------------
@@ -243,9 +360,9 @@ class _CalculadoraState extends State<_Calculadora> {
   void _calcular() {
     final v = evaluar(_expresion);
     if (v == null) {
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        const SnackBar(content: Text("La operación está incompleta o no se puede calcular."), duration: Duration(seconds: 2)),
-      );
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(const SnackBar(content: Text("La operación está incompleta o no se puede calcular."), duration: Duration(seconds: 2)));
       return;
     }
     final resultado = formatear(v);
@@ -265,16 +382,16 @@ class _CalculadoraState extends State<_Calculadora> {
     return t.endsWith('.0') ? t.substring(0, t.length - 2) : t;
   }
 
-  void _usarResultado(String resultado) {
-    // "1.234,5" -> "1234.5"
-    final interno = resultado.replaceAll('.', '').replaceAll(',', '.').replaceAll('−', '-');
+  /// Carga la operación del historial sin resultado, para seguir editándola.
+  void _usarOperacion(String expresion) {
+    // "1.234,5 × 2 − 3" -> "1234.5×2-3"
+    final interno = expresion.replaceAll('.', '').replaceAll(',', '.').replaceAll('−', '-').replaceAll(' ', '');
     setState(() {
-      final ultimo = _expresion.isEmpty ? '' : _expresion[_expresion.length - 1];
-      _expresion = (_expresion.isEmpty || _esOperador(ultimo)) && !_recienCalculado ? _expresion + interno : interno;
+      _expresion = interno;
       _recienCalculado = false;
       _verHistorial = false;
       final v = evaluar(_expresion);
-      _resultadoPrevio = v != null && RegExp(r'[+×÷%]').hasMatch(_expresion) ? formatear(v) : null;
+      _resultadoPrevio = v != null && RegExp(r'[+\-×÷%]').hasMatch(_expresion.replaceFirst(RegExp(r'^-'), '')) ? formatear(v) : null;
     });
   }
 
@@ -287,7 +404,10 @@ class _CalculadoraState extends State<_Calculadora> {
     } else if (k == LogicalKeyboardKey.backspace) {
       _tecla('⌫');
     } else if (k == LogicalKeyboardKey.escape || k == LogicalKeyboardKey.delete) {
-      if (k == LogicalKeyboardKey.escape && _expresion.isEmpty) return KeyEventResult.ignored; // cierra
+      if (k == LogicalKeyboardKey.escape && _expresion.isEmpty) {
+        widget.onCerrar();
+        return KeyEventResult.handled;
+      }
       _tecla('C');
     } else if (c != null && RegExp(r'^[0-9]$').hasMatch(c)) {
       _tecla(c);
@@ -310,35 +430,63 @@ class _CalculadoraState extends State<_Calculadora> {
   @override
   Widget build(BuildContext context) {
     final esquema = Theme.of(context).colorScheme;
-    return Focus(
-      focusNode: _foco,
-      autofocus: true,
-      onKeyEvent: _teclado,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 360),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.calculate_outlined, size: 20),
-                  const SizedBox(width: 8),
-                  const Expanded(child: Text("Calculadora", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
-                  IconButton(
-                    tooltip: _verHistorial ? "Volver a la calculadora" : "Historial",
-                    icon: Icon(_verHistorial ? Icons.calculate : Icons.history),
-                    onPressed: () => setState(() => _verHistorial = !_verHistorial),
-                  ),
-                  IconButton(tooltip: "Cerrar", icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
-                ],
-              ),
-              _pantalla(esquema),
-              const SizedBox(height: 10),
-              SizedBox(height: 330, child: _verHistorial ? _listaHistorial(esquema) : _teclado4x5(esquema)),
-            ],
+    // Al tocarla vuelve a recibir el teclado (por si se escribió en el programa).
+    return Listener(
+      onPointerDown: (_) {
+        if (!_foco.hasFocus) _foco.requestFocus();
+      },
+      child: Focus(
+        focusNode: _foco,
+        autofocus: true,
+        onKeyEvent: _teclado,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    // Barra para arrastrar la ventana.
+                    Expanded(
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.move,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onPanUpdate: (d) => widget.onArrastrar(d.delta),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 10),
+                            child: Row(
+                              children: [
+                                Icon(Icons.drag_indicator, size: 18),
+                                SizedBox(width: 4),
+                                Icon(Icons.calculate_outlined, size: 20),
+                                SizedBox(width: 8),
+                                Expanded(
+                                  child: Text("Calculadora", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: _verHistorial ? "Volver a la calculadora" : "Historial",
+                      icon: Icon(_verHistorial ? Icons.calculate : Icons.history),
+                      onPressed: () => setState(() => _verHistorial = !_verHistorial),
+                    ),
+                    IconButton(tooltip: "Minimizar", icon: const Icon(Icons.minimize), onPressed: widget.onMinimizar),
+                    IconButton(tooltip: "Cerrar", icon: const Icon(Icons.close), onPressed: widget.onCerrar),
+                  ],
+                ),
+                _pantalla(esquema),
+                const SizedBox(height: 10),
+                SizedBox(height: 330, child: _verHistorial ? _listaHistorial(esquema) : _teclado4x5(esquema)),
+              ],
+            ),
           ),
         ),
       ),
@@ -349,10 +497,7 @@ class _CalculadoraState extends State<_Calculadora> {
     final textoPrincipal = _expresion.isEmpty ? '0' : mostrar(_expresion);
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
-      decoration: BoxDecoration(
-        color: esquema.surfaceContainerHighest.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(12),
-      ),
+      decoration: BoxDecoration(color: esquema.surfaceContainerHighest.withValues(alpha: 0.5), borderRadius: BorderRadius.circular(12)),
       child: Row(
         children: [
           Expanded(
@@ -367,10 +512,7 @@ class _CalculadoraState extends State<_Calculadora> {
                 ),
                 SizedBox(
                   height: 20,
-                  child: Text(
-                    _resultadoPrevio == null ? '' : '= $_resultadoPrevio',
-                    style: TextStyle(fontSize: 14, color: esquema.onSurfaceVariant),
-                  ),
+                  child: Text(_resultadoPrevio == null ? '' : '= $_resultadoPrevio', style: TextStyle(fontSize: 14, color: esquema.onSurfaceVariant)),
                 ),
               ],
             ),
@@ -381,9 +523,7 @@ class _CalculadoraState extends State<_Calculadora> {
             onPressed: () {
               final v = evaluar(_expresion);
               Clipboard.setData(ClipboardData(text: v == null ? textoPrincipal : formatear(v)));
-              ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                const SnackBar(content: Text("Copiado"), duration: Duration(seconds: 1)),
-              );
+              ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(content: Text("Copiado"), duration: Duration(seconds: 1)));
             },
           ),
         ],
@@ -407,10 +547,7 @@ class _CalculadoraState extends State<_Calculadora> {
               children: [
                 for (final t in fila)
                   Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.all(3),
-                      child: _boton(t, esquema),
-                    ),
+                    child: Padding(padding: const EdgeInsets.all(3), child: _boton(t, esquema)),
                   ),
               ],
             ),
@@ -426,17 +563,17 @@ class _CalculadoraState extends State<_Calculadora> {
     final fondo = esIgual
         ? esquema.primary
         : esOperador
-            ? esquema.primaryContainer
-            : esFuncion
-                ? esquema.surfaceContainerHigh
-                : esquema.surfaceContainerLow;
+        ? esquema.primaryContainer
+        : esFuncion
+        ? esquema.surfaceContainerHigh
+        : esquema.surfaceContainerLow;
     final colorTexto = esIgual
         ? esquema.onPrimary
         : esOperador
-            ? esquema.onPrimaryContainer
-            : t == 'C'
-                ? Colors.red.shade400
-                : esquema.onSurface;
+        ? esquema.onPrimaryContainer
+        : t == 'C'
+        ? Colors.red.shade400
+        : esquema.onSurface;
     final etiqueta = t == '.' ? ',' : (t == '-' ? '−' : t);
     return Material(
       color: fondo,
@@ -447,7 +584,10 @@ class _CalculadoraState extends State<_Calculadora> {
         child: Center(
           child: t == '⌫'
               ? Icon(Icons.backspace_outlined, size: 20, color: colorTexto)
-              : Text(etiqueta, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: colorTexto)),
+              : Text(
+                  etiqueta,
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: colorTexto),
+                ),
         ),
       ),
     );
@@ -455,7 +595,9 @@ class _CalculadoraState extends State<_Calculadora> {
 
   Widget _listaHistorial(ColorScheme esquema) {
     if (_historial.isEmpty) {
-      return Center(child: Text("Todavía no hay operaciones.", style: TextStyle(color: esquema.onSurfaceVariant)));
+      return Center(
+        child: Text("Todavía no hay operaciones.", style: TextStyle(color: esquema.onSurfaceVariant)),
+      );
     }
     return Column(
       children: [
@@ -467,10 +609,17 @@ class _CalculadoraState extends State<_Calculadora> {
               final h = _historial[i];
               return ListTile(
                 dense: true,
-                title: Text(h.expresion, textAlign: TextAlign.right, style: TextStyle(color: esquema.onSurfaceVariant)),
-                subtitle: Text("= ${h.resultado}", textAlign: TextAlign.right,
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: esquema.onSurface)),
-                onTap: () => _usarResultado(h.resultado),
+                title: Text(
+                  h.expresion,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(color: esquema.onSurfaceVariant),
+                ),
+                subtitle: Text(
+                  "= ${h.resultado}",
+                  textAlign: TextAlign.right,
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: esquema.onSurface),
+                ),
+                onTap: () => _usarOperacion(h.expresion),
               );
             },
           ),
@@ -478,8 +627,7 @@ class _CalculadoraState extends State<_Calculadora> {
         Row(
           children: [
             Expanded(
-              child: Text("Tocá una operación para usar su resultado.",
-                  style: TextStyle(fontSize: 11.5, color: esquema.onSurfaceVariant)),
+              child: Text("Tocá una operación para seguir editándola.", style: TextStyle(fontSize: 11.5, color: esquema.onSurfaceVariant)),
             ),
             TextButton.icon(
               onPressed: () {

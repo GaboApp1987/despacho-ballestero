@@ -89,7 +89,9 @@ class _WhatsAppBandejaScreenState extends State<WhatsAppBandejaScreen> {
   Future<void> _abrir(Map<String, dynamic> c) async {
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => WhatsAppConversacionScreen(conversacionId: c['id'], telefono: c['telefono'] ?? '')),
+      MaterialPageRoute(
+        builder: (_) => WhatsAppConversacionScreen(conversacionId: c['id'], telefono: c['telefono'] ?? ''),
+      ),
     );
     _cargar(silencioso: true);
   }
@@ -104,7 +106,10 @@ class _WhatsAppBandejaScreenState extends State<WhatsAppBandejaScreen> {
         children: [
           Icon(icono, size: 12, color: color),
           const SizedBox(width: 4),
-          Text(texto, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
+          Text(
+            texto,
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color),
+          ),
         ],
       ),
     );
@@ -112,83 +117,112 @@ class _WhatsAppBandejaScreenState extends State<WhatsAppBandejaScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text("Bandeja de WhatsApp"),
-        actions: [IconButton(icon: const Icon(Icons.refresh), tooltip: "Actualizar", onPressed: _cargar)],
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          title: const Text("Bandeja de WhatsApp"),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.tune),
+              tooltip: "Tono de la IA",
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TonoIAScreen())),
+            ),
+            IconButton(icon: const Icon(Icons.refresh), tooltip: "Actualizar", onPressed: _cargar),
+          ],
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: "Visitantes"),
+              Tab(text: "Clientes"),
+            ],
+          ),
+        ),
+        body: TabBarView(children: [_visitantes(), const _ConversacionesClientes()]),
       ),
-      body: _cargando
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(_error!, textAlign: TextAlign.center)))
-              : _conversaciones.isEmpty
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(32),
+    );
+  }
+
+  Widget _visitantes() {
+    return _cargando
+        ? const Center(child: CircularProgressIndicator())
+        : _error != null
+        ? Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(_error!, textAlign: TextAlign.center),
+            ),
+          )
+        : _conversaciones.isEmpty
+        ? Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Text(
+                "Todavía nadie escribió al WhatsApp de Equilibra.\nCuando alguien escriba, la IA le contesta primero y la conversación aparece acá.",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.textMuted),
+              ),
+            ),
+          )
+        : RefreshIndicator(
+            onRefresh: _cargar,
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: _conversaciones.length,
+              separatorBuilder: (_, __) => Divider(height: 1, color: AppColors.border),
+              itemBuilder: (context, i) {
+                final c = _conversaciones[i];
+                final pendiente = c['atendido'] != true;
+                final autor = c['ultimo_autor'];
+                final prefijo = autor == 'ia' ? '🤖 ' : (autor == 'equipo' ? 'Vos: ' : '');
+                return ListTile(
+                  onTap: () => _abrir(c),
+                  leading: CircleAvatar(
+                    backgroundColor: const Color(0xFF25D366).withOpacity(0.15),
+                    child: const Icon(Icons.chat, color: Color(0xFF25D366)),
+                  ),
+                  title: Row(
+                    children: [
+                      Expanded(
                         child: Text(
-                          "Todavía nadie escribió al WhatsApp de Equilibra.\nCuando alguien escriba, la IA le contesta primero y la conversación aparece acá.",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: AppColors.textMuted),
+                          formatearTelefonoWhatsApp(c['telefono'] ?? ''),
+                          style: TextStyle(fontWeight: pendiente ? FontWeight.w800 : FontWeight.w600, color: AppColors.textStrong),
                         ),
                       ),
-                    )
-                  : RefreshIndicator(
-                      onRefresh: _cargar,
-                      child: ListView.separated(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        itemCount: _conversaciones.length,
-                        separatorBuilder: (_, __) => Divider(height: 1, color: AppColors.border),
-                        itemBuilder: (context, i) {
-                          final c = _conversaciones[i];
-                          final pendiente = c['atendido'] != true;
-                          final autor = c['ultimo_autor'];
-                          final prefijo = autor == 'ia' ? '🤖 ' : (autor == 'equipo' ? 'Vos: ' : '');
-                          return ListTile(
-                            onTap: () => _abrir(c),
-                            leading: CircleAvatar(
-                              backgroundColor: const Color(0xFF25D366).withOpacity(0.15),
-                              child: const Icon(Icons.chat, color: Color(0xFF25D366)),
-                            ),
-                            title: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    formatearTelefonoWhatsApp(c['telefono'] ?? ''),
-                                    style: TextStyle(fontWeight: pendiente ? FontWeight.w800 : FontWeight.w600, color: AppColors.textStrong),
-                                  ),
-                                ),
-                                Text(_haceCuanto(c['ultimo_mensaje_en']), style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
-                                if (pendiente) ...[
-                                  const SizedBox(width: 8),
-                                  Container(width: 9, height: 9, decoration: BoxDecoration(color: AppColors.primary, shape: BoxShape.circle)),
-                                ],
-                              ],
-                            ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const SizedBox(height: 2),
-                                Text(
-                                  "$prefijo${c['ultimo_mensaje'] ?? ''}",
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(color: AppColors.textMuted),
-                                ),
-                                Wrap(
-                                  children: [
-                                    if (c['escalado'] == true && pendiente) _etiqueta("Pide una persona", Colors.orange, Icons.front_hand_outlined),
-                                    if (c['ia_pausada'] == true) _etiqueta("IA pausada", Colors.blueGrey, Icons.pause_circle_outline),
-                                    if (c['ventana_abierta'] != true) _etiqueta("Fuera de las 24 h", Colors.grey, Icons.schedule),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          );
-                        },
+                      Text(_haceCuanto(c['ultimo_mensaje_en']), style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                      if (pendiente) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          width: 9,
+                          height: 9,
+                          decoration: BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
+                        ),
+                      ],
+                    ],
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 2),
+                      Text(
+                        "$prefijo${c['ultimo_mensaje'] ?? ''}",
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: AppColors.textMuted),
                       ),
-                    ),
-    );
+                      Wrap(
+                        children: [
+                          if (c['escalado'] == true && pendiente) _etiqueta("Pide una persona", Colors.orange, Icons.front_hand_outlined),
+                          if (c['ia_pausada'] == true) _etiqueta("IA pausada", Colors.blueGrey, Icons.pause_circle_outline),
+                          if (c['ventana_abierta'] != true) _etiqueta("Fuera de las 24 h", Colors.grey, Icons.schedule),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          );
   }
 }
 
@@ -346,11 +380,9 @@ class _WhatsAppConversacionScreenState extends State<WhatsAppConversacionScreen>
                 ),
               ),
               TextButton(
-                onPressed: () => _post(
-                  'pausar_ia',
-                  {'pausada': !pausada},
-                  exito: pausada ? "La IA vuelve a contestar esta conversación" : "IA pausada: ahora contestás vos",
-                ),
+                onPressed: () => _post('pausar_ia', {
+                  'pausada': !pausada,
+                }, exito: pausada ? "La IA vuelve a contestar esta conversación" : "IA pausada: ahora contestás vos"),
                 child: Text(pausada ? "Devolver a la IA" : "Tomar conversación"),
               ),
             ],
@@ -359,7 +391,10 @@ class _WhatsAppConversacionScreenState extends State<WhatsAppConversacionScreen>
           if (c['escalado'] == true && c['atendido'] != true)
             Padding(
               padding: const EdgeInsets.only(top: 4),
-              child: Text("✋ La IA indicó que esta persona necesita hablar con alguien del equipo.", style: TextStyle(fontSize: 12, color: Colors.orange.shade700, fontWeight: FontWeight.w600)),
+              child: Text(
+                "✋ La IA indicó que esta persona necesita hablar con alguien del equipo.",
+                style: TextStyle(fontSize: 12, color: Colors.orange.shade700, fontWeight: FontWeight.w600),
+              ),
             ),
         ],
       ),
@@ -395,66 +430,608 @@ class _WhatsAppConversacionScreenState extends State<WhatsAppConversacionScreen>
       body: _cargando
           ? const Center(child: CircularProgressIndicator())
           : _conv == null
-              ? const Center(child: Text("No se pudo cargar la conversación."))
-              : Column(
-                  children: [
-                    _barraEstado(),
-                    Divider(height: 1, color: AppColors.border),
-                    Expanded(
-                      child: ListView.builder(
-                        controller: _scrollCtrl,
-                        padding: const EdgeInsets.all(16),
-                        itemCount: historial.length,
-                        itemBuilder: (_, i) => _burbuja(historial[i]),
-                      ),
-                    ),
-                    SafeArea(
-                      top: false,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Focus(
-                                // Enter envía también en Flutter Web (ver chat_detalle_screen.dart).
-                                onKeyEvent: (node, event) {
-                                  if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.enter && !HardwareKeyboard.instance.isShiftPressed) {
-                                    _enviar();
-                                    return KeyEventResult.handled;
-                                  }
-                                  return KeyEventResult.ignored;
-                                },
-                                child: TextField(
-                                  controller: _inputCtrl,
-                                  enabled: ventana && !_enviando,
-                                  minLines: 1,
-                                  maxLines: 4,
-                                  style: TextStyle(color: AppColors.textStrong),
-                                  decoration: InputDecoration(
-                                    hintText: ventana ? "Escribí tu respuesta (le llega por WhatsApp)..." : "Esperá a que el cliente vuelva a escribir",
-                                    filled: true,
-                                    fillColor: AppColors.surface,
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide(color: AppColors.border)),
-                                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide(color: AppColors.border)),
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                                  ),
+          ? const Center(child: Text("No se pudo cargar la conversación."))
+          : Column(
+              children: [
+                _barraEstado(),
+                Divider(height: 1, color: AppColors.border),
+                Expanded(
+                  child: ListView.builder(
+                    controller: _scrollCtrl,
+                    padding: const EdgeInsets.all(16),
+                    itemCount: historial.length,
+                    itemBuilder: (_, i) => _burbuja(historial[i]),
+                  ),
+                ),
+                SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Focus(
+                            // Enter envía también en Flutter Web (ver chat_detalle_screen.dart).
+                            onKeyEvent: (node, event) {
+                              if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.enter && !HardwareKeyboard.instance.isShiftPressed) {
+                                _enviar();
+                                return KeyEventResult.handled;
+                              }
+                              return KeyEventResult.ignored;
+                            },
+                            child: TextField(
+                              controller: _inputCtrl,
+                              enabled: ventana && !_enviando,
+                              minLines: 1,
+                              maxLines: 4,
+                              style: TextStyle(color: AppColors.textStrong),
+                              decoration: InputDecoration(
+                                hintText: ventana ? "Escribí tu respuesta (le llega por WhatsApp)..." : "Esperá a que el cliente vuelva a escribir",
+                                filled: true,
+                                fillColor: AppColors.surface,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                  borderSide: BorderSide(color: AppColors.border),
                                 ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                  borderSide: BorderSide(color: AppColors.border),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            _enviando
-                                ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)))
-                                : IconButton.filled(
-                                    onPressed: ventana ? _enviar : null,
-                                    icon: const Icon(Icons.send),
-                                    style: IconButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
-                                  ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _enviando
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)),
+                              )
+                            : IconButton.filled(
+                                onPressed: ventana ? _enviar : null,
+                                icon: const Icon(Icons.send),
+                                style: IconButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                              ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+/// Pestaña "Clientes": lo que los clientes con el WhatsApp vinculado hablan
+/// con la IA (backend: ConversacionWhatsAppUsuario). Solo lectura: a ellos
+/// les contesta siempre la IA con sus datos.
+class _ConversacionesClientes extends StatefulWidget {
+  const _ConversacionesClientes();
+
+  @override
+  State<_ConversacionesClientes> createState() => _ConversacionesClientesState();
+}
+
+class _ConversacionesClientesState extends State<_ConversacionesClientes> with AutomaticKeepAliveClientMixin {
+  List<Map<String, dynamic>> _conversaciones = [];
+  bool _cargando = true;
+  String? _error;
+  String _busqueda = '';
+  Timer? _debounce;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargar();
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _cargar() async {
+    setState(() => _cargando = true);
+    try {
+      final q = Uri.encodeQueryComponent(_busqueda.trim());
+      final r = await ApiService.get('/whatsapp/conversaciones/clientes/${q.isEmpty ? '' : '?q=$q'}');
+      if (!mounted) return;
+      if (r.statusCode == 200) {
+        setState(() {
+          _conversaciones = (json.decode(utf8.decode(r.bodyBytes)) as List).cast<Map<String, dynamic>>();
+          _error = null;
+        });
+      } else {
+        setState(() => _error = "No se pudieron cargar: ${ApiService.mensajeError(r)}.");
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = "No se pudieron cargar: ${ApiService.textoError(e)}");
+    } finally {
+      if (mounted) setState(() => _cargando = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: TextField(
+            decoration: InputDecoration(
+              hintText: "Buscar por negocio, número o palabra...",
+              prefixIcon: const Icon(Icons.search),
+              filled: true,
+              fillColor: AppColors.surface,
+              isDense: true,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(24),
+                borderSide: BorderSide(color: AppColors.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(24),
+                borderSide: BorderSide(color: AppColors.border),
+              ),
+            ),
+            onChanged: (v) {
+              _busqueda = v;
+              _debounce?.cancel();
+              _debounce = Timer(const Duration(milliseconds: 400), _cargar);
+            },
+          ),
+        ),
+        Expanded(
+          child: _cargando
+              ? const Center(child: CircularProgressIndicator())
+              : _error != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(_error!, textAlign: TextAlign.center),
+                  ),
+                )
+              : _conversaciones.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Text(
+                      _busqueda.trim().isEmpty
+                          ? "Todavía no hay conversaciones de clientes.\nCuando un cliente con el WhatsApp vinculado le escriba a la IA, aparece acá."
+                          : "No hay conversaciones que coincidan.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AppColors.textMuted),
+                    ),
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: _cargar,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    itemCount: _conversaciones.length,
+                    separatorBuilder: (_, __) => Divider(height: 1, color: AppColors.border),
+                    itemBuilder: (context, i) {
+                      final c = _conversaciones[i];
+                      final prefijo = c['ultimo_autor'] == 'ia' ? '🤖 ' : '';
+                      return ListTile(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => WhatsAppClienteConversacionScreen(conversacionId: c['id'], titulo: c['nombre'] ?? ''),
+                          ),
+                        ),
+                        leading: CircleAvatar(
+                          backgroundColor: AppColors.primary.withOpacity(0.12),
+                          child: Icon(Icons.storefront, color: AppColors.primary),
+                        ),
+                        title: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                c['nombre'] ?? '',
+                                style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textStrong),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Text(_haceCuanto(c['ultimo_mensaje_en']), style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
                           ],
                         ),
-                      ),
-                    ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "${formatearTelefonoWhatsApp(c['telefono'] ?? '')} · ${c['usuario'] ?? ''} · ${c['mensajes'] ?? 0} mensajes",
+                              style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              "$prefijo${c['ultimo_mensaje'] ?? ''}",
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: AppColors.textMuted),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class WhatsAppClienteConversacionScreen extends StatefulWidget {
+  final int conversacionId;
+  final String titulo;
+
+  const WhatsAppClienteConversacionScreen({super.key, required this.conversacionId, required this.titulo});
+
+  @override
+  State<WhatsAppClienteConversacionScreen> createState() => _WhatsAppClienteConversacionScreenState();
+}
+
+class _WhatsAppClienteConversacionScreenState extends State<WhatsAppClienteConversacionScreen> {
+  Map<String, dynamic>? _conv;
+  bool _cargando = true;
+  final _scrollCtrl = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _cargar();
+  }
+
+  @override
+  void dispose() {
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _cargar() async {
+    try {
+      final r = await ApiService.get('/whatsapp/conversaciones/clientes/${widget.conversacionId}/');
+      if (!mounted) return;
+      if (r.statusCode == 200) {
+        setState(() => _conv = json.decode(utf8.decode(r.bodyBytes)));
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollCtrl.hasClients) _scrollCtrl.jumpTo(_scrollCtrl.position.maxScrollExtent);
+        });
+      }
+    } catch (_) {
+      // Sin conexión: queda el mensaje de "No se pudo cargar".
+    } finally {
+      if (mounted) setState(() => _cargando = false);
+    }
+  }
+
+  Widget _burbuja(Map<String, dynamic> t) {
+    final esCliente = (t['autor'] ?? 'cliente') == 'cliente';
+    final herramientas = ((t['herramientas'] as List?) ?? []).cast<String>();
+    final hora = horaCostaRica(t['fecha'] ?? '');
+    return Align(
+      alignment: esCliente ? Alignment.centerLeft : Alignment.centerRight,
+      child: Container(
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: esCliente ? AppColors.surface : AppColors.primary.withOpacity(0.16),
+          borderRadius: BorderRadius.circular(14),
+          border: esCliente ? Border.all(color: AppColors.border) : null,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (!esCliente)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  "🤖 Respondió la IA",
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.textStrong.withOpacity(0.75)),
+                ),
+              ),
+            SelectableText(t['texto'] ?? '', style: TextStyle(color: AppColors.textStrong, fontSize: 14.5)),
+            if (herramientas.isNotEmpty || t['documento'] != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    for (final h in herramientas) _chip(Icons.build_outlined, h),
+                    if (t['documento'] != null) _chip(Icons.attach_file, "Envió ${t['documento']}"),
                   ],
                 ),
+              ),
+            if (hora.isNotEmpty)
+              Align(
+                alignment: Alignment.bottomRight,
+                child: Text(hora, style: TextStyle(fontSize: 10.5, color: AppColors.textMuted)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _chip(IconData icono, String texto) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icono, size: 12, color: AppColors.textMuted),
+          const SizedBox(width: 4),
+          Text(texto, style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final historial = ((_conv?['historial'] as List?) ?? []).cast<Map<String, dynamic>>();
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.titulo),
+            if (_conv != null)
+              Text("${formatearTelefonoWhatsApp(_conv!['telefono'] ?? '')} · ${_conv!['usuario'] ?? ''}", style: const TextStyle(fontSize: 12)),
+          ],
+        ),
+        actions: [IconButton(icon: const Icon(Icons.refresh), tooltip: "Actualizar", onPressed: _cargar)],
+      ),
+      body: _cargando
+          ? const Center(child: CircularProgressIndicator())
+          : _conv == null
+          ? const Center(child: Text("No se pudo cargar la conversación."))
+          : ListView.builder(
+              controller: _scrollCtrl,
+              padding: const EdgeInsets.all(16),
+              itemCount: historial.length,
+              itemBuilder: (_, i) => _burbuja(historial[i]),
+            ),
+    );
+  }
+}
+
+/// Tono con el que la IA contesta por WhatsApp (visitantes y clientes).
+/// Lo decide el administrador; "Probar" muestra cómo contestaría sin guardar.
+class TonoIAScreen extends StatefulWidget {
+  const TonoIAScreen({super.key});
+
+  @override
+  State<TonoIAScreen> createState() => _TonoIAScreenState();
+}
+
+class _TonoIAScreenState extends State<TonoIAScreen> {
+  Map<String, dynamic>? _opciones;
+  String _trato = 'usted';
+  String _estilo = 'calido';
+  bool _emojis = true;
+  String _largo = 'corto';
+  final _extraCtrl = TextEditingController();
+  final _preguntaCtrl = TextEditingController(text: "Hola, ¿cuánto cuesta Equilibra y qué incluye?");
+  bool _cargando = true;
+  bool _guardando = false;
+  bool _probando = false;
+  String? _respuestaPrueba;
+  String? _error;
+
+  static const _descripcionEstilo = {
+    'calido': "Amable y humano, con alguna expresión tica natural.",
+    'profesional': "Claro y cortés, sin modismos.",
+    'directo': "Al grano: el dato primero, sin rodeos.",
+    'formal': "Como un despacho contable.",
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _cargar();
+  }
+
+  @override
+  void dispose() {
+    _extraCtrl.dispose();
+    _preguntaCtrl.dispose();
+    super.dispose();
+  }
+
+  void _aplicar(Map<String, dynamic> d) {
+    _opciones = (d['opciones'] as Map?)?.cast<String, dynamic>();
+    _trato = d['trato'] ?? _trato;
+    _estilo = d['estilo'] ?? _estilo;
+    _emojis = d['emojis'] ?? _emojis;
+    _largo = d['largo'] ?? _largo;
+    _extraCtrl.text = d['instrucciones_extra'] ?? '';
+  }
+
+  Map<String, dynamic> get _datos => {'trato': _trato, 'estilo': _estilo, 'emojis': _emojis, 'largo': _largo, 'instrucciones_extra': _extraCtrl.text.trim()};
+
+  Future<void> _cargar() async {
+    try {
+      final r = await ApiService.get('/whatsapp/conversaciones/tono/');
+      if (!mounted) return;
+      if (r.statusCode == 200) {
+        setState(() => _aplicar(json.decode(utf8.decode(r.bodyBytes))));
+      } else {
+        setState(() => _error = "No se pudo cargar el tono: ${ApiService.mensajeError(r)}.");
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = ApiService.textoError(e));
+    } finally {
+      if (mounted) setState(() => _cargando = false);
+    }
+  }
+
+  Future<void> _guardar() async {
+    setState(() => _guardando = true);
+    try {
+      final r = await ApiService.put('/whatsapp/conversaciones/tono/', _datos);
+      if (!mounted) return;
+      if (r.statusCode == 200) {
+        setState(() => _aplicar(json.decode(utf8.decode(r.bodyBytes))));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Listo: la IA ya contesta con este tono en WhatsApp.")));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.mensajeError(r))));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
+    } finally {
+      if (mounted) setState(() => _guardando = false);
+    }
+  }
+
+  Future<void> _probar() async {
+    final pregunta = _preguntaCtrl.text.trim();
+    if (pregunta.isEmpty) return;
+    setState(() {
+      _probando = true;
+      _respuestaPrueba = null;
+    });
+    try {
+      final r = await ApiService.post('/whatsapp/conversaciones/probar_tono/', {..._datos, 'pregunta': pregunta});
+      final d = json.decode(utf8.decode(r.bodyBytes));
+      if (!mounted) return;
+      setState(() => _respuestaPrueba = r.statusCode == 200 ? d['respuesta'] : (d['detail']?.toString() ?? ApiService.mensajeError(r)));
+    } catch (e) {
+      if (mounted) setState(() => _respuestaPrueba = ApiService.textoError(e));
+    } finally {
+      if (mounted) setState(() => _probando = false);
+    }
+  }
+
+  List<Map<String, dynamic>> _lista(String campo) => ((_opciones?[campo] as List?) ?? []).cast<Map<String, dynamic>>();
+
+  Widget _titulo(String texto) => Padding(
+    padding: const EdgeInsets.only(top: 20, bottom: 8),
+    child: Text(
+      texto,
+      style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.textStrong, fontSize: 15),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(title: const Text("Tono de la IA en WhatsApp")),
+      body: _cargando
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(_error!, textAlign: TextAlign.center),
+              ),
+            )
+          : Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 640),
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+                  children: [
+                    Text(
+                      "Así le contesta la IA a todos por WhatsApp: a visitantes y a clientes con el número vinculado. "
+                      "El chat dentro de la app no cambia.",
+                      style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+                    ),
+                    _titulo("Trato"),
+                    SegmentedButton<String>(
+                      segments: [for (final o in _lista('trato')) ButtonSegment(value: o['valor'], label: Text(o['nombre']))],
+                      selected: {_trato},
+                      onSelectionChanged: (s) => setState(() => _trato = s.first),
+                    ),
+                    _titulo("Estilo"),
+                    for (final o in _lista('estilo'))
+                      RadioListTile<String>(
+                        value: o['valor'],
+                        groupValue: _estilo,
+                        onChanged: (v) => setState(() => _estilo = v!),
+                        title: Text(o['nombre']),
+                        subtitle: Text(_descripcionEstilo[o['valor']] ?? ''),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    _titulo("Largo de las respuestas"),
+                    SegmentedButton<String>(
+                      segments: [for (final o in _lista('largo')) ButtonSegment(value: o['valor'], label: Text(o['nombre']))],
+                      selected: {_largo},
+                      onSelectionChanged: (s) => setState(() => _largo = s.first),
+                    ),
+                    const SizedBox(height: 8),
+                    SwitchListTile(
+                      value: _emojis,
+                      onChanged: (v) => setState(() => _emojis = v),
+                      title: const Text("Usar emojis"),
+                      subtitle: const Text("Uno o dos por mensaje cuando sumen 🙌"),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    _titulo("Indicaciones adicionales (opcional)"),
+                    TextField(
+                      controller: _extraCtrl,
+                      minLines: 2,
+                      maxLines: 5,
+                      maxLength: 2000,
+                      decoration: const InputDecoration(hintText: "Ej.: Siempre ofrezca la prueba gratis de 10 días.", border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 8),
+                    FilledButton.icon(
+                      onPressed: _guardando ? null : _guardar,
+                      icon: _guardando
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.save_outlined),
+                      label: const Text("Guardar tono"),
+                    ),
+                    const Divider(height: 40),
+                    Text(
+                      "Probar antes de guardar",
+                      style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.textStrong, fontSize: 15),
+                    ),
+                    const SizedBox(height: 4),
+                    Text("La IA contesta como a un visitante, con el tono escogido arriba.", style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _preguntaCtrl,
+                      decoration: const InputDecoration(labelText: "Mensaje de prueba", border: OutlineInputBorder()),
+                      onSubmitted: (_) => _probar(),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _probando ? null : _probar,
+                      icon: _probando ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.play_arrow),
+                      label: const Text("Probar"),
+                    ),
+                    if (_respuestaPrueba != null)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Container(
+                          margin: const EdgeInsets.only(top: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.16), borderRadius: BorderRadius.circular(14)),
+                          child: SelectableText(_respuestaPrueba!, style: TextStyle(color: AppColors.textStrong, fontSize: 14.5)),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
     );
   }
 }
