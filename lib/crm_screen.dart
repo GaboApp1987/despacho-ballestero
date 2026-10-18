@@ -884,7 +884,8 @@ class _FichaProspectoState extends State<_FichaProspecto> {
         if ((p['telefono'] ?? '').toString().isNotEmpty && !_noContactar)
           TextButton.icon(
             onPressed: () async {
-              if (await enviarWhatsAppProspectos(context, [p['id'] as int], nombre: p['nombre']) && context.mounted) Navigator.pop(context, true);
+              final enviado = await enviarWhatsAppProspectos(context, [p['id'] as int], nombre: p['nombre'], categoria: p['categoria']);
+              if (enviado && context.mounted) Navigator.pop(context, true);
             },
             icon: const Icon(Icons.chat_outlined, size: 18),
             label: const Text("WhatsApp"),
