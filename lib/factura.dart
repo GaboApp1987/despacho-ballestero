@@ -6,6 +6,9 @@ class DetalleFacturaItem {
   final int productoId;
   final String nombreProducto;
   final String codigoCabys;
+  // Tarifa nominal de IVA de la línea (13, 4, 2, 1, 0...), ver
+  // DetalleFacturaSerializer.tarifa_iva.
+  final double? tarifaIvaServidor;
   final int cantidad;
   final double precioUnitario;
   final double montoIva;
@@ -30,6 +33,7 @@ class DetalleFacturaItem {
     required this.productoId,
     required this.nombreProducto,
     this.codigoCabys = '',
+    this.tarifaIvaServidor,
     required this.cantidad,
     required this.precioUnitario,
     required this.montoIva,
@@ -46,6 +50,10 @@ class DetalleFacturaItem {
   });
 
   double get total => subtotal + montoIva;
+  // Facturas guardadas antes de que el servidor la mandara: se deduce del IVA
+  // bruto (antes de exonerar) sobre la base.
+  double get tarifaIva => tarifaIvaServidor ??
+      (subtotal > 0 ? (((montoIva + montoExoneracion) / subtotal * 100) * 100).roundToDouble() / 100 : 0);
   double get montoBruto => precioUnitario * cantidad;
 
   factory DetalleFacturaItem.fromJson(Map<String, dynamic> json) {
@@ -55,6 +63,7 @@ class DetalleFacturaItem {
       productoId: json['producto'] is int ? json['producto'] : int.tryParse(json['producto'].toString()) ?? 0,
       nombreProducto: json['nombre_producto'] ?? 'Producto',
       codigoCabys: json['codigo_cabys'] ?? productoDetalle?['codigo_cabys'] ?? '',
+      tarifaIvaServidor: json['tarifa_iva'] == null ? null : double.tryParse(json['tarifa_iva'].toString()),
       cantidad: json['cantidad'] is int ? json['cantidad'] : int.tryParse(json['cantidad'].toString()) ?? 0,
       precioUnitario: double.tryParse(json['precio_unitario'].toString()) ?? 0.0,
       montoIva: double.tryParse(json['monto_iva'].toString()) ?? 0.0,
@@ -102,6 +111,9 @@ class Factura {
   // lleno cuando estadoHacienda es '4' (Rechazada) o '5' (Error Técnico),
   // ver Factura.get_motivo_rechazo en el backend.
   final String? motivoRechazo;
+  // Dirección, teléfono, actividad y tipo de identificación del cliente
+  // (FacturaSerializer.receptor_info), para el PDF.
+  final Map<String, dynamic>? receptorInfo;
   // totalFactura/totalIva y los montos de detalles SIEMPRE están en
   // colones -- si esta factura se emitió en dólares, moneda/tipoCambio
   // permiten mostrar el equivalente (total / tipoCambio) sin duplicar el
@@ -152,6 +164,7 @@ class Factura {
     this.logoNegocioUrl,
     this.negocioInfo,
     this.motivoRechazo,
+    this.receptorInfo,
     this.moneda = 'CRC',
     this.tipoCambio = 1.0,
     this.clienteId,
@@ -192,6 +205,7 @@ class Factura {
       logoNegocioUrl: json['logo_negocio'],
       negocioInfo: json['negocio_info'] != null ? NegocioInfo.fromJson(json['negocio_info']) : null,
       motivoRechazo: json['motivo_rechazo'],
+      receptorInfo: json['receptor_info'] is Map ? Map<String, dynamic>.from(json['receptor_info']) : null,
       moneda: json['moneda'] ?? 'CRC',
       tipoCambio: double.tryParse(json['tipo_cambio']?.toString() ?? '') ?? 1.0,
       xmlFirmado: json['xml_firmado'],

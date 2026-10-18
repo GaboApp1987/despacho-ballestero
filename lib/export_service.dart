@@ -1991,6 +1991,57 @@ class ExportService {
   }
 
   /// Exporta (o comparte) una factura individual con su detalle de productos
+  static String _textoTarifa(double tarifa) =>
+      tarifa <= 0 ? 'Exento' : '${tarifa == tarifa.roundToDouble() ? tarifa.toStringAsFixed(0) : tarifa.toStringAsFixed(2)}%';
+
+  /// Cédula (con su tipo), correo, teléfono, dirección y actividad del
+  /// receptor -- antes solo salían cédula y correo (2026-10-17).
+  static List<String> _lineasReceptor(Factura factura) {
+    final info = factura.receptorInfo ?? const {};
+    const tipos = {'01': 'Cédula física', '02': 'Cédula jurídica', '03': 'DIMEX', '04': 'NITE'};
+    String dato(String clave) => (info[clave] ?? '').toString().trim();
+    return [
+      if ((factura.receptorCedula ?? '').isNotEmpty) '${tipos[dato('tipo_cedula')] ?? 'Cédula'}: ${factura.receptorCedula}',
+      if ((factura.receptorCorreo ?? '').isNotEmpty) 'Correo: ${factura.receptorCorreo}',
+      if (dato('telefono').isNotEmpty) 'Tel.: ${dato('telefono')}',
+      if (dato('direccion').isNotEmpty) 'Dirección: ${dato('direccion')}',
+      if (dato('codigo_actividad').isNotEmpty) 'Actividad económica: ${dato('codigo_actividad')}',
+    ];
+  }
+
+  /// Base imponible e IVA por tarifa (13%, 4%, 1%, exento...), y lo
+  /// exonerado si hubo -- igual que el PDF del servidor (_tabla_tarifas_pdf).
+  static pw.Widget _tablaTarifas(List<DetalleFacturaItem> detalles, String Function(num) fmt) {
+    final grupos = <double, List<double>>{};
+    for (final d in detalles) {
+      final g = grupos.putIfAbsent(d.tarifaIva, () => [0, 0, 0]);
+      g[0] += d.subtotal;
+      g[1] += d.montoIva;
+      g[2] += d.montoExoneracion;
+    }
+    final hayExoneracion = grupos.values.any((g) => g[2] > 0);
+    final tarifas = grupos.keys.toList()..sort((a, b) => b.compareTo(a));
+    return pw.SizedBox(
+      width: hayExoneracion ? 340 : 260,
+      child: pw.TableHelper.fromTextArray(
+        headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5, color: PdfColors.grey700),
+        headerDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
+        cellStyle: const pw.TextStyle(fontSize: 8.5),
+        cellAlignments: const {1: pw.Alignment.centerRight, 2: pw.Alignment.centerRight, 3: pw.Alignment.centerRight},
+        headers: ['Tarifa IVA', 'Base imponible', 'IVA', if (hayExoneracion) 'Exonerado'],
+        data: [
+          for (final t in tarifas)
+            [
+              t <= 0 ? 'Exento (0%)' : _textoTarifa(t),
+              fmt(grupos[t]![0]),
+              fmt(grupos[t]![1]),
+              if (hayExoneracion) grupos[t]![2] > 0 ? fmt(grupos[t]![2]) : '-',
+            ],
+        ],
+      ),
+    );
+  }
+
   static Future<void> exportFacturaDetalleToPdf(Factura factura, {bool share = false, List<NotaCredito> notasCredito = const []}) async {
     final pdf = pw.Document(theme: await _cargarTema());
     final subtotal = factura.totalFactura - factura.totalIva;
@@ -2032,10 +2083,7 @@ class ExportService {
         pw.SizedBox(height: 14),
         pw.Text('RECEPTOR', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.indigo)),
         pw.Text(factura.receptorNombre),
-        if (factura.receptorCedula != null && factura.receptorCedula!.isNotEmpty)
-          pw.Text('Cédula: ${factura.receptorCedula}'),
-        if (factura.receptorCorreo != null && factura.receptorCorreo!.isNotEmpty)
-          pw.Text('Correo: ${factura.receptorCorreo}'),
+        ..._lineasReceptor(factura).map((l) => pw.Text(l, style: const pw.TextStyle(fontSize: 10))),
         if (factura.clave != null && factura.clave!.isNotEmpty) ...[
           pw.SizedBox(height: 8),
           pw.Text('Clave Numérica:', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
@@ -2070,13 +2118,19 @@ class ExportService {
                   ['Sin detalle de líneas registrado.', '', '', '', ''],
                 ]
               : factura.detalles.map((d) => [
-                    d.nombreProducto,
+                    d.codigoCabys.isNotEmpty ? '${d.nombreProducto}\nCABYS: ${d.codigoCabys}' : d.nombreProducto,
                     d.cantidad.toString(),
                     fmt(d.precioUnitario),
-                    fmt(d.montoIva),
+                    '${fmt(d.montoIva)}\n${_textoTarifa(d.tarifaIva)}',
                     fmt(d.total),
                   ]).toList(),
         ),
+        if (factura.detalles.isNotEmpty) ...[
+          pw.SizedBox(height: 14),
+          pw.Text('DETALLE POR TARIFA DE IVA', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9, color: PdfColors.indigo)),
+          pw.SizedBox(height: 4),
+          _tablaTarifas(factura.detalles, fmt),
+        ],
         pw.SizedBox(height: 20),
         pw.Align(
           alignment: pw.Alignment.centerRight,
