@@ -70,8 +70,12 @@ class _VentanaCalculadora extends StatefulWidget {
 class _VentanaCalculadoraState extends State<_VentanaCalculadora> {
   // Se recuerda mientras la app está abierta, para que vuelva donde se dejó.
   static Offset? _posicionGuardada;
-  static const _ancho = 360.0;
+  // Tamaño que dejó la persona arrastrando la esquina de abajo a la derecha.
+  static double _ancho = 360.0;
+  static double _altoTeclado = 330.0;
   static const _margen = 16.0;
+  static const _anchoMinimo = 280.0;
+  static const _altoMinimo = 220.0;
 
   Offset? _posicion;
   bool _minimizada = false;
@@ -87,13 +91,19 @@ class _VentanaCalculadoraState extends State<_VentanaCalculadora> {
   @override
   Widget build(BuildContext context) {
     final pantalla = MediaQuery.sizeOf(context);
-    final ancho = _ancho.clamp(0.0, pantalla.width - 2 * _margen);
+    final ancho = _ancho.clamp(0.0, pantalla.width - 2 * _margen).toDouble();
     _posicion ??= _posicionGuardada ?? Offset(pantalla.width - ancho - _margen, 72);
     final pos = _limitar(_posicion!, pantalla, _minimizada ? 160 : ancho);
 
     void mover(Offset delta) => setState(() {
       _posicion = _limitar(pos + delta, pantalla, _minimizada ? 160 : ancho);
       _posicionGuardada = _posicion;
+    });
+
+    void redimensionar(Offset delta) => setState(() {
+      _ancho = (_ancho + delta.dx).clamp(_anchoMinimo, (pantalla.width - pos.dx - 8).clamp(_anchoMinimo, 900.0)).toDouble();
+      // Lo de arriba del teclado (barra y pantalla) mide unos 170.
+      _altoTeclado = (_altoTeclado + delta.dy).clamp(_altoMinimo, (pantalla.height - pos.dy - 190).clamp(_altoMinimo, 900.0)).toDouble();
     });
 
     final esquema = Theme.of(context).colorScheme;
@@ -140,7 +150,35 @@ class _VentanaCalculadoraState extends State<_VentanaCalculadora> {
                   offstage: _minimizada,
                   child: SizedBox(
                     width: ancho,
-                    child: _Calculadora(onCerrar: widget.onCerrar, onMinimizar: () => setState(() => _minimizada = true), onArrastrar: mover),
+                    child: Stack(
+                      children: [
+                        _Calculadora(
+                          onCerrar: widget.onCerrar,
+                          onMinimizar: () => setState(() => _minimizada = true),
+                          onArrastrar: mover,
+                          altoTeclado: _altoTeclado,
+                        ),
+                        // Esquina para cambiar el tamaño de la ventana.
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
+                          child: MouseRegion(
+                            cursor: SystemMouseCursors.resizeDownRight,
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onPanUpdate: (d) => redimensionar(d.delta),
+                              child: Tooltip(
+                                message: "Arrastrá para cambiar el tamaño",
+                                child: Padding(
+                                  padding: const EdgeInsets.all(2),
+                                  child: Icon(Icons.open_in_full, size: 16, color: esquema.onSurfaceVariant.withValues(alpha: 0.7)),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -156,7 +194,8 @@ class _Calculadora extends StatefulWidget {
   final VoidCallback onCerrar;
   final VoidCallback onMinimizar;
   final ValueChanged<Offset> onArrastrar;
-  const _Calculadora({required this.onCerrar, required this.onMinimizar, required this.onArrastrar});
+  final double altoTeclado;
+  const _Calculadora({required this.onCerrar, required this.onMinimizar, required this.onArrastrar, this.altoTeclado = 330});
 
   @override
   State<_Calculadora> createState() => _CalculadoraState();
@@ -440,7 +479,7 @@ class _CalculadoraState extends State<_Calculadora> {
         autofocus: true,
         onKeyEvent: _teclado,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360),
+          constraints: const BoxConstraints(maxWidth: 900),
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Column(
@@ -484,7 +523,7 @@ class _CalculadoraState extends State<_Calculadora> {
                 ),
                 _pantalla(esquema),
                 const SizedBox(height: 10),
-                SizedBox(height: 330, child: _verHistorial ? _listaHistorial(esquema) : _teclado4x5(esquema)),
+                SizedBox(height: widget.altoTeclado, child: _verHistorial ? _listaHistorial(esquema) : _teclado4x5(esquema)),
               ],
             ),
           ),
@@ -586,7 +625,7 @@ class _CalculadoraState extends State<_Calculadora> {
               ? Icon(Icons.backspace_outlined, size: 20, color: colorTexto)
               : Text(
                   etiqueta,
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: colorTexto),
+                  style: TextStyle(fontSize: (widget.altoTeclado / 15).clamp(16.0, 34.0), fontWeight: FontWeight.w600, color: colorTexto),
                 ),
         ),
       ),

@@ -585,7 +585,11 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
       ),
     );
     ctrl.dispose();
-    if (telefono != null && telefono.isNotEmpty) await _invitarWhatsApp(telefono: telefono);
+    if (telefono != null && telefono.isNotEmpty) {
+      await _invitarWhatsApp(telefono: telefono);
+      // Si no tenía número, el backend lo guardó en el perfil.
+      if (_telefonoRegistrado.isEmpty) _cargarInvitacion();
+    }
   }
 
   Future<void> _vincularWhatsApp() async {
@@ -847,9 +851,15 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                           ),
                         )
                       else
-                        const Text(
-                          "Guardá el número de WhatsApp en Ajustes para mandar la invitación con un toque, o escribilo abajo.",
-                          style: TextStyle(fontSize: 12.5, color: Colors.grey),
+                        // Contador y despacho no tienen Ajustes con teléfono:
+                        // lo escriben acá y queda guardado en el perfil.
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: _whatsappCargando ? null : _invitarOtroNumero,
+                            icon: const Icon(Icons.send_to_mobile),
+                            label: Text(_cuentaAjena ? "Escribir su número y enviarle la invitación" : "Escribir mi número y enviarme la invitación"),
+                          ),
                         ),
                       const SizedBox(height: 6),
                       const Text(
@@ -911,6 +921,8 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                         ),
                       ],
                     ),
+                    const Divider(height: 28),
+                    _SaludoManana(negocioId: widget.negocioId),
                   ] else ...[
                     Text(
                       "Enviá este código desde tu WhatsApp al número indicado para completar la vinculación (vence en ${_whatsappResultado!['vence_en_minutos']} minutos):",
@@ -1227,6 +1239,144 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+
+/// Saludo de cada mañana por WhatsApp (backend: whatsapp/saludo/,
+/// saludo_diario.py): encenderlo, la hora y el texto, y probarlo.
+class _SaludoManana extends StatefulWidget {
+  final int? negocioId;
+  const _SaludoManana({this.negocioId});
+
+  @override
+  State<_SaludoManana> createState() => _SaludoMananaState();
+}
+
+class _SaludoMananaState extends State<_SaludoManana> {
+  Map<String, dynamic>? _datos;
+  final _textoCtrl = TextEditingController();
+  bool _guardando = false;
+
+  String get _sufijo => widget.negocioId != null ? '?negocio=${widget.negocioId}' : '';
+  Map<String, dynamic> get _cuerpoNegocio => {if (widget.negocioId != null) 'negocio': widget.negocioId};
+
+  @override
+  void initState() {
+    super.initState();
+    _cargar();
+  }
+
+  @override
+  void dispose() {
+    _textoCtrl.dispose();
+    super.dispose();
+  }
+
+  void _aplicar(Map<String, dynamic> d) {
+    setState(() => _datos = d);
+    _textoCtrl.text = d['texto'] ?? '';
+  }
+
+  Future<void> _cargar() async {
+    try {
+      final r = await ApiService.get('/whatsapp/saludo/$_sufijo');
+      if (r.statusCode == 200 && mounted) _aplicar(json.decode(utf8.decode(r.bodyBytes)));
+    } catch (_) {}
+  }
+
+  Future<void> _guardar(Map<String, dynamic> cambios, {String? exito}) async {
+    setState(() => _guardando = true);
+    try {
+      final r = await ApiService.put('/whatsapp/saludo/', {..._cuerpoNegocio, ...cambios});
+      final d = json.decode(utf8.decode(r.bodyBytes));
+      if (!mounted) return;
+      if (r.statusCode == 200) {
+        _aplicar(d);
+        if (exito != null) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(exito)));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(d['detail']?.toString() ?? ApiService.mensajeError(r))));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
+    } finally {
+      if (mounted) setState(() => _guardando = false);
+    }
+  }
+
+  Future<void> _probar() async {
+    try {
+      final r = await ApiService.post('/whatsapp/saludo/', _cuerpoNegocio);
+      final d = json.decode(utf8.decode(r.bodyBytes));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(d['detail'].toString())));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
+    }
+  }
+
+  String _hora(int h) => h == 0 ? "12 a. m." : h < 12 ? "$h a. m." : h == 12 ? "12 m. d." : "${h - 12} p. m.";
+
+  @override
+  Widget build(BuildContext context) {
+    final d = _datos;
+    if (d == null || d['vinculado'] != true) return const SizedBox.shrink();
+    final activo = d['activo'] == true;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: activo,
+          onChanged: _guardando ? null : (v) => _guardar({'activo': v}),
+          title: const Text("Saludo de la mañana", style: TextStyle(fontWeight: FontWeight.w700)),
+          subtitle: const Text("Cada mañana el asistente te saluda, te dice lo pendiente y te pregunta qué ocupás hacer hoy."),
+        ),
+        if (activo) ...[
+          Row(
+            children: [
+              const Text("Hora:"),
+              const SizedBox(width: 12),
+              DropdownButton<int>(
+                value: (d['hora'] ?? 7) as int,
+                items: [for (var h = 5; h <= 12; h++) DropdownMenuItem(value: h, child: Text(_hora(h)))],
+                onChanged: _guardando ? null : (h) => _guardar({'hora': h}),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _textoCtrl,
+            minLines: 2,
+            maxLines: 4,
+            maxLength: 500,
+            decoration: InputDecoration(
+              labelText: "Mensaje (opcional)",
+              hintText: d['texto_por_defecto'],
+              helperText: "Vacío = el mensaje de siempre.",
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          Wrap(
+            spacing: 8,
+            children: [
+              TextButton(
+                onPressed: _guardando ? null : () => _guardar({'texto': _textoCtrl.text}, exito: "Mensaje guardado."),
+                child: const Text("Guardar mensaje"),
+              ),
+              TextButton.icon(onPressed: _probar, icon: const Icon(Icons.send, size: 16), label: const Text("Mandármelo ahora")),
+            ],
+          ),
+          if (d['vista_previa'] != null)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(top: 6),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: const Color(0xFF25D366).withValues(alpha: 0.10), borderRadius: BorderRadius.circular(10)),
+              child: Text(d['vista_previa'], style: const TextStyle(fontSize: 13)),
+            ),
+        ],
+      ],
     );
   }
 }

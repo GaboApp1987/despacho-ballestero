@@ -31,6 +31,7 @@ import 'export_service.dart';
 import 'impuestos_screen.dart';
 import 'reportes_screen.dart';
 import 'tarjeta_lealtad_screen.dart';
+import 'promociones_screen.dart';
 import 'restaurante_screen.dart';
 import 'caja_screen.dart';
 import 'addons_screen.dart';
@@ -283,6 +284,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     (id: 16, icono: Icons.receipt_outlined, titulo: "Recibos de Pago"),
     (id: 15, icono: Icons.assignment_return_outlined, titulo: "Notas de Crédito/Débito"),
     (id: 11, icono: Icons.loyalty_outlined, titulo: "Tarjeta de Lealtad"),
+    (id: 25, icono: Icons.campaign_outlined, titulo: "Mensajes a clientes"),
     (id: 17, icono: Icons.mark_email_read_outlined, titulo: "Correos de Compra"),
     (id: 13, icono: Icons.local_shipping_outlined, titulo: "Cuentas por Pagar"),
     (id: 9, icono: Icons.receipt_long_outlined, titulo: "Gastos"),
@@ -312,7 +314,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
 
   static const Map<String, List<int>> _idsPorCategoria = {
     "Principal": [1, 2, 3, 24],
-    "Ventas": [21, 22, 0, 4, 15, 11, 16, 6, 19],
+    "Ventas": [21, 22, 0, 4, 15, 11, 25, 16, 6, 19],
     "Compras": [8, 17, 13, 9],
     "Finanzas": [23, 18, 20, 10, 7],
     "Administración": [14, 12, 5],
@@ -322,13 +324,13 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
   // bloquea la escritura/lectura correspondiente de todas formas (ver
   // BloqueaCajeroMixin y los chequeos de es_cajero en views.py), esto es
   // solo para no mostrar botones que van a fallar. 'completo' ve todo esto.
-  static const Set<int> _idsOcultosParaCajero = {6, 8, 13, 9, 7, 10, 11, 12, 5, 15, 16, 17, 18, 19, 20, 23, 24};
+  static const Set<int> _idsOcultosParaCajero = {6, 8, 13, 9, 7, 10, 11, 12, 5, 15, 16, 17, 18, 19, 20, 23, 24, 25};
 
   // Colaborador 'A la medida': sección -> permiso que la muestra (las que no
   // están acá las ve siempre, igual que el cajero).
   static const Map<int, String> _permisoPorSeccion = {
     24: 'vehiculos', 8: 'compras', 17: 'compras', 13: 'compras', 18: 'gastos', 9: 'gastos', 23: 'prestamos',
-    6: 'cobros', 19: 'cobros', 16: 'cobros', 15: 'notas', 11: 'ajustes', 12: 'ajustes', 5: 'ajustes',
+    6: 'cobros', 19: 'cobros', 16: 'cobros', 15: 'notas', 11: 'ajustes', 25: 'ajustes', 12: 'ajustes', 5: 'ajustes',
     10: 'reportes', 7: 'reportes', 20: 'bancos',
   };
 
@@ -598,6 +600,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     'reportes': (10, 'Reportes: reportes de facturación, compras e ingresos en PDF/Excel'),
     'impuestos': (7, 'Impuestos: declaración de IVA y de Renta'),
     'tarjeta_lealtad': (11, 'Tarjeta de lealtad: programa de puntos para clientes'),
+    'mensajes_clientes': (25, 'Mensajes a clientes: mandar promociones o avisos a los clientes por WhatsApp o correo'),
     'colaboradores': (14, 'Colaboradores: usuarios del negocio (cajeros, etc.)'),
     'ajustes': (5, 'Ajustes: datos del negocio, llave criptográfica de Hacienda, logo, numeración'),
   };
@@ -808,6 +811,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         return "Reportes";
       case 11:
         return "Tarjeta de Lealtad";
+      case 25:
+        return "Mensajes a clientes";
       case 21:
         return "Restaurante";
       case 22:
@@ -1095,6 +1100,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         return ReportesScreen(negocio: widget.negocio);
       case 11:
         return TarjetaLealtadScreen(negocio: widget.negocio);
+      case 25:
+        return PromocionesScreen(negocioId: widget.negocio.id);
       case 21:
         return RestauranteScreen(negocio: _negocioConCuota, rolEmpleado: widget.rolEmpleado);
       case 22:

@@ -118,7 +118,7 @@ class _WhatsAppBandejaScreenState extends State<WhatsAppBandejaScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         backgroundColor: AppColors.background,
         appBar: AppBar(
@@ -135,10 +135,11 @@ class _WhatsAppBandejaScreenState extends State<WhatsAppBandejaScreen> {
             tabs: [
               Tab(text: "Visitantes"),
               Tab(text: "Clientes"),
+              Tab(text: "Cobros"),
             ],
           ),
         ),
-        body: TabBarView(children: [_visitantes(), const _ConversacionesClientes()]),
+        body: TabBarView(children: [_visitantes(), const _ConversacionesClientes(), const _CobrosMensajes()]),
       ),
     );
   }
@@ -826,6 +827,7 @@ class _TonoIAScreenState extends State<TonoIAScreen> {
   bool _emojis = true;
   String _largo = 'corto';
   final _extraCtrl = TextEditingController();
+  final _precioCtrl = TextEditingController();
   final _preguntaCtrl = TextEditingController(text: "Hola, ¿cuánto cuesta Equilibra y qué incluye?");
   bool _cargando = true;
   bool _guardando = false;
@@ -849,6 +851,7 @@ class _TonoIAScreenState extends State<TonoIAScreen> {
   @override
   void dispose() {
     _extraCtrl.dispose();
+    _precioCtrl.dispose();
     _preguntaCtrl.dispose();
     super.dispose();
   }
@@ -860,9 +863,17 @@ class _TonoIAScreenState extends State<TonoIAScreen> {
     _emojis = d['emojis'] ?? _emojis;
     _largo = d['largo'] ?? _largo;
     _extraCtrl.text = d['instrucciones_extra'] ?? '';
+    _precioCtrl.text = formatearNumero((d['precio_mensaje'] ?? 15) as num, decimales: 0);
   }
 
-  Map<String, dynamic> get _datos => {'trato': _trato, 'estilo': _estilo, 'emojis': _emojis, 'largo': _largo, 'instrucciones_extra': _extraCtrl.text.trim()};
+  Map<String, dynamic> get _datos => {
+    'trato': _trato,
+    'estilo': _estilo,
+    'emojis': _emojis,
+    'largo': _largo,
+    'instrucciones_extra': _extraCtrl.text.trim(),
+    'precio_mensaje': double.tryParse(_precioCtrl.text.replaceAll('.', '').replaceAll(',', '.').trim()) ?? 15,
+  };
 
   Future<void> _cargar() async {
     try {
@@ -991,7 +1002,18 @@ class _TonoIAScreenState extends State<TonoIAScreen> {
                       maxLength: 2000,
                       decoration: const InputDecoration(hintText: "Ej.: Siempre ofrezca la prueba gratis de 10 días.", border: OutlineInputBorder()),
                     ),
-                    const SizedBox(height: 8),
+                    _titulo("Precio por mensaje"),
+                    TextField(
+                      controller: _precioCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        prefixText: "₡ ",
+                        helperText: "Lo que se le cobra al negocio por cada saludo de la mañana o promoción por WhatsApp (se cobra a fin de mes).",
+                        helperMaxLines: 2,
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     FilledButton.icon(
                       onPressed: _guardando ? null : _guardar,
                       icon: _guardando
@@ -1032,6 +1054,106 @@ class _TonoIAScreenState extends State<TonoIAScreen> {
                 ),
               ),
             ),
+    );
+  }
+}
+
+/// Pestaña "Cobros": mensajes de WhatsApp cobrables (saludos y
+/// promociones) de este mes por negocio y los cargos de meses cerrados,
+/// para marcarlos como pagados (backend: cobro_mensajes.py).
+class _CobrosMensajes extends StatefulWidget {
+  const _CobrosMensajes();
+
+  @override
+  State<_CobrosMensajes> createState() => _CobrosMensajesState();
+}
+
+class _CobrosMensajesState extends State<_CobrosMensajes> with AutomaticKeepAliveClientMixin {
+  Map<String, dynamic>? _datos;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargar();
+  }
+
+  Future<void> _cargar() async {
+    try {
+      final r = await ApiService.get('/whatsapp/conversaciones/cobros/');
+      if (r.statusCode == 200 && mounted) setState(() => _datos = json.decode(utf8.decode(r.bodyBytes)));
+    } catch (_) {
+      // Se reintenta al deslizar para actualizar.
+    }
+  }
+
+  Future<void> _marcar(int id, String estado) async {
+    final r = await ApiService.post('/whatsapp/conversaciones/cobros/$id/', {'estado': estado});
+    if (!mounted) return;
+    if (r.statusCode == 200) {
+      _cargar();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.mensajeError(r))));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final d = _datos;
+    if (d == null) return const Center(child: CircularProgressIndicator());
+    final esteMes = ((d['este_mes'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final cargos = ((d['cargos'] as List?) ?? []).cast<Map<String, dynamic>>();
+    final totalMes = esteMes.fold<double>(0, (s, e) => s + (e['monto'] as num).toDouble());
+    final pendiente = cargos.where((c) => c['estado'] == 'pendiente').fold<double>(0, (s, c) => s + (c['monto'] as num).toDouble());
+    Widget titulo(String t) => Padding(
+      padding: const EdgeInsets.only(top: 18, bottom: 6),
+      child: Text(
+        t,
+        style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.textStrong),
+      ),
+    );
+    return RefreshIndicator(
+      onRefresh: _cargar,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text(
+            "₡${formatearNumero(d['precio_mensaje'] as num, decimales: 0)} por mensaje (saludo o promoción). El día 1 se cierra "
+            "el mes anterior. El precio se cambia en ⚙️ Tono de la IA.",
+            style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+          ),
+          titulo("Este mes (${d['periodo_actual']}): ${formatearColones(totalMes)}"),
+          if (esteMes.isEmpty) Text("Todavía no hay mensajes cobrables este mes.", style: TextStyle(color: AppColors.textMuted)),
+          for (final e in esteMes)
+            ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: Text(e['negocio'] ?? ''),
+              trailing: Text("${e['cantidad']} · ${formatearColones((e['monto'] as num).toDouble())}"),
+            ),
+          titulo("Meses cerrados · pendiente: ${formatearColones(pendiente)}"),
+          if (cargos.isEmpty) Text("Todavía no se ha cerrado ningún mes.", style: TextStyle(color: AppColors.textMuted)),
+          for (final c in cargos)
+            ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: Text("${c['negocio']} · ${c['periodo']}"),
+              subtitle: Text("${c['cantidad']} mensajes · ${formatearColones((c['monto'] as num).toDouble())}"),
+              trailing: c['estado'] == 'pendiente'
+                  ? Wrap(
+                      spacing: 4,
+                      children: [
+                        TextButton(onPressed: () => _marcar(c['id'], 'pagado'), child: const Text("Pagado")),
+                        TextButton(onPressed: () => _marcar(c['id'], 'perdonado'), child: const Text("Perdonar")),
+                      ],
+                    )
+                  : Chip(label: Text(c['estado'] == 'pagado' ? "Pagado" : "Perdonado")),
+            ),
+        ],
+      ),
     );
   }
 }

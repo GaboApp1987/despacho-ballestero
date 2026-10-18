@@ -22,6 +22,14 @@ class CotizacionScreen extends StatefulWidget {
 }
 
 class _CotizacionScreenState extends State<CotizacionScreen> {
+  Future<void> _pdf(Map<String, dynamic> c, {bool share = false}) async {
+    try {
+      await ExportService.exportCotizacionToPdf(c, widget.negocio.nombreComercial, share: share);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
+    }
+  }
+
   late Future<List<dynamic>> _cotizacionesFuture;
   List<dynamic> _todasLasCotizaciones = [];
   List<dynamic> _cotizacionesFiltradas = [];
@@ -213,7 +221,7 @@ class _CotizacionScreenState extends State<CotizacionScreen> {
               IconButton(
                 tooltip: "Compartir",
                 icon: const Icon(Icons.share_outlined, color: Colors.blue),
-                onPressed: () => ExportService.exportCotizacionToPdf(c, widget.negocio.nombreComercial, share: true),
+                onPressed: () => _pdf(c, share: true),
               ),
               ElevatedButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cerrar")),
             ],
@@ -521,10 +529,10 @@ class _CotizacionScreenState extends State<CotizacionScreen> {
                                     icon: const Icon(Icons.more_vert, color: Colors.grey, size: 20),
                                     onSelected: (opcion) {
                                       if (opcion == 'ver') {
-                                        ExportService.exportCotizacionToPdf(c, widget.negocio.nombreComercial);
+                                        _pdf(c);
                                       }
                                       if (opcion == 'compartir') {
-                                        ExportService.exportCotizacionToPdf(c, widget.negocio.nombreComercial, share: true);
+                                        _pdf(c, share: true);
                                       }
                                     },
                                     itemBuilder: (context) => [

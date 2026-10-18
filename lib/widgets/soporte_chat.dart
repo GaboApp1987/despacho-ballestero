@@ -887,7 +887,9 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
   // asistente_acciones.py en el backend.
   static final _rutasPost = RegExp(
       r'^/(clientes|gastos-operativos|abonos|abonos-proveedor|cotizaciones|notas-credito|ingresos-operativos|proveedores|facturas-recurrentes)/$'
-      r'|^/facturas/\d+/(reenviar-hacienda|consultar-hacienda)/$'
+      r'|^/facturas/\d+/(reenviar-hacienda|consultar-hacienda|enviar-correo)/$'
+      r'|^/clientes/(\d+/enviar-cobro|enviar-cobros)/$'
+      r'|^/productos/ajustar-stock/$'
       r'|^/compras/registrar-desde-asistente/$');
   static final _rutasPatch = RegExp(r'^/productos/\d+/$|^/cobro-automatico/$');
   static const _estadosHacienda = {
@@ -946,6 +948,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
     'compra': Icons.shopping_cart_outlined,
     'recurrente': Icons.event_repeat_rounded,
     'cobro': Icons.notifications_active_outlined,
+    'correo': Icons.forward_to_inbox_outlined,
   };
 
   Widget _buildTarjetaAccion(_ChatMensaje mensaje) {

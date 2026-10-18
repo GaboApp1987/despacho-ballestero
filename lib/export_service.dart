@@ -2264,62 +2264,15 @@ class ExportService {
     }
   }
 
-  /// Genera y comparte una cotización por WA/Correo
+  /// Proforma formal de la cotización: la arma el servidor (la misma que
+  /// llega por WhatsApp, ver CotizacionViewSet.pdf) para que no haya dos
+  /// diseños distintos. Se imprime o se comparte por WA/Correo.
   static Future<void> exportCotizacionToPdf(Map<String, dynamic> cotizacion, String negocioNombre, {bool share = false}) async {
-    final pdf = pw.Document(theme: await _cargarTema());
-    pdf.addPage(pw.MultiPage(
-      pageTheme: _temaPagina(),
-      build: (pw.Context context) => [
-        pw.Header(
-          level: 0,
-          child: pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            children: [
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text('PROFORMA / COTIZACIÓN', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold, color: PdfColors.orange)),
-                  pw.Text('Número: COT-${cotizacion['consecutivo_cotizacion'].toString().padLeft(5, '0')}'),
-                  pw.Text('Fecha: ${cotizacion['fecha_emision'].toString().split('T')[0]}'),
-                ],
-              ),
-              pw.Text(negocioNombre, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-            ],
-          ),
-        ),
-        pw.SizedBox(height: 20),
-        pw.Text('CLIENTE:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-        pw.Text(cotizacion['cliente_nombre'] ?? 'Cliente General'),
-        pw.SizedBox(height: 20),
-        pw.TableHelper.fromTextArray(
-          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white),
-          headerDecoration: const pw.BoxDecoration(color: PdfColors.orange),
-          headers: const ['Producto', 'Cant', 'Precio Unit.', 'IVA', 'Total'],
-          data: ((cotizacion['detalles'] as List?) ?? []).map((item) {
-            final precioUnitario = double.tryParse(item['precio_unitario'].toString()) ?? 0.0;
-            final montoIva = double.tryParse((item['monto_iva'] ?? 0).toString()) ?? 0.0;
-            final subtotal = double.tryParse((item['subtotal'] ?? (precioUnitario * (item['cantidad'] ?? 1))).toString()) ?? 0.0;
-            return [
-              item['nombre_producto'] ?? 'Producto',
-              item['cantidad'].toString(),
-              formatearColones(precioUnitario),
-              formatearColones(montoIva),
-              formatearColones(subtotal + montoIva),
-            ];
-          }).toList(),
-        ),
-        pw.SizedBox(height: 20),
-        pw.Align(
-          alignment: pw.Alignment.centerRight,
-          child: pw.Text('TOTAL: ${formatearColones(double.parse(cotizacion['total'].toString()))}',
-              style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 18, color: PdfColors.orange)),
-        ),
-        pw.SizedBox(height: 50),
-        pw.Center(child: pw.Text('Gracias por su preferencia. Esta cotización tiene una validez de 15 días.')),
-      ],
-    ));
-
-    final pdfBytes = await pdf.save();
+    final respuesta = await ApiService.get('/cotizaciones/${cotizacion['id']}/pdf/?negocio=${cotizacion['negocio']}');
+    if (respuesta.statusCode != 200) {
+      throw Exception("No se pudo generar el PDF de la cotización: ${ApiService.mensajeError(respuesta)}");
+    }
+    final pdfBytes = respuesta.bodyBytes;
     final fileName = 'Cotizacion_${cotizacion['consecutivo_cotizacion']}.pdf';
 
     if (share) {

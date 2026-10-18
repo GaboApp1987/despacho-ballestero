@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'theme/app_theme.dart';
 import 'api_service.dart';
 import 'cliente.dart';
@@ -63,6 +64,9 @@ class _FormularioCotizacionState extends State<FormularioCotizacion> {
 
   final TextEditingController _busquedaCtrl = TextEditingController();
   String _busqueda = '';
+  // Van en la proforma en PDF (validez y condiciones para el cliente).
+  int _validezDias = 15;
+  String _notas = '';
   int? _categoriaFiltro;
 
   @override
@@ -490,6 +494,52 @@ class _FormularioCotizacionState extends State<FormularioCotizacion> {
     );
   }
 
+  Future<void> _editarCondiciones() async {
+    final validezCtrl = TextEditingController(text: '$_validezDias');
+    final notasCtrl = TextEditingController(text: _notas);
+    final guardar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Validez y notas"),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: validezCtrl,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(labelText: "Válida por (días)", border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: notasCtrl,
+                minLines: 3,
+                maxLines: 6,
+                decoration: const InputDecoration(
+                  labelText: "Notas o condiciones (opcional)",
+                  hintText: "Ej.: Entrega en 3 días hábiles. Garantía de 6 meses.",
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Listo")),
+        ],
+      ),
+    );
+    if (guardar == true && mounted) {
+      setState(() {
+        _validezDias = (int.tryParse(validezCtrl.text) ?? 15).clamp(1, 365);
+        _notas = notasCtrl.text.trim();
+      });
+    }
+  }
+
   Future<void> _guardar() async {
     if (_clienteSeleccionado == null || _carrito.isEmpty) return;
     setState(() => _isSaving = true);
@@ -502,6 +552,8 @@ class _FormularioCotizacionState extends State<FormularioCotizacion> {
         'subtotal': redondear2(subtotal),
         'monto_iva': redondear2(montoIva),
         'total': redondear2(_totalGeneral),
+        'validez_dias': _validezDias,
+        'notas': _notas,
         'detalles': _carrito.map((i) => {
           'producto': i.producto.id,
           'cantidad': i.cantidad,
@@ -823,7 +875,16 @@ class _FormularioCotizacionState extends State<FormularioCotizacion> {
                   Text(formatearColones(_totalGeneral), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: AppColors.primary)),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: _editarCondiciones,
+                  icon: const Icon(Icons.edit_note, size: 18),
+                  label: Text("Válida $_validezDias días${_notas.isEmpty ? ' · agregar notas' : ' · con notas'}"),
+                ),
+              ),
+              const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,
                 height: 50,
