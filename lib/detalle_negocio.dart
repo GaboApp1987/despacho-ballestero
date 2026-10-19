@@ -58,6 +58,7 @@ import 'prestamos_screen.dart';
 import 'vehiculos_screen.dart';
 import 'widgets/recorrido_guiado.dart';
 import 'widgets/calculadora.dart';
+import 'mensajes_automaticos_screen.dart';
 
 /// Envuelve a un hijo y le avisa a [builder] si el cursor está encima
 /// (hover) -- solo tiene efecto real con mouse (escritorio/web), en touch no
@@ -295,6 +296,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     // -- Administración --
     (id: 14, icono: Icons.badge_outlined, titulo: "Colaboradores"),
     (id: 12, icono: Icons.extension_outlined, titulo: "Add-ons"),
+    (id: 26, icono: Icons.mark_chat_read_outlined, titulo: "Mensajes automáticos"),
     (id: 5, icono: Icons.settings_outlined, titulo: "Ajustes"),
   ];
 
@@ -317,20 +319,20 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     "Ventas": [21, 22, 0, 4, 15, 11, 25, 16, 6, 19],
     "Compras": [8, 17, 13, 9],
     "Finanzas": [23, 18, 20, 10, 7],
-    "Administración": [14, 12, 5],
+    "Administración": [14, 12, 26, 5],
   };
 
   // Secciones ocultas para un empleado con rol 'cajero' -- el backend ya
   // bloquea la escritura/lectura correspondiente de todas formas (ver
   // BloqueaCajeroMixin y los chequeos de es_cajero en views.py), esto es
   // solo para no mostrar botones que van a fallar. 'completo' ve todo esto.
-  static const Set<int> _idsOcultosParaCajero = {6, 8, 13, 9, 7, 10, 11, 12, 5, 15, 16, 17, 18, 19, 20, 23, 24, 25};
+  static const Set<int> _idsOcultosParaCajero = {6, 8, 13, 9, 7, 10, 11, 12, 5, 15, 16, 17, 18, 19, 20, 23, 24, 25, 26};
 
   // Colaborador 'A la medida': sección -> permiso que la muestra (las que no
   // están acá las ve siempre, igual que el cajero).
   static const Map<int, String> _permisoPorSeccion = {
     24: 'vehiculos', 8: 'compras', 17: 'compras', 13: 'compras', 18: 'gastos', 9: 'gastos', 23: 'prestamos',
-    6: 'cobros', 19: 'cobros', 16: 'cobros', 15: 'notas', 11: 'ajustes', 25: 'ajustes', 12: 'ajustes', 5: 'ajustes',
+    6: 'cobros', 19: 'cobros', 16: 'cobros', 15: 'notas', 11: 'ajustes', 25: 'ajustes', 26: 'ajustes', 12: 'ajustes', 5: 'ajustes',
     10: 'reportes', 7: 'reportes', 20: 'bancos',
   };
 
@@ -600,6 +602,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
     'reportes': (10, 'Reportes: reportes de facturación, compras e ingresos en PDF/Excel'),
     'impuestos': (7, 'Impuestos: declaración de IVA y de Renta'),
     'tarjeta_lealtad': (11, 'Tarjeta de lealtad: programa de puntos para clientes'),
+    'mensajes_automaticos': (26, 'Mensajes automáticos: encender o apagar el saludo de la mañana por WhatsApp'),
     'mensajes_clientes': (25, 'Mensajes a clientes: mandar promociones o avisos a los clientes por WhatsApp o correo'),
     'colaboradores': (14, 'Colaboradores: usuarios del negocio (cajeros, etc.)'),
     'ajustes': (5, 'Ajustes: datos del negocio, llave criptográfica de Hacienda, logo, numeración'),
@@ -813,6 +816,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         return "Tarjeta de Lealtad";
       case 25:
         return "Mensajes a clientes";
+      case 26:
+        return "Mensajes automáticos";
       case 21:
         return "Restaurante";
       case 22:
@@ -1102,6 +1107,8 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         return TarjetaLealtadScreen(negocio: widget.negocio);
       case 25:
         return PromocionesScreen(negocioId: widget.negocio.id);
+      case 26:
+        return const MensajesAutomaticosScreen(embebido: true);
       case 21:
         return RestauranteScreen(negocio: _negocioConCuota, rolEmpleado: widget.rolEmpleado);
       case 22:
@@ -1287,7 +1294,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         // Bancos (20), Cuentas por pagar (13), Préstamos (23), Vehículos (24) y
         // Mensajes a clientes (25) también traen su propio botón: el de
         // factura se les encimaba ("Nueva cuenta" de Bancos, 2026-10-18).
-        if ([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 18, 20, 23, 24, 25].contains(_seccionActiva)) return null;
+        if ([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 18, 20, 23, 24, 25, 26].contains(_seccionActiva)) return null;
         if (_seccionActiva == 2) {
           return FloatingActionButton(
             key: GuiaClientes.nuevo,

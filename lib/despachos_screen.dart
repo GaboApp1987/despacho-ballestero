@@ -22,6 +22,7 @@ import 'admin_contadores_screen.dart';
 import 'perfil_sesion.dart';
 import 'widgets/calculadora.dart';
 import 'widgets/requisitos_contrasena.dart';
+import 'mensajes_automaticos_screen.dart';
 
 /// Pantalla de nivel plataforma: solo la ve un superusuario (el dueño del programa).
 /// Desde acá se dan de alta los despachos contables (cada uno con su propio dueño/login),
@@ -497,6 +498,11 @@ class _DespachosScreenState extends State<DespachosScreen> {
         ]),
         SeccionMenu("CONFIGURACIÓN", [
           EntradaMenu(icono: Icons.workspace_premium_outlined, etiqueta: "Planes de suscripción", onTap: _abrirPlanes),
+          EntradaMenu(
+            icono: Icons.mark_chat_read_outlined,
+            etiqueta: "Mensajes automáticos",
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MensajesAutomaticosScreen())),
+          ),
           EntradaMenu(
             icono: Icons.percent,
             etiqueta: "Tasas de planilla",

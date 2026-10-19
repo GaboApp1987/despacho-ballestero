@@ -32,6 +32,7 @@ import 'recorridos.dart';
 import 'widgets/recorrido_guiado.dart';
 import 'widgets/calculadora.dart';
 import 'widgets/requisitos_contrasena.dart';
+import 'mensajes_automaticos_screen.dart';
 
 /// Paleta "Blanco & Cobalto" -- solo para cuando esta pantalla la ve un
 /// CONTADOR viendo su propia cartera (widget.puedeCrear), a propósito
@@ -1767,6 +1768,11 @@ class _NegociosScreenState extends State<NegociosScreen> {
           ),
         ]),
         SeccionMenu("COMUNICACIÓN", [
+          EntradaMenu(
+            icono: Icons.mark_chat_read_outlined,
+            etiqueta: "Mensajes automáticos",
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MensajesAutomaticosScreen())),
+          ),
           EntradaMenu(
             icono: Icons.chat_bubble_outline_rounded,
             etiqueta: "Chats con clientes",

@@ -19,6 +19,7 @@ import 'widgets/asistente_ia_bar.dart';
 import 'perfil_sesion.dart';
 import 'widgets/calculadora.dart';
 import 'widgets/requisitos_contrasena.dart';
+import 'mensajes_automaticos_screen.dart';
 
 class ContadoresScreen extends StatefulWidget {
   const ContadoresScreen({super.key});
@@ -353,6 +354,11 @@ class _ContadoresScreenState extends State<ContadoresScreen> {
               context,
               MaterialPageRoute(builder: (context) => const ReportesContadorScreen()),
             ),
+          ),
+          accionAppBar(
+            icono: Icons.mark_chat_read_outlined,
+            tooltip: "Mensajes automáticos de WhatsApp",
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MensajesAutomaticosScreen())),
           ),
           accionAppBar(
             icono: Icons.account_circle_rounded,

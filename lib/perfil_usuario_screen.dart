@@ -10,6 +10,7 @@ import 'firmante_contador.dart';
 import 'login.dart';
 import 'logo_screen.dart';
 import 'widgets/requisitos_contrasena.dart';
+import 'mensajes_automaticos_screen.dart';
 
 /// Pantalla de "Mi Perfil" reutilizable para el usuario que tiene la sesión
 /// abierta (despacho, contador o negocio): logo, cambio de contraseña y
@@ -925,6 +926,14 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                     ),
                     const Divider(height: 28),
                     _SaludoManana(negocioId: widget.negocioId),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MensajesAutomaticosScreen())),
+                        icon: const Icon(Icons.mark_chat_read_outlined, size: 18),
+                        label: const Text("Ver quién recibe mensajes automáticos"),
+                      ),
+                    ),
                   ] else ...[
                     Text(
                       "Enviá este código desde tu WhatsApp al número indicado para completar la vinculación (vence en ${_whatsappResultado!['vence_en_minutos']} minutos):",
