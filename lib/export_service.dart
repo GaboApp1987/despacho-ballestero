@@ -646,6 +646,7 @@ class ExportService {
                   if (info?.nombreLegal != null && info!.nombreLegal!.isNotEmpty && info.nombreLegal != nombre)
                     pw.Text(info.nombreLegal!, style: gris),
                   if (info != null) pw.Text(info.cedulaEtiquetada, style: gris),
+                  if (info?.actividad != null && info!.actividad!.isNotEmpty) pw.Text('Actividad económica: ${info.actividad}', style: gris),
                   if (info?.direccion != null && info!.direccion!.isNotEmpty) pw.Text(info.direccion!, style: gris),
                   if (contacto.isNotEmpty) pw.Text(contacto, style: gris),
                 ],

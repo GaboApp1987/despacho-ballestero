@@ -9,6 +9,8 @@ class NegocioInfo {
   final String? direccion;
   final String? telefono;
   final String? logoUrl;
+  /// "4520.0 – Venta de repuestos": la del documento o la principal.
+  final String? actividad;
 
   NegocioInfo({
     required this.nombreComercial,
@@ -19,6 +21,7 @@ class NegocioInfo {
     this.direccion,
     this.telefono,
     this.logoUrl,
+    this.actividad,
   });
 
   static const Map<String, String> _tiposCedula = {
@@ -40,6 +43,7 @@ class NegocioInfo {
       direccion: json['direccion'],
       telefono: json['telefono'],
       logoUrl: json['logo'],
+      actividad: json['actividad'],
     );
   }
 }

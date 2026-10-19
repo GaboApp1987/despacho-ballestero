@@ -828,6 +828,7 @@ class _TonoIAScreenState extends State<TonoIAScreen> {
   String _largo = 'corto';
   final _extraCtrl = TextEditingController();
   final _precioCtrl = TextEditingController();
+  final _seguimientoCtrl = TextEditingController();
   final _preguntaCtrl = TextEditingController(text: "Hola, ¿cuánto cuesta Equilibra y qué incluye?");
   bool _cargando = true;
   bool _guardando = false;
@@ -852,6 +853,7 @@ class _TonoIAScreenState extends State<TonoIAScreen> {
   void dispose() {
     _extraCtrl.dispose();
     _precioCtrl.dispose();
+    _seguimientoCtrl.dispose();
     _preguntaCtrl.dispose();
     super.dispose();
   }
@@ -864,6 +866,7 @@ class _TonoIAScreenState extends State<TonoIAScreen> {
     _largo = d['largo'] ?? _largo;
     _extraCtrl.text = d['instrucciones_extra'] ?? '';
     _precioCtrl.text = formatearNumero((d['precio_mensaje'] ?? 15) as num, decimales: 0);
+    _seguimientoCtrl.text = '${d['seguimiento_chat_minutos'] ?? 5}';
   }
 
   Map<String, dynamic> get _datos => {
@@ -873,6 +876,7 @@ class _TonoIAScreenState extends State<TonoIAScreen> {
     'largo': _largo,
     'instrucciones_extra': _extraCtrl.text.trim(),
     'precio_mensaje': double.tryParse(_precioCtrl.text.replaceAll('.', '').replaceAll(',', '.').trim()) ?? 15,
+    'seguimiento_chat_minutos': int.tryParse(_seguimientoCtrl.text.trim()) ?? 5,
   };
 
   Future<void> _cargar() async {
@@ -1010,6 +1014,18 @@ class _TonoIAScreenState extends State<TonoIAScreen> {
                         prefixText: "₡ ",
                         helperText: "Lo que se le cobra al negocio por cada saludo de la mañana o promoción por WhatsApp (se cobra a fin de mes).",
                         helperMaxLines: 2,
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    _titulo("Seguimiento del chat de la página"),
+                    TextField(
+                      controller: _seguimientoCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        suffixText: "minutos",
+                        helperText: "Si alguien chatea en la página y deja de contestar, después de estos minutos la IA le escribe una vez por "
+                            "WhatsApp (de 8 a. m. a 7 p. m.). 0 = no darle seguimiento.",
+                        helperMaxLines: 3,
                         border: OutlineInputBorder(),
                       ),
                     ),
