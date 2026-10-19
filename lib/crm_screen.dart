@@ -860,9 +860,24 @@ class _FichaProspectoState extends State<_FichaProspecto> {
                 Text("Todavía ninguno.", style: TextStyle(color: AppColors.textMuted, fontSize: 13))
               else
                 for (final s in seguimientos)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Text("• ${s['asunto']} — ${_fecha(s['enviado_en']?.toString())}", style: TextStyle(color: AppColors.textStrong, fontSize: 13)),
+                  // Se abre para leer lo que se le mandó.
+                  ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    childrenPadding: const EdgeInsets.only(bottom: 10),
+                    dense: true,
+                    title: Text("${s['asunto']}", style: TextStyle(color: AppColors.textStrong, fontSize: 13, fontWeight: FontWeight.w600)),
+                    subtitle: Text(_fecha(s['enviado_en']?.toString()), style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(color: AppColors.surfaceSubtle, borderRadius: BorderRadius.circular(10)),
+                        child: SelectableText(
+                          (s['texto'] ?? '').toString().isEmpty ? "(Sin texto guardado)" : s['texto'].toString(),
+                          style: TextStyle(color: AppColors.textStrong, fontSize: 12.5),
+                        ),
+                      ),
+                    ],
                   ),
               if (conversacion.isNotEmpty) ...[
                 const SizedBox(height: 14),
