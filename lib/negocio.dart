@@ -87,6 +87,8 @@ class Negocio {
   final int documentosRecarga;
   final int iaCortesia;
   final int iaRecarga;
+  /// Sin pagar: solo puede facturar con lo regalado.
+  final bool soloCortesia;
   final int? suscripcionId;
   final String? suscripcionEstado;
   final bool suscripcionCobroAutomatico;
@@ -151,6 +153,7 @@ class Negocio {
     this.documentosRecarga = 0,
     this.iaCortesia = 0,
     this.iaRecarga = 0,
+    this.soloCortesia = false,
     this.usoPlan,
     this.suscripcionId,
     this.suscripcionEstado,
@@ -206,6 +209,7 @@ class Negocio {
       documentosRecarga: (json['saldos_extra']?['documentos_recarga'] as num?)?.toInt() ?? 0,
       iaCortesia: (json['saldos_extra']?['ia_cortesia'] as num?)?.toInt() ?? 0,
       iaRecarga: (json['saldos_extra']?['ia_recarga'] as num?)?.toInt() ?? 0,
+      soloCortesia: json['saldos_extra']?['solo_cortesia'] == true,
       usoPlan: json['uso_plan'] is Map ? Map<String, dynamic>.from(json['uso_plan']) : null,
       suscripcionId: json['suscripcion_id'],
       suscripcionEstado: json['suscripcion_estado'],

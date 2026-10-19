@@ -959,30 +959,27 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
           tooltip: "Este negocio no tiene plan -- tocá para ver los planes",
           onTap: abrirPlanes,
         ));
-        // Sin plan igual se ve lo regalado o comprado que le queda.
+        // Sin plan igual se ve lo disponible: sin límite (∞), o -- si no
+        // está pagando -- solo lo regalado que le queda.
         final n = _negocioConCuota;
-        final docsExtra = n.documentosCortesia + n.documentosRecarga;
-        if (docsExtra > 0) {
-          segmentos.add(_segmentoDatosAppBar(
-            icono: Icons.receipt_long_outlined,
-            texto: "$docsExtra facturas",
-            tooltip: "Te quedan $docsExtra documentos"
-                "${n.documentosCortesia > 0 ? ' (${n.documentosCortesia} de regalo)' : ''}"
-                "${n.documentosRecarga > 0 ? ' (${n.documentosRecarga} comprados)' : ''}",
-            onTap: abrirPlanes,
-          ));
-        }
+        final regalo = n.documentosCortesia > 0 ? ' (${n.documentosCortesia} de regalo)' : '';
+        segmentos.add(_segmentoDatosAppBar(
+          icono: Icons.receipt_long_outlined,
+          texto: n.soloCortesia ? "${n.documentosCortesia} facturas" : "∞ facturas",
+          tooltip: n.soloCortesia
+              ? "Te quedan ${n.documentosCortesia} facturas de regalo"
+              : "Sin plan no hay límite de facturas$regalo",
+          colorTexto: n.soloCortesia ? colorSegun(n.documentosCortesia, 10) : null,
+          onTap: abrirPlanes,
+        ));
         final iaExtra = n.iaCortesia + n.iaRecarga;
-        if (iaExtra > 0) {
-          segmentos.add(_segmentoDatosAppBar(
-            icono: Icons.auto_awesome_outlined,
-            texto: "$iaExtra IA",
-            tooltip: "Te quedan $iaExtra consultas al asistente de IA"
-                "${n.iaCortesia > 0 ? ' (${n.iaCortesia} de regalo)' : ''}"
-                "${n.iaRecarga > 0 ? ' (${n.iaRecarga} compradas)' : ''}",
-            onTap: abrirPlanes,
-          ));
-        }
+        segmentos.add(_segmentoDatosAppBar(
+          icono: Icons.auto_awesome_outlined,
+          texto: "∞ IA",
+          tooltip: "Sin plan no hay límite de consultas al asistente de IA"
+              "${iaExtra > 0 ? ' ($iaExtra guardadas de regalo o compradas)' : ''}",
+          onTap: abrirPlanes,
+        ));
       } else {
         final unidad = uso?['periodicidad'] == 'anual' ? 'este año' : 'este mes';
         final extraPermitido = uso?['precio_documento_extra'] != null;
