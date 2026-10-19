@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'api_service.dart';
 import 'formato.dart';
-import 'negocio.dart';
+import 'negocio.dart';
 import 'widgets/requisitos_contrasena.dart';
+import 'widgets/campo_cedula_hacienda.dart';
 
 /// Colaboradores del negocio -- exclusivo del dueño real (ver
 /// SoloDuenoDelNegocioMixin y gestion/colaboradores.py en el backend):
@@ -572,7 +573,7 @@ class _FormularioColaboradorState extends State<_FormularioColaborador> {
   // Errores al lado de cada campo (los del servidor vienen con el nombre del
   // campo: password, username, cedula...) y uno general arriba del
   // formulario: el aviso de abajo quedaba detrás del diálogo.
-  static const _ordenCampos = ['nombre', 'telefono', 'username', 'password', 'comision', 'salario', 'cedula'];
+  static const _ordenCampos = ['cedula', 'nombre', 'telefono', 'username', 'password', 'comision', 'salario'];
   final Map<String, FocusNode> _focos = {for (final c in _ordenCampos) c: FocusNode()};
   final Map<String, GlobalKey> _llaves = {
     for (final c in [..._ordenCampos, 'general']) c: GlobalKey(),
@@ -726,6 +727,22 @@ class _FormularioColaboradorState extends State<_FormularioColaborador> {
                     ],
                   ),
                 ),
+              // Primero la cédula: al escribirla se busca en Hacienda y llena el nombre.
+              KeyedSubtree(
+                key: _llaves['cedula'],
+                child: CampoCedulaHacienda(
+                  controller: _cedula,
+                  nombreController: _nombre,
+                  labelText: 'Cédula (opcional)',
+                  onEncontrado: (_) => _limpiarError('nombre'),
+                ),
+              ),
+              if (_errores['cedula'] != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, left: 12),
+                  child: Text(_errores['cedula']!, style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12)),
+                ),
+              const SizedBox(height: 12),
               TextField(
                 key: _llaves['nombre'],
                 focusNode: _focos['nombre'],
@@ -824,29 +841,13 @@ class _FormularioColaboradorState extends State<_FormularioColaborador> {
               const SizedBox(height: 18),
               const Text('Planilla', style: TextStyle(fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      key: _llaves['salario'],
-                      focusNode: _focos['salario'],
-                      controller: _salario,
-                      keyboardType: TextInputType.number,
-                      onChanged: (_) => _limpiarError('salario'),
-                      decoration: _deco('Salario mensual bruto (₡)', ayuda: 'Vacío = no va en la planilla', campo: 'salario'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextField(
-                      key: _llaves['cedula'],
-                      focusNode: _focos['cedula'],
-                      controller: _cedula,
-                      onChanged: (_) => _limpiarError('cedula'),
-                      decoration: _deco('Cédula', campo: 'cedula'),
-                    ),
-                  ),
-                ],
+              TextField(
+                key: _llaves['salario'],
+                focusNode: _focos['salario'],
+                controller: _salario,
+                keyboardType: TextInputType.number,
+                onChanged: (_) => _limpiarError('salario'),
+                decoration: _deco('Salario mensual bruto (₡)', ayuda: 'Vacío = no va en la planilla', campo: 'salario'),
               ),
               const SizedBox(height: 4),
               Row(

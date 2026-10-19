@@ -45,7 +45,9 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
   Map<String, dynamic>? _hacienda; // respuesta con encontrado=true
   String? _avisoBusqueda; // no encontrada / Hacienda caída
   // Lo que se cargó solo: si la persona lo cambió a mano, no se pisa.
-  String? _nombreCargado;
+  // Al editar, el nombre que venía guardado también se puede reemplazar con
+  // el de Hacienda (si no lo tocaron): antes solo se llenaba si estaba vacío.
+  late String? _nombreCargado = widget.clienteExistente?.nombre;
   String? _actividadCargada;
 
   String get _soloDigitos => _cedulaController.text.replaceAll(RegExp(r'\D'), '');

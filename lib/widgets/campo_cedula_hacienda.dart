@@ -43,6 +43,15 @@ class _CampoCedulaHaciendaState extends State<CampoCedulaHacienda> {
   String get _digitos => widget.controller.text.replaceAll(RegExp(r'\D'), '');
 
   @override
+  void initState() {
+    super.initState();
+    // Al editar, el nombre que venía guardado también se puede reemplazar
+    // con el de Hacienda (si no lo tocaron): antes solo se llenaba vacío.
+    final inicial = widget.nombreController?.text.trim() ?? '';
+    if (inicial.isNotEmpty) _nombreCargado = inicial;
+  }
+
+  @override
   void dispose() {
     _espera?.cancel();
     super.dispose();
