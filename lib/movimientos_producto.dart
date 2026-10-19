@@ -3,6 +3,7 @@ import 'theme/app_theme.dart';
 import 'dart:convert';
 import 'api_service.dart';
 import 'producto.dart';
+import 'widgets/calculadora.dart';
 
 class MovimientosProductoScreen extends StatelessWidget {
   final Producto producto;
@@ -23,6 +24,7 @@ class MovimientosProductoScreen extends StatelessWidget {
         title: Text("Kárdex: ${producto.nombre}"),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
+        actions: const [BotonCalculadora()],
       ),
       body: FutureBuilder<List<dynamic>>(
         future: _fetchMovimientos(),

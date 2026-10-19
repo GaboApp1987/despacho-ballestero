@@ -16,6 +16,7 @@ import 'recorridos.dart';
 import 'restaurante_variaciones.dart';
 import 'widgets/recorrido_guiado.dart';
 import 'theme/app_theme.dart';
+import 'widgets/calculadora.dart';
 
 /// Cuenta de una mesa (o pedido para llevar): menú a un lado y la orden al
 /// otro en tablet; en celular la orden ocupa la pantalla y el menú se abre
@@ -986,7 +987,7 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
         backgroundColor: AppColors.surfaceSubtle,
         appBar: AppBar(
           title: Text(_titulo),
-          actions: [
+          actions: [const BotonCalculadora(), 
             BotonGuia(iniciar: () => GuiaOrden.mostrar(context)),
             if (_orden != null)
               PopupMenuButton<String>(

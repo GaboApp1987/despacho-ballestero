@@ -6,6 +6,7 @@ import 'api_service.dart';
 import 'cliente.dart';
 import 'formato.dart';
 import 'historial_precio_cliente.dart';
+import 'widgets/calculadora.dart';
 
 /// Muestra, para un cliente puntual, cada producto que se le ha facturado
 /// y a que precio -- para negociar rapido el proximo precio sin tener que
@@ -43,7 +44,7 @@ class _HistorialPreciosClienteScreenState extends State<HistorialPreciosClienteS
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Precios de ${widget.cliente.nombre}")),
+      appBar: AppBar(title: Text("Precios de ${widget.cliente.nombre}"), actions: const [BotonCalculadora()]),
       body: FutureBuilder<List<PrecioHistoricoCliente>>(
         future: _historialFuture,
         builder: (context, snapshot) {

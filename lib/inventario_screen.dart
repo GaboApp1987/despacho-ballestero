@@ -14,6 +14,7 @@ import 'actualizar_precios_screen.dart' show PantallaActualizarPrecios;
 import 'carga_productos.dart';
 import 'recorridos.dart';
 import 'widgets/recorrido_guiado.dart';
+import 'widgets/calculadora.dart';
 
 class InventarioScreen extends StatefulWidget {
   final Negocio negocio;
@@ -319,7 +320,7 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
         title: const Text("Gestión de Inventario"),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
-        actions: [
+        actions: [const BotonCalculadora(), 
           IconButton(
             key: GuiaInventario.precios,
             tooltip: "Actualizar Precios",

@@ -9,6 +9,7 @@ import 'firmante_selector.dart';
 import 'negocio.dart';
 import 'socio.dart';
 import 'widgets/flujo_caja_modalidades.dart';
+import 'widgets/calculadora.dart';
 
 class MesFlujoCaja {
   final String mes;
@@ -167,6 +168,7 @@ class _FlujoCajaScreenState extends State<FlujoCajaScreen> {
         iconTheme: const IconThemeData(color: TemaContador.textoFuerte),
         backgroundColor: TemaContador.fondo,
         elevation: 0,
+        actions: const [BotonCalculadora()],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _nuevo,
@@ -609,6 +611,7 @@ class _FlujoCajaFormScreenState extends State<FlujoCajaFormScreen> {
         iconTheme: const IconThemeData(color: TemaContador.textoFuerte),
         backgroundColor: TemaContador.fondo,
         elevation: 0,
+        actions: const [BotonCalculadora()],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),

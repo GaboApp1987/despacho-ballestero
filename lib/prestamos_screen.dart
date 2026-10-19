@@ -12,6 +12,7 @@ import 'export_service.dart';
 import 'formato.dart';
 import 'negocio.dart';
 import 'theme/app_theme.dart';
+import 'widgets/calculadora.dart';
 
 /// Módulo de préstamos: ventas de vehículos a plazo y préstamos personales,
 /// con cuotas mensuales. Backend: gestion/prestamos.py.
@@ -695,7 +696,7 @@ class _NuevoPrestamoState extends State<_NuevoPrestamo> {
     final cuotas = ((_simulacion?['cuotas'] as List?) ?? []).cast<Map>();
     return Scaffold(
       backgroundColor: AppColors.surfaceSubtle,
-      appBar: AppBar(title: const Text("Nuevo préstamo"), backgroundColor: AppColors.surface, foregroundColor: AppColors.textStrong),
+      appBar: AppBar(title: const Text("Nuevo préstamo"), backgroundColor: AppColors.surface, foregroundColor: AppColors.textStrong, actions: const [BotonCalculadora()]),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
         children: [
@@ -1059,7 +1060,7 @@ class _DetallePrestamoState extends State<_DetallePrestamo> {
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
         bottom: _trabajando ? const PreferredSize(preferredSize: Size.fromHeight(3), child: LinearProgressIndicator(minHeight: 3)) : null,
-        actions: [
+        actions: [const BotonCalculadora(), 
           if (p['enlace'] != null) ...[
             IconButton(
               tooltip: "Mandar recordatorio por WhatsApp",
@@ -1261,7 +1262,7 @@ class _RecordatoriosWhatsAppState extends State<_RecordatoriosWhatsApp> {
     final filas = _filas;
     return Scaffold(
       backgroundColor: AppColors.surfaceSubtle,
-      appBar: AppBar(title: const Text("Recordatorios por WhatsApp"), backgroundColor: AppColors.surface, foregroundColor: AppColors.textStrong),
+      appBar: AppBar(title: const Text("Recordatorios por WhatsApp"), backgroundColor: AppColors.surface, foregroundColor: AppColors.textStrong, actions: const [BotonCalculadora()]),
       body: filas == null
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(

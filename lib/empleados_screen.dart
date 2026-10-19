@@ -7,6 +7,7 @@ import 'formato.dart';
 import 'negocio.dart';
 import 'widgets/requisitos_contrasena.dart';
 import 'widgets/campo_cedula_hacienda.dart';
+import 'widgets/calculadora.dart';
 
 /// Colaboradores del negocio -- exclusivo del dueño real (ver
 /// SoloDuenoDelNegocioMixin y gestion/colaboradores.py en el backend):
@@ -1218,7 +1219,7 @@ class _FichaColaboradorState extends State<FichaColaborador> {
         title: Text(widget.fila['nombre']),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
-        actions: [
+        actions: [const BotonCalculadora(), 
           if (e != null) ...[
             IconButton(tooltip: 'Editar', icon: const Icon(Icons.edit_outlined), onPressed: _editar),
             PopupMenuButton<String>(

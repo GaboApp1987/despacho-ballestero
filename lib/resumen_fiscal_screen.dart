@@ -12,6 +12,7 @@ import 'gasto_operativo.dart';
 import 'negocio.dart';
 import 'nota_credito.dart';
 import 'widgets/selector_periodo.dart';
+import 'widgets/calculadora.dart';
 
 /// Lo primero que ve el contador al entrar a un cliente: el resumen fiscal
 /// completo (IVA del periodo + Renta del año) antes de meterse a administrar
@@ -399,6 +400,7 @@ class _ResumenFiscalNegocioScreenState extends State<ResumenFiscalNegocioScreen>
         title: Text(widget.negocio.nombreComercial),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
+        actions: const [BotonCalculadora()],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),

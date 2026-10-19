@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import 'api_service.dart';
 import 'theme/app_theme.dart';
+import 'widgets/calculadora.dart';
 
 /// Panel del administrador: todos los contadores de la plataforma, también
 /// los independientes (sin despacho), que antes no aparecían en ninguna
@@ -103,7 +104,7 @@ class _AdminContadoresScreenState extends State<AdminContadoresScreen> {
         title: const Text("Contadores"),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
-        actions: [IconButton(tooltip: "Actualizar", icon: const Icon(Icons.refresh), onPressed: _cargar)],
+        actions: [const BotonCalculadora(), IconButton(tooltip: "Actualizar", icon: const Icon(Icons.refresh), onPressed: _cargar)],
       ),
       body: _cargando
           ? const Center(child: CircularProgressIndicator())

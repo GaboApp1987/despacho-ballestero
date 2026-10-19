@@ -12,6 +12,7 @@ import 'export_service.dart';
 import 'formato.dart';
 import 'negocio.dart';
 import 'theme/app_theme.dart';
+import 'widgets/calculadora.dart';
 
 /// Planilla de los colaboradores (gestion/planilla.py): períodos mensuales o
 /// quincenales con CCSS, impuesto al salario, horas extra, comisiones,
@@ -536,7 +537,7 @@ class _PlanillaDetalleScreenState extends State<PlanillaDetalleScreen> {
         title: Text(p == null ? 'Planilla' : 'Planilla · ${nombrePeriodo(p)}'),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
-        actions: [
+        actions: [const BotonCalculadora(), 
           if (p != null) ...[
             IconButton(tooltip: 'Colillas en PDF', icon: const Icon(Icons.picture_as_pdf_outlined), onPressed: () => _colillas()),
             IconButton(tooltip: 'Excel', icon: const Icon(Icons.table_view_outlined), onPressed: _excel),
@@ -702,7 +703,7 @@ class _AguinaldoScreenState extends State<AguinaldoScreen> {
         title: const Text('Aguinaldo'),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
-        actions: [
+        actions: [const BotonCalculadora(), 
           DropdownButton<int>(
             value: _anio,
             underline: const SizedBox(),

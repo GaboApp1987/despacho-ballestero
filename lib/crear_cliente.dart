@@ -7,6 +7,7 @@ import 'theme/app_theme.dart';
 import 'api_service.dart';
 import 'cliente.dart';
 import 'negocio.dart';
+import 'widgets/calculadora.dart';
 
 class CrearClienteScreen extends StatefulWidget {
   final Negocio negocio;
@@ -270,6 +271,7 @@ class _CrearClienteScreenState extends State<CrearClienteScreen> {
         title: Text(_esEdicion ? "Editar Cliente" : "Nuevo Cliente"),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
+        actions: const [BotonCalculadora()],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),

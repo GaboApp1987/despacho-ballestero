@@ -11,6 +11,7 @@ import 'catalogo_cuentas_util.dart';
 import 'cuenta_contable.dart';
 import 'export_service.dart';
 import 'negocio.dart';
+import 'widgets/calculadora.dart';
 
 /// Catálogo de cuentas contables de un negocio -- base de los Asientos
 /// Contables. Cada negocio tiene su propio catálogo. Se muestra como árbol
@@ -345,7 +346,7 @@ class _CuentasContablesScreenState extends State<CuentasContablesScreen> {
         iconTheme: const IconThemeData(color: TemaContador.textoFuerte),
         backgroundColor: TemaContador.fondo,
         elevation: 0,
-        actions: [BotonGuia(iniciar: () => GuiaCatalogo.mostrar(context), color: TemaContador.textoFuerte), _menuAcciones()],
+        actions: [const BotonCalculadora(), BotonGuia(iniciar: () => GuiaCatalogo.mostrar(context), color: TemaContador.textoFuerte), _menuAcciones()],
       ),
       floatingActionButton: FloatingActionButton.extended(
         key: GuiaCatalogo.nueva,

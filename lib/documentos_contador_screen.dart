@@ -10,6 +10,7 @@ import 'atestiguamientos_screen.dart';
 import 'flujo_caja_screen.dart';
 import 'solicitudes_certificacion_screen.dart';
 import 'descarga_navegador_stub.dart' if (dart.library.html) 'descarga_navegador_web.dart';
+import 'widgets/calculadora.dart';
 
 /// Descarga cualquiera de los documentos del contador (certificación de
 /// ingresos, atestiguamiento, flujo de caja) en PDF o Word -- comparten el
@@ -81,6 +82,7 @@ class _DocumentosContadorScreenState extends State<DocumentosContadorScreen> {
         iconTheme: const IconThemeData(color: TemaContador.textoFuerte),
         backgroundColor: TemaContador.fondo,
         elevation: 0,
+        actions: const [BotonCalculadora()],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),

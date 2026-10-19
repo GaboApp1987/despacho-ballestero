@@ -12,6 +12,7 @@ import 'negocio.dart';
 import 'prestamos_screen.dart' show abrirNuevoPrestamo;
 import 'producto.dart';
 import 'theme/app_theme.dart';
+import 'widgets/calculadora.dart';
 
 /// Inventario de vehículos (ver gestion/vehiculos.py): cada carro es una
 /// unidad con su VIN, motor y placa; la cantidad de un modelo es cuántas
@@ -568,6 +569,7 @@ class _FormVehiculoState extends State<_FormVehiculo> {
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
         bottom: _guardando ? const PreferredSize(preferredSize: Size.fromHeight(3), child: LinearProgressIndicator(minHeight: 3)) : null,
+        actions: const [BotonCalculadora()],
       ),
       bottomNavigationBar: SafeArea(
         child: Padding(
@@ -974,7 +976,7 @@ class _DetalleVehiculoState extends State<_DetalleVehiculo> {
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
         bottom: _trabajando ? const PreferredSize(preferredSize: Size.fromHeight(3), child: LinearProgressIndicator(minHeight: 3)) : null,
-        actions: [
+        actions: [const BotonCalculadora(), 
           IconButton(onPressed: _editar, icon: const Icon(Icons.edit_outlined), tooltip: "Editar"),
           if (!vendido) IconButton(onPressed: _borrar, icon: const Icon(Icons.delete_outline), tooltip: "Borrar"),
         ],

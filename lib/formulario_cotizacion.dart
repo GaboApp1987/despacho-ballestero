@@ -13,6 +13,7 @@ import 'negocio.dart';
 import 'producto.dart';
 import 'impuesto.dart';
 import 'formato.dart';
+import 'widgets/calculadora.dart';
 
 class LineaCotizacion {
   final Producto producto;
@@ -589,7 +590,7 @@ class _FormularioCotizacionState extends State<FormularioCotizacion> {
         title: const Text("Nueva Cotización"),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
-        actions: [
+        actions: [const BotonCalculadora(), 
           IconButton(
             icon: _procesandoNota
                 ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))

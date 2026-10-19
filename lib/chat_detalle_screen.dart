@@ -9,6 +9,7 @@ import 'avatar_logo.dart';
 import 'chat_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/adjuntos_ia.dart';
+import 'widgets/calculadora.dart';
 
 /// Conversación en vivo entre un negocio y su contador -- misma pantalla
 /// para los dos lados, cambia el color según `esContador` (igual patrón
@@ -339,6 +340,7 @@ class _ChatDetalleScreenState extends State<ChatDetalleScreen> {
         foregroundColor: _colorFuerte,
         iconTheme: IconThemeData(color: _colorFuerte),
         elevation: 0,
+        actions: const [BotonCalculadora()],
       ),
       body: Column(
         children: [

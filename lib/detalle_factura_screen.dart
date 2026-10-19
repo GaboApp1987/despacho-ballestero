@@ -11,6 +11,7 @@ import 'nota_credito.dart';
 import 'negocio.dart';
 import 'formulario_factura.dart';
 import 'widgets/automatizacion_factura.dart';
+import 'widgets/calculadora.dart';
 
 class DetalleFacturaScreen extends StatefulWidget {
   final Factura factura;
@@ -352,6 +353,7 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
         title: Text("Documento F-${factura.consecutivo}"),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
+        actions: const [BotonCalculadora()],
       ),
       backgroundColor: AppColors.background,
       body: Center(

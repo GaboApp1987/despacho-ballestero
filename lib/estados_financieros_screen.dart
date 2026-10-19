@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 
 import 'api_service.dart';
+import 'widgets/calculadora.dart';
 
 /// Balance General y Estado de Resultados de un negocio -- se calculan del
 /// lado del backend a partir de los Asientos Contables ya cargados (ver
@@ -278,6 +279,7 @@ class _EstadosFinancierosScreenState extends State<EstadosFinancierosScreen> {
         iconTheme: const IconThemeData(color: TemaContador.textoFuerte),
         backgroundColor: TemaContador.fondo,
         elevation: 0,
+        actions: const [BotonCalculadora()],
       ),
       body: _cargando
           ? const Center(child: CircularProgressIndicator())

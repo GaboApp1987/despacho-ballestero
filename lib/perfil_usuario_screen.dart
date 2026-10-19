@@ -11,6 +11,7 @@ import 'login.dart';
 import 'logo_screen.dart';
 import 'widgets/requisitos_contrasena.dart';
 import 'mensajes_automaticos_screen.dart';
+import 'widgets/calculadora.dart';
 
 /// Pantalla de "Mi Perfil" reutilizable para el usuario que tiene la sesión
 /// abierta (despacho, contador o negocio): logo, cambio de contraseña y
@@ -695,6 +696,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
         foregroundColor: _colorFuerte,
         iconTheme: IconThemeData(color: _colorFuerte),
         elevation: 0,
+        actions: const [BotonCalculadora()],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),

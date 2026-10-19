@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'api_service.dart';
 import 'theme/app_theme.dart';
+import 'widgets/calculadora.dart';
 
 /// Rubros frecuentes para buscar con un toque (lo que se le pide a Google).
 const _rubros = [
@@ -238,7 +239,7 @@ class _BuscarMapsScreenState extends State<BuscarMapsScreen> {
     final elegidosVisibles = visibles.where((l) => _elegidos.contains(l['place_id'])).length;
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text("Buscar prospectos en Google Maps")),
+      appBar: AppBar(title: const Text("Buscar prospectos en Google Maps"), actions: const [BotonCalculadora()]),
       bottomNavigationBar: elegidosVisibles == 0
           ? null
           : SafeArea(

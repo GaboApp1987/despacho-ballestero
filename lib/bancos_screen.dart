@@ -10,6 +10,7 @@ import 'cuenta_contable.dart';
 import 'formato.dart';
 import 'negocio.dart';
 import 'theme/app_theme.dart';
+import 'widgets/calculadora.dart';
 
 /// Bancos de un negocio: cuentas con su saldo, movimientos (cada uno con su
 /// asiento contable automático) y traslados entre cuentas propias. La usan
@@ -241,7 +242,7 @@ class _BancosScreenState extends State<BancosScreen> {
     return Scaffold(
       appBar: widget.embebido
           ? null
-          : AppBar(title: Text("Bancos · ${widget.negocioNombre}"), actions: acciones),
+          : AppBar(title: Text("Bancos · ${widget.negocioNombre}"), actions: [const BotonCalculadora(), ...acciones]),
       floatingActionButton: FloatingActionButton.extended(
         key: GuiaBancos.nueva,
         onPressed: _nuevaCuenta,
@@ -487,7 +488,7 @@ class _MovimientosCuentaScreenState extends State<_MovimientosCuentaScreen> {
   Widget build(BuildContext context) {
     final c = widget.cuenta;
     return Scaffold(
-      appBar: AppBar(title: Text("${c['banco']} · ${c['nombre']}"), actions: [
+      appBar: AppBar(title: Text("${c['banco']} · ${c['nombre']}"), actions: [const BotonCalculadora(), 
         TextButton.icon(
           onPressed: () async {
             await Navigator.push(

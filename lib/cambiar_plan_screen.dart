@@ -7,6 +7,7 @@ import 'onvo_cobro_automatico_screen.dart';
 import 'theme/app_theme.dart';
 import 'widgets/tarjeta_plan_negocio.dart';
 import 'recarga_onvo_screen.dart';
+import 'widgets/calculadora.dart';
 
 /// Pantalla de autoservicio para que el propio negocio suba de plan (mas
 /// facturas mensuales) pagando de una vez con tarjeta -- el limite nuevo
@@ -198,6 +199,7 @@ class _CambiarPlanScreenState extends State<CambiarPlanScreen> {
         title: const Text("Planes"),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
+        actions: const [BotonCalculadora()],
       ),
       body: _cargando
           ? const Center(child: CircularProgressIndicator())

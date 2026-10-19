@@ -18,6 +18,7 @@ import 'widgets/campo_cedula_hacienda.dart';
 import 'widgets/selector_ubicacion_cr.dart';
 import 'recorridos.dart';
 import 'widgets/recorrido_guiado.dart';
+import 'widgets/calculadora.dart';
 
 /// Registra una Nota de Débito que el proveedor emitió sobre `compra` (le
 /// cobró de más) -- compartido entre la lista de Compras y la pantalla de
@@ -947,6 +948,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
                   ),
                 ]
               : [
+                  const BotonCalculadora(),
                   IconButton(
                     icon: const Icon(Icons.checklist),
                     tooltip: "Seleccionar varias para borrar",

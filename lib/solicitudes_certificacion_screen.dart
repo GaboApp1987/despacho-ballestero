@@ -9,6 +9,7 @@ import 'socio.dart';
 import 'solicitud_certificacion.dart';
 import 'certificacion_ingreso.dart';
 import 'certificaciones_screen.dart';
+import 'widgets/calculadora.dart';
 
 /// Bandeja del contador con las solicitudes de Certificación de Ingresos
 /// que sus clientes mandaron desde el link público (sin login) -- ver
@@ -173,7 +174,7 @@ class _SolicitudesCertificacionScreenState extends State<SolicitudesCertificacio
         iconTheme: const IconThemeData(color: TemaContador.textoFuerte),
         backgroundColor: TemaContador.fondo,
         elevation: 0,
-        actions: [
+        actions: [const BotonCalculadora(), 
           IconButton(icon: const Icon(Icons.ios_share, color: TemaContador.acento), tooltip: "Compartir link con clientes", onPressed: _compartirLink),
         ],
       ),
@@ -397,7 +398,7 @@ class _DetalleSolicitudScreenState extends State<_DetalleSolicitudScreen> {
         iconTheme: const IconThemeData(color: TemaContador.textoFuerte),
         backgroundColor: TemaContador.fondo,
         elevation: 0,
-        actions: [
+        actions: [const BotonCalculadora(), 
           IconButton(icon: const Icon(Icons.delete_outline, color: TemaContador.textoTenue), tooltip: "Descartar", onPressed: _procesando ? null : _descartar),
         ],
       ),

@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'api_service.dart';
+import 'widgets/calculadora.dart';
 
 /// Pantalla genérica para subir/reemplazar una imagen (logo o membrete) de
 /// un Negocio, Socio (contador) o Despacho — todos usan el mismo patrón de
@@ -121,7 +122,7 @@ class _LogoScreenState extends State<LogoScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.titulo)),
+      appBar: AppBar(title: Text(widget.titulo), actions: const [BotonCalculadora()]),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),

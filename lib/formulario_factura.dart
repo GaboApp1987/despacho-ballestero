@@ -16,6 +16,7 @@ import 'factura.dart';
 import 'widgets/automatizacion_factura.dart';
 import 'recorridos.dart';
 import 'widgets/recorrido_guiado.dart';
+import 'widgets/calculadora.dart';
 
 // Modelo temporal para los items del carrito
 class LineaFactura {
@@ -1135,7 +1136,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
             : (_esInterno ? "Nuevo Tiquete Interno" : (_esTiquete ? "Nuevo Tiquete" : "Nueva Factura"))),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
-        actions: [BotonGuia(iniciar: () => GuiaFactura.mostrar(context))],
+        actions: [const BotonCalculadora(), BotonGuia(iniciar: () => GuiaFactura.mostrar(context))],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())

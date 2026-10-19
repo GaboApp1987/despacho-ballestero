@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'api_service.dart';
 import 'theme/app_theme.dart';
+import 'widgets/calculadora.dart';
 
 /// Estadísticas del embudo de adquisición (solo superusuario): cuánta gente
 /// visita el landing, cuántos tocan "Probar gratis", abren y envían el
@@ -259,7 +260,7 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text("Estadísticas del landing"),
-        actions: [IconButton(icon: const Icon(Icons.refresh), tooltip: "Actualizar", onPressed: _cargar)],
+        actions: [const BotonCalculadora(), IconButton(icon: const Icon(Icons.refresh), tooltip: "Actualizar", onPressed: _cargar)],
       ),
       body: Center(
         child: ConstrainedBox(

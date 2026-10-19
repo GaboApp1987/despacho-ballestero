@@ -4,6 +4,7 @@ import 'theme/app_theme.dart';
 import 'api_service.dart';
 import 'formato.dart';
 import 'producto.dart';
+import 'widgets/calculadora.dart';
 
 enum _EstadoFila { inactivo, guardando, guardado, error }
 
@@ -159,6 +160,7 @@ class _PantallaActualizarPreciosState extends State<PantallaActualizarPrecios> {
       appBar: AppBar(
         title: const Text('Actualizar Precios'),
         backgroundColor: AppColors.surface,
+        actions: const [BotonCalculadora()],
       ),
       body: Column(
         children: [

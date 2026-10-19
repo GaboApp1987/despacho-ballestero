@@ -12,6 +12,7 @@ import 'formulario_compra.dart';
 import 'negocio.dart';
 import 'producto.dart';
 import 'theme/app_theme.dart';
+import 'widgets/calculadora.dart';
 
 /// Órdenes de compra (gestion/ordenes_compra.py): lo que se le pide al
 /// proveedor. No mueve inventario ni contabilidad; eso lo hace la factura
@@ -631,6 +632,7 @@ class _FormularioOrdenCompraState extends State<FormularioOrdenCompra> {
         title: Text(widget.orden == null ? "Nueva orden de compra" : "Editar ${widget.orden!.codigo}"),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
+        actions: const [BotonCalculadora()],
       ),
       body: _cargando
           ? const Center(child: CircularProgressIndicator())
@@ -1022,7 +1024,7 @@ class _DetalleOrdenCompraScreenState extends State<DetalleOrdenCompraScreen> {
         title: Text(o?.codigo ?? "Orden de compra"),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
-        actions: [
+        actions: [const BotonCalculadora(), 
           if (o != null)
             PopupMenuButton<String>(
               onSelected: (v) async {
@@ -1280,6 +1282,7 @@ class _SugerenciasCompraScreenState extends State<SugerenciasCompraScreen> {
         title: const Text("Qué pedir"),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
+        actions: const [BotonCalculadora()],
       ),
       body: _cargando
           ? const Center(child: CircularProgressIndicator())

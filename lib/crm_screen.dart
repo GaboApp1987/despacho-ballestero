@@ -7,6 +7,7 @@ import 'api_service.dart';
 import 'crm_maps_screen.dart';
 import 'crm_chats_screen.dart';
 import 'theme/app_theme.dart';
+import 'widgets/calculadora.dart';
 
 /// CRM de la plataforma (solo superusuario): las personas interesadas en
 /// Equilibra en un embudo por etapas -- backend: crm.py (ProspectoViewSet).
@@ -684,7 +685,7 @@ class _CrmScreenState extends State<CrmScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text("Clientes potenciales"),
-        actions: [
+        actions: [const BotonCalculadora(), 
           if (MediaQuery.sizeOf(context).width >= 700) ...[
             TextButton.icon(onPressed: _buscarEnMaps, icon: const Icon(Icons.travel_explore), label: const Text("Buscar en Google Maps")),
             TextButton.icon(onPressed: _whatsappAVarios, icon: const Icon(Icons.forum_outlined), label: const Text("WhatsApp a varios")),

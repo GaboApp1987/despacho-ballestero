@@ -8,6 +8,7 @@ import 'firmante_contador.dart';
 import 'firmante_selector.dart';
 import 'negocio.dart';
 import 'socio.dart';
+import 'widgets/calculadora.dart';
 
 /// Informe de certificación GENÉRICO (Circular 02-2022 del Colegio de
 /// Contadores Públicos de Costa Rica) -- a diferencia de la certificación
@@ -147,6 +148,7 @@ class _AtestiguamientosScreenState extends State<AtestiguamientosScreen> {
         iconTheme: const IconThemeData(color: TemaContador.textoFuerte),
         backgroundColor: TemaContador.fondo,
         elevation: 0,
+        actions: const [BotonCalculadora()],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _nuevo,
@@ -435,6 +437,7 @@ class _AtestiguamientoFormScreenState extends State<AtestiguamientoFormScreen> {
         iconTheme: const IconThemeData(color: TemaContador.textoFuerte),
         backgroundColor: TemaContador.fondo,
         elevation: 0,
+        actions: const [BotonCalculadora()],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),

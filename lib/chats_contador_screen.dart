@@ -5,6 +5,7 @@ import 'avatar_logo.dart';
 import 'chat_detalle_screen.dart';
 import 'negocio.dart';
 import 'theme/app_theme.dart';
+import 'widgets/calculadora.dart';
 
 class _ConversacionResumen {
   final int id;
@@ -160,6 +161,7 @@ class _ChatsContadorScreenState extends State<ChatsContadorScreen> {
         iconTheme: const IconThemeData(color: TemaContador.textoFuerte),
         backgroundColor: TemaContador.fondo,
         elevation: 0,
+        actions: const [BotonCalculadora()],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _nuevoChat,

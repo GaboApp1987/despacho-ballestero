@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'api_service.dart';
 import 'onvo_iframe_view.dart';
 import 'theme/app_theme.dart';
+import 'widgets/calculadora.dart';
 
 /// Activa el cobro automático mensual por tarjeta vía ONVO para una
 /// SuscripcionNegocio o SuscripcionDespacho que ya existe (y ya tiene
@@ -187,6 +188,7 @@ class _OnvoCobroAutomaticoScreenState extends State<OnvoCobroAutomaticoScreen> {
         ),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
+        actions: const [BotonCalculadora()],
       ),
       body: _cargando
           ? const Center(child: CircularProgressIndicator())

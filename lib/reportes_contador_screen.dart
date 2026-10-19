@@ -11,6 +11,7 @@ import 'formato.dart';
 import 'negocio.dart';
 import 'widgets/selector_periodo.dart';
 import 'widgets/botones_exportar.dart';
+import 'widgets/calculadora.dart';
 
 enum _TipoReporteContador { ventas, compras, ambos, renta }
 
@@ -299,7 +300,7 @@ class _ReportesContadorScreenState extends State<ReportesContadorScreen> {
           "Reportes",
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: widget.esContador ? TemaContador.textoFuerte : Colors.white),
         ),
-        actions: [
+        actions: [const BotonCalculadora(), 
           BotonGuia(iniciar: () => GuiaReportes.mostrar(context), color: widget.esContador ? TemaContador.textoFuerte : Colors.white),
         ],
       ),

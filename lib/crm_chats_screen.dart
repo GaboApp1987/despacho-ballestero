@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'api_service.dart';
 import 'formato.dart';
 import 'theme/app_theme.dart';
+import 'widgets/calculadora.dart';
 
 /// Conversaciones del chat con IA para el CRM (backend: crm.py, chats):
 /// "Visitantes" son las del landing y del login (con o sin contacto) y
@@ -22,6 +23,7 @@ class ChatsCrmScreen extends StatelessWidget {
         appBar: AppBar(
           title: const Text("Chats con la IA"),
           bottom: const TabBar(tabs: [Tab(text: "Visitantes"), Tab(text: "Soporte de clientes")]),
+          actions: const [BotonCalculadora()],
         ),
         body: const TabBarView(children: [_ListaChats(tipo: 'visitantes'), _ListaChats(tipo: 'clientes')]),
       ),

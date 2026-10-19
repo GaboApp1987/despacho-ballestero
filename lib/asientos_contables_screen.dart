@@ -11,6 +11,7 @@ import 'cuenta_contable.dart';
 import 'cuentas_contables_screen.dart';
 import 'estados_financieros_screen.dart';
 import 'negocio.dart';
+import 'widgets/calculadora.dart';
 
 /// Punto de entrada de "Asientos Contables" en la sidebar del contador:
 /// elegís el negocio (cliente) cuyos libros vas a llevar y de ahí entrás
@@ -64,7 +65,7 @@ class _AsientosContablesScreenState extends State<AsientosContablesScreen> {
         iconTheme: const IconThemeData(color: TemaContador.textoFuerte),
         backgroundColor: TemaContador.fondo,
         elevation: 0,
-        actions: [BotonGuia(iniciar: () => GuiaAsientos.mostrar(context), color: TemaContador.textoFuerte)],
+        actions: [const BotonCalculadora(), BotonGuia(iniciar: () => GuiaAsientos.mostrar(context), color: TemaContador.textoFuerte)],
       ),
       body: _cargandoNegocios
           ? const Center(child: CircularProgressIndicator())
@@ -646,6 +647,7 @@ class _AsientoContableFormScreenState extends State<AsientoContableFormScreen> {
         iconTheme: const IconThemeData(color: TemaContador.textoFuerte),
         backgroundColor: TemaContador.fondo,
         elevation: 0,
+        actions: const [BotonCalculadora()],
       ),
       body: _cargandoCuentas
           ? const Center(child: CircularProgressIndicator())

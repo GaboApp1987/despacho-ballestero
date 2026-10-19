@@ -6,6 +6,7 @@ import 'negocio.dart';
 import 'compra_model.dart';
 import 'formato.dart';
 import 'widgets/campo_cedula_hacienda.dart';
+import 'widgets/calculadora.dart';
 
 /// Espejo de CuentasPorCobrarScreen, pero del lado de lo que el negocio le
 /// debe a SUS proveedores (compras a credito) en vez de lo que le deben a
@@ -430,6 +431,7 @@ class _DetalleCuentaProveedorScreenState extends State<DetalleCuentaProveedorScr
         title: Text("Historial: ${widget.proveedorNombre}"),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
+        actions: const [BotonCalculadora()],
       ),
       body: Column(
         children: [

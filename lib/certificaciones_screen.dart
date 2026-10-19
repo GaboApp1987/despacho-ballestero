@@ -14,6 +14,7 @@ import 'firmante_selector.dart';
 import 'negocio.dart';
 import 'socio.dart';
 import 'widgets/bloqueo_salida_raiz.dart';
+import 'widgets/calculadora.dart';
 
 /// Nombre de archivo legible para una certificación: el nombre del
 /// solicitante en vez de un id suelto.
@@ -181,6 +182,7 @@ class _CertificacionesScreenState extends State<CertificacionesScreen> {
         iconTheme: const IconThemeData(color: TemaContador.textoFuerte),
         backgroundColor: TemaContador.fondo,
         elevation: 0,
+        actions: const [BotonCalculadora()],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _nuevaCertificacion,
@@ -1052,6 +1054,7 @@ class _CertificacionFormScreenState extends State<CertificacionFormScreen> {
         iconTheme: const IconThemeData(color: TemaContador.textoFuerte),
         backgroundColor: TemaContador.fondo,
         elevation: 0,
+        actions: const [BotonCalculadora()],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),

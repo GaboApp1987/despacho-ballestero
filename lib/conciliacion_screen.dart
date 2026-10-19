@@ -11,6 +11,7 @@ import 'perfil_sesion.dart';
 import 'recorridos.dart';
 import 'widgets/recorrido_guiado.dart';
 import 'theme/app_theme.dart';
+import 'widgets/calculadora.dart';
 
 /// Conciliación bancaria de una cuenta, mes a mes: el estado de cuenta del
 /// banco (Excel o CSV, leído con [leerEstadoDeCuenta]) contra los
@@ -163,7 +164,7 @@ class _ConciliacionesScreenState extends State<ConciliacionesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text("Conciliación · ${c['banco']} ${c['nombre']}"),
-        actions: [IconButton(tooltip: "Actualizar", icon: const Icon(Icons.refresh), onPressed: _cargar)],
+        actions: [const BotonCalculadora(), IconButton(tooltip: "Actualizar", icon: const Icon(Icons.refresh), onPressed: _cargar)],
       ),
       floatingActionButton: _esContador
           ? FloatingActionButton.extended(onPressed: _nueva, icon: const Icon(Icons.add), label: const Text("Nueva conciliación"))
@@ -563,7 +564,7 @@ class _ConciliacionDetalleScreenState extends State<_ConciliacionDetalleScreen> 
     return Scaffold(
       appBar: AppBar(
         title: Text(titulo),
-        actions: [
+        actions: [const BotonCalculadora(), 
           if (_editable) ...[
             IconButton(
                 key: GuiaConciliacion.cargar,

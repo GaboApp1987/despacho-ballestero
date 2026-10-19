@@ -8,6 +8,7 @@ import 'export_service.dart';
 import 'formato.dart';
 import 'negocio.dart';
 import 'theme/app_theme.dart';
+import 'widgets/calculadora.dart';
 
 /// Lo de la planilla que va fuera del período: tasas por año (solo el
 /// administrador las edita), vacaciones y el reporte mensual para la CCSS.
@@ -163,7 +164,7 @@ class _TasasPlanillaScreenState extends State<TasasPlanillaScreen> {
         title: const Text('Tasas de planilla'),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
-        actions: [
+        actions: [const BotonCalculadora(), 
           DropdownButton<int>(
             value: _anio,
             underline: const SizedBox(),
@@ -377,7 +378,7 @@ class _VacacionesScreenState extends State<VacacionesScreen> {
     final lista = _lista;
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Vacaciones'), backgroundColor: AppColors.surface, foregroundColor: AppColors.textStrong),
+      appBar: AppBar(title: const Text('Vacaciones'), backgroundColor: AppColors.surface, foregroundColor: AppColors.textStrong, actions: const [BotonCalculadora()]),
       body: lista == null
           ? Center(child: _error != null ? Text(_error!, style: const TextStyle(color: Colors.red)) : const CircularProgressIndicator())
           : ListView(
@@ -511,7 +512,7 @@ class _ReporteCCSSScreenState extends State<ReporteCCSSScreen> {
         title: const Text('Reporte para la CCSS'),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
-        actions: [
+        actions: [const BotonCalculadora(), 
           DropdownButton<DateTime>(
             value: _mes,
             underline: const SizedBox(),

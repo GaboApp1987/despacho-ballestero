@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'formato.dart';
 import 'widgets/staggered_entrance.dart';
+import 'widgets/calculadora.dart';
 
 /// Widgets compartidos del dashboard que consume /socios/dashboard-despacho/:
 /// el endpoint ya viene filtrado por permisos (un contador solo ve su propia
@@ -653,6 +654,7 @@ class SeccionDashboardScreen extends StatelessWidget {
         backgroundColor: const Color(0xFF4F46E5),
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: const [BotonCalculadora()],
       ),
       body: SafeArea(
         child: SingleChildScrollView(

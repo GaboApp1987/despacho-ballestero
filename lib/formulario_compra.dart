@@ -14,6 +14,7 @@ import 'widgets/recorrido_guiado.dart';
 import 'producto.dart';
 import 'formato.dart';
 import 'widgets/campo_cedula_hacienda.dart';
+import 'widgets/calculadora.dart';
 
 class FormularioCompra extends StatefulWidget {
   final Negocio negocio;
@@ -953,7 +954,7 @@ class _FormularioCompraState extends State<FormularioCompra> {
         title: const Text("Ingreso de Mercadería"),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
-        actions: [BotonGuia(iniciar: () => GuiaCompra.mostrar(context))],
+        actions: [const BotonCalculadora(), BotonGuia(iniciar: () => GuiaCompra.mostrar(context))],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())

@@ -19,6 +19,7 @@ import 'restaurante_tema.dart';
 import 'theme/app_theme.dart';
 import 'widgets/campana.dart';
 import 'widgets/recorrido_guiado.dart';
+import 'widgets/calculadora.dart';
 
 /// Módulo de restaurante: el salón (mesas con su cuenta abierta y pedidos
 /// para llevar), la pantalla de cocina y la configuración de mesas. Se
@@ -1133,7 +1134,7 @@ class PantallaCocina extends StatelessWidget {
   Widget build(BuildContext context) {
     return ConTemaResto(child: Scaffold(
       backgroundColor: AppColors.surfaceSubtle,
-      appBar: AppBar(title: Text("Cocina · ${negocio.nombreComercial}"), toolbarHeight: 48),
+      appBar: AppBar(title: Text("Cocina · ${negocio.nombreComercial}"), toolbarHeight: 48, actions: const [BotonCalculadora()]),
       body: _Cocina(negocio: negocio, grande: true),
     ));
   }

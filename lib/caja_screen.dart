@@ -12,6 +12,7 @@ import 'negocio.dart';
 import 'recorridos.dart';
 import 'widgets/recorrido_guiado.dart';
 import 'theme/app_theme.dart';
+import 'widgets/calculadora.dart';
 
 /// Cierre de caja (gestion/caja.py): abrir con el fondo inicial, registrar
 /// entradas y salidas de efectivo, y cerrar contando. Los cajeros cierran
@@ -403,7 +404,7 @@ class _ConteoCajaState extends State<_ConteoCaja> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.surfaceSubtle,
-      appBar: AppBar(title: const Text("Cerrar caja")),
+      appBar: AppBar(title: const Text("Cerrar caja"), actions: const [BotonCalculadora()]),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         Center(
           child: ConstrainedBox(
@@ -517,7 +518,7 @@ class ResultadoCierre extends StatelessWidget {
       backgroundColor: AppColors.surfaceSubtle,
       appBar: AppBar(
         title: const Text("Resultado del cierre"),
-        actions: [IconButton(tooltip: "Imprimir", icon: const Icon(Icons.print_outlined), onPressed: _imprimir)],
+        actions: [const BotonCalculadora(), IconButton(tooltip: "Imprimir", icon: const Icon(Icons.print_outlined), onPressed: _imprimir)],
       ),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         Center(
@@ -629,7 +630,7 @@ class _HistorialCajaState extends State<_HistorialCaja> {
     final filas = _filas;
     return Scaffold(
       backgroundColor: AppColors.surfaceSubtle,
-      appBar: AppBar(title: const Text("Cierres de caja")),
+      appBar: AppBar(title: const Text("Cierres de caja"), actions: const [BotonCalculadora()]),
       body: filas == null
           ? const Center(child: CircularProgressIndicator())
           : filas.isEmpty

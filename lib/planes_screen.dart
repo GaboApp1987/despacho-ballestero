@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'api_service.dart';
 import 'plan.dart';
+import 'widgets/calculadora.dart';
 
 /// Gestión de planes de suscripción (nivel plataforma). Solo el administrador
 /// del programa (superusuario) puede crear, editar o borrar planes; los
@@ -377,7 +378,7 @@ class _PlanesScreenState extends State<PlanesScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text("Planes de Suscripción"),
-        actions: [
+        actions: [const BotonCalculadora(), 
           IconButton(icon: const Icon(Icons.refresh), onPressed: _cargarPlanes),
         ],
       ),

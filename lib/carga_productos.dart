@@ -13,6 +13,7 @@ import 'formato.dart';
 import 'negocio.dart';
 import 'producto.dart';
 import 'theme/app_theme.dart';
+import 'widgets/calculadora.dart';
 
 /// Carga masiva de productos: exportar el inventario a Excel, editarlo y
 /// volver a subirlo; la plantilla vacía; o cualquier otro archivo (PDF,
@@ -727,6 +728,7 @@ class _PantallaRevisionCargaState extends State<PantallaRevisionCarga> {
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
         bottom: _ocupado ? const PreferredSize(preferredSize: Size.fromHeight(2), child: LinearProgressIndicator(minHeight: 2)) : null,
+        actions: const [BotonCalculadora()],
       ),
       body: _analisis == null
           ? Center(

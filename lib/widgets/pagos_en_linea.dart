@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../api_service.dart';
 import '../formato.dart';
 import '../theme/app_theme.dart';
+import 'calculadora.dart';
 
 /// Pagos en línea (paso 1): cada factura a crédito tiene una página pública
 /// de pago con los datos de SINPE/transferencia del negocio, donde el
@@ -413,7 +414,7 @@ class PagosReportadosScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: AppColors.background,
-        appBar: AppBar(title: const Text("Pagos en línea")),
+        appBar: AppBar(title: const Text("Pagos en línea"), actions: const [BotonCalculadora()]),
         body: PagosEnLineaVista(negocioId: negocioId),
       );
 }

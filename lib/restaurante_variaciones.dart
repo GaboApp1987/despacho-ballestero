@@ -8,6 +8,7 @@ import 'negocio.dart';
 import 'producto.dart';
 import 'restaurante_tema.dart';
 import 'theme/app_theme.dart';
+import 'widgets/calculadora.dart';
 
 /// Variaciones de los platos (gestion/restaurante.py): "Tamaño" (se elige
 /// una) o "Adicionales" (se pueden elegir varias), cada opción con su
@@ -606,7 +607,7 @@ class _EditorVariacionesState extends State<EditorVariaciones> {
         backgroundColor: AppColors.surfaceSubtle,
         appBar: AppBar(
           title: Text("Variaciones · ${p.nombre}"),
-          actions: [
+          actions: [const BotonCalculadora(), 
             IconButton(tooltip: "Así lo ve el mesero", onPressed: _grupos.isEmpty ? null : _vistaPrevia, icon: const Icon(Icons.visibility_outlined)),
           ],
         ),

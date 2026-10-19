@@ -6,6 +6,7 @@ import 'api_service.dart';
 import 'formato.dart';
 import 'negocio.dart';
 import 'theme/app_theme.dart';
+import 'widgets/calculadora.dart';
 
 /// Órdenes de producción (gestion/produccion.py): para quien fabrica por
 /// lotes y guarda el producto antes de venderlo. El lote gasta los insumos
@@ -439,7 +440,7 @@ class _DetalleLoteScreenState extends State<DetalleLoteScreen> {
         title: Text(l == null ? "Lote" : "${_codigo(l)} · ${l['nombre_producto']}"),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
-        actions: [
+        actions: [const BotonCalculadora(), 
           if (l != null && l['estado'] != 'anulada')
             PopupMenuButton<String>(
               onSelected: (v) => v == 'borrar' ? _borrar() : _anular(),

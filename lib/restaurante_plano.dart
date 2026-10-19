@@ -6,6 +6,7 @@ import 'api_service.dart';
 import 'negocio.dart';
 import 'restaurante_tema.dart';
 import 'theme/app_theme.dart';
+import 'widgets/calculadora.dart';
 
 /// Plano del restaurante: una cuadrícula por zona con las mesas y lo demás
 /// (paredes, maceteras, baños, barra...) para que los meseros se ubiquen.
@@ -533,7 +534,7 @@ class _EditorPlanoState extends State<EditorPlano> {
         backgroundColor: AppColors.surfaceSubtle,
         appBar: AppBar(
           title: const Text("Plano del restaurante"),
-          actions: [
+          actions: [const BotonCalculadora(), 
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: FilledButton.icon(

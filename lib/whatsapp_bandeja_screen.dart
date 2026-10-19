@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'api_service.dart';
 import 'formato.dart';
 import 'theme/app_theme.dart';
+import 'widgets/calculadora.dart';
 
 /// Bandeja de WhatsApp del superusuario: conversaciones de gente que le
 /// escribe al número de Equilibra sin tener cuenta vinculada. Primero
@@ -123,7 +124,7 @@ class _WhatsAppBandejaScreenState extends State<WhatsAppBandejaScreen> {
         backgroundColor: AppColors.background,
         appBar: AppBar(
           title: const Text("Bandeja de WhatsApp"),
-          actions: [
+          actions: [const BotonCalculadora(), 
             IconButton(
               icon: const Icon(Icons.tune),
               tooltip: "Tono de la IA",
@@ -411,7 +412,7 @@ class _WhatsAppConversacionScreenState extends State<WhatsAppConversacionScreen>
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: Text(formatearTelefonoWhatsApp(widget.telefono)),
-        actions: [
+        actions: [const BotonCalculadora(), 
           IconButton(
             icon: const Icon(Icons.copy),
             tooltip: "Copiar número",
@@ -795,7 +796,7 @@ class _WhatsAppClienteConversacionScreenState extends State<WhatsAppClienteConve
               Text("${formatearTelefonoWhatsApp(_conv!['telefono'] ?? '')} · ${_conv!['usuario'] ?? ''}", style: const TextStyle(fontSize: 12)),
           ],
         ),
-        actions: [IconButton(icon: const Icon(Icons.refresh), tooltip: "Actualizar", onPressed: _cargar)],
+        actions: [const BotonCalculadora(), IconButton(icon: const Icon(Icons.refresh), tooltip: "Actualizar", onPressed: _cargar)],
       ),
       body: _cargando
           ? const Center(child: CircularProgressIndicator())
@@ -946,7 +947,7 @@ class _TonoIAScreenState extends State<TonoIAScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text("Tono de la IA en WhatsApp")),
+      appBar: AppBar(title: const Text("Tono de la IA en WhatsApp"), actions: const [BotonCalculadora()]),
       body: _cargando
           ? const Center(child: CircularProgressIndicator())
           : _error != null

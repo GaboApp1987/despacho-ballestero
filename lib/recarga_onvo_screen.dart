@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'api_service.dart';
 import 'onvo_iframe_view.dart';
 import 'theme/app_theme.dart';
+import 'widgets/calculadora.dart';
 
 /// Compra de una recarga (documentos o consultas de IA) con un pago único
 /// de ONVO. El formulario de tarjeta es el mismo de ONVO
@@ -110,6 +111,7 @@ class _RecargaOnvoScreenState extends State<RecargaOnvoScreen> {
         title: Text("Recarga: ${widget.descripcion}"),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
+        actions: const [BotonCalculadora()],
       ),
       body: _cargando
           ? const Center(child: CircularProgressIndicator())

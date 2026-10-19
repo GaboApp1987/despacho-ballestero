@@ -9,6 +9,7 @@ import 'cabys_picker.dart';
 import 'impuesto.dart';
 import 'negocio.dart';
 import 'producto.dart';
+import 'widgets/calculadora.dart';
 
 class CrearProductoScreen extends StatefulWidget {
   final Negocio negocio;
@@ -465,6 +466,7 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(esEdicion ? "Editar Producto" : "Nuevo Producto"),
+        actions: const [BotonCalculadora()],
       ),
       body: _cargandoInicial
           ? const Center(child: CircularProgressIndicator())

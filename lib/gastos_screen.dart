@@ -10,6 +10,7 @@ import 'compra_model.dart';
 import 'gasto_operativo.dart';
 import 'negocio.dart';
 import 'formato.dart';
+import 'widgets/calculadora.dart';
 
 /// Registro de gastos operativos (planilla, alquiler, servicios, etc.):
 /// junto con Compras, es lo que alimenta la Declaración de Renta anual.
@@ -274,7 +275,7 @@ class _GastosScreenState extends State<GastosScreen> {
         title: const Text("Gastos Operativos"),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
-        actions: [
+        actions: [const BotonCalculadora(), 
           DropdownButtonHideUnderline(
             child: DropdownButton<int>(
               value: _anioFiltro,

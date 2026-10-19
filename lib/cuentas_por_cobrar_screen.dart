@@ -11,6 +11,7 @@ import 'saldos_iniciales_dialog.dart';
 import 'widgets/pagos_en_linea.dart';
 import 'recorridos.dart';
 import 'widgets/recorrido_guiado.dart';
+import 'widgets/calculadora.dart';
 
 /// Abre WhatsApp (wa.me) con el mensaje ya escrito para ese número --
 /// compartido entre el recordatorio individual (por cliente) y el masivo
@@ -571,7 +572,7 @@ class _DetalleCuentaClienteScreenState extends State<DetalleCuentaClienteScreen>
         title: Text("Historial: ${widget.clienteNombre}"),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
-        actions: [
+        actions: [const BotonCalculadora(), 
           IconButton(
             icon: _generandoMensaje
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
@@ -730,7 +731,7 @@ class _RecordatoriosCobroScreenState extends State<_RecordatoriosCobroScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Recordatorios de Cobro (${_items.length})")),
+      appBar: AppBar(title: Text("Recordatorios de Cobro (${_items.length})"), actions: const [BotonCalculadora()]),
       body: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: _items.length,

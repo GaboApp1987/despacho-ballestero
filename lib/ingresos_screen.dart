@@ -10,6 +10,7 @@ import 'importar_externo_dialog.dart';
 import 'negocio.dart';
 import 'formato.dart';
 import 'widgets/selector_periodo.dart';
+import 'widgets/calculadora.dart';
 
 /// Ingresos/ventas que no pasan por Factura -- para negocios que llevan su
 /// contabilidad con Equilibra pero no facturan electrónicamente acá (ver
@@ -377,7 +378,7 @@ class _IngresosScreenState extends State<IngresosScreen> {
         title: const Text("Ingresos"),
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textStrong,
-        actions: [
+        actions: [const BotonCalculadora(), 
           IconButton(
             icon: const Icon(Icons.chevron_left),
             tooltip: "Mes anterior",

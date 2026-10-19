@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'api_service.dart';
 import 'theme/app_theme.dart';
+import 'widgets/calculadora.dart';
 
 /// Quién recibe los mensajes automáticos de WhatsApp (por ahora, el saludo
 /// de la mañana; backend: WhatsAppAutomaticosView). Cada perfil ve su
@@ -257,7 +258,7 @@ class _MensajesAutomaticosScreenState extends State<MensajesAutomaticosScreen> {
           ? null
           : AppBar(
               title: const Text("Mensajes automáticos de WhatsApp"),
-              actions: [IconButton(tooltip: "Actualizar", icon: const Icon(Icons.refresh), onPressed: _cargar)],
+              actions: [const BotonCalculadora(), IconButton(tooltip: "Actualizar", icon: const Icon(Icons.refresh), onPressed: _cargar)],
             ),
       body: d == null
           ? Center(child: _error == null ? const CircularProgressIndicator() : Text(_error!, textAlign: TextAlign.center))
