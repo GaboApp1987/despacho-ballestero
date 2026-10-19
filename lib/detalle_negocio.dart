@@ -959,6 +959,30 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
           tooltip: "Este negocio no tiene plan -- tocá para ver los planes",
           onTap: abrirPlanes,
         ));
+        // Sin plan igual se ve lo regalado o comprado que le queda.
+        final n = _negocioConCuota;
+        final docsExtra = n.documentosCortesia + n.documentosRecarga;
+        if (docsExtra > 0) {
+          segmentos.add(_segmentoDatosAppBar(
+            icono: Icons.receipt_long_outlined,
+            texto: "$docsExtra facturas",
+            tooltip: "Te quedan $docsExtra documentos"
+                "${n.documentosCortesia > 0 ? ' (${n.documentosCortesia} de regalo)' : ''}"
+                "${n.documentosRecarga > 0 ? ' (${n.documentosRecarga} comprados)' : ''}",
+            onTap: abrirPlanes,
+          ));
+        }
+        final iaExtra = n.iaCortesia + n.iaRecarga;
+        if (iaExtra > 0) {
+          segmentos.add(_segmentoDatosAppBar(
+            icono: Icons.auto_awesome_outlined,
+            texto: "$iaExtra IA",
+            tooltip: "Te quedan $iaExtra consultas al asistente de IA"
+                "${n.iaCortesia > 0 ? ' (${n.iaCortesia} de regalo)' : ''}"
+                "${n.iaRecarga > 0 ? ' (${n.iaRecarga} compradas)' : ''}",
+            onTap: abrirPlanes,
+          ));
+        }
       } else {
         final unidad = uso?['periodicidad'] == 'anual' ? 'este año' : 'este mes';
         final extraPermitido = uso?['precio_documento_extra'] != null;
@@ -987,6 +1011,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
                 ? "Consultas al asistente de IA ilimitadas"
                 : "Te quedan ${iaDisp ?? 0} consultas al asistente de IA este mes"
                     "${(uso['saldo_consultas_ia_recarga'] ?? 0) > 0 ? ' (incluye ${uso['saldo_consultas_ia_recarga']} de recargas)' : ''}"
+                    "${(uso['saldo_consultas_ia_cortesia'] ?? 0) > 0 ? ' (incluye ${uso['saldo_consultas_ia_cortesia']} de regalo)' : ''}"
                     " -- tocá para comprar más",
             colorTexto: colorSegun(iaDisp, (uso['consultas_ia_limite'] as num?)?.toInt()),
             onTap: abrirPlanes,

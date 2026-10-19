@@ -81,6 +81,12 @@ class Negocio {
   /// Uso del plan (documentos del período, usuarios, consultas de IA) --
   /// ver uso_plan_negocio en el backend. null si no tiene plan.
   final Map<String, dynamic>? usoPlan;
+  /// Facturas y consultas de IA regaladas (cortesía) o compradas (recargas)
+  /// que le quedan, aunque no tenga plan -- ver saldos_extra en el backend.
+  final int documentosCortesia;
+  final int documentosRecarga;
+  final int iaCortesia;
+  final int iaRecarga;
   final int? suscripcionId;
   final String? suscripcionEstado;
   final bool suscripcionCobroAutomatico;
@@ -141,6 +147,10 @@ class Negocio {
     this.facturasUsadasMes,
     this.facturasDisponibles,
     this.facturasCortesia = 0,
+    this.documentosCortesia = 0,
+    this.documentosRecarga = 0,
+    this.iaCortesia = 0,
+    this.iaRecarga = 0,
     this.usoPlan,
     this.suscripcionId,
     this.suscripcionEstado,
@@ -192,6 +202,10 @@ class Negocio {
       facturasUsadasMes: json['facturas_usadas_mes'],
       facturasDisponibles: json['facturas_disponibles'],
       facturasCortesia: json['facturas_cortesia'] ?? 0,
+      documentosCortesia: (json['saldos_extra']?['documentos_cortesia'] as num?)?.toInt() ?? 0,
+      documentosRecarga: (json['saldos_extra']?['documentos_recarga'] as num?)?.toInt() ?? 0,
+      iaCortesia: (json['saldos_extra']?['ia_cortesia'] as num?)?.toInt() ?? 0,
+      iaRecarga: (json['saldos_extra']?['ia_recarga'] as num?)?.toInt() ?? 0,
       usoPlan: json['uso_plan'] is Map ? Map<String, dynamic>.from(json['uso_plan']) : null,
       suscripcionId: json['suscripcion_id'],
       suscripcionEstado: json['suscripcion_estado'],
