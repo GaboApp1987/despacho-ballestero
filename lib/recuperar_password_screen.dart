@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'api_service.dart';
 import 'theme/app_theme.dart';
+import 'widgets/requisitos_contrasena.dart';
 
 /// Flujo de "olvidé mi contraseña" sin sesión iniciada: pide el usuario,
 /// el backend manda un código de 6 dígitos al correo asociado (si existe),
@@ -185,6 +186,7 @@ class _RecuperarPasswordScreenState extends State<RecuperarPasswordScreen> {
                       ),
                     ),
                   ),
+                  RequisitosContrasena(controller: _nuevaController, parecidosA: []),
                   const SizedBox(height: 16),
                   TextField(
                     controller: _confirmarController,

@@ -21,6 +21,7 @@ import 'crm_maps_screen.dart';
 import 'admin_contadores_screen.dart';
 import 'perfil_sesion.dart';
 import 'widgets/calculadora.dart';
+import 'widgets/requisitos_contrasena.dart';
 
 /// Pantalla de nivel plataforma: solo la ve un superusuario (el dueño del programa).
 /// Desde acá se dan de alta los despachos contables (cada uno con su propio dueño/login),
@@ -127,6 +128,7 @@ class _DespachosScreenState extends State<DespachosScreen> {
                   obscureText: true,
                   decoration: const InputDecoration(labelText: "Contraseña *", border: OutlineInputBorder()),
                 ),
+                RequisitosContrasena(controller: passwordCtrl, parecidosA: [usernameCtrl, nombreCtrl, emailCtrl]),
                 const SizedBox(height: 10),
                 TextField(
                   controller: emailCtrl,
@@ -231,6 +233,7 @@ class _DespachosScreenState extends State<DespachosScreen> {
                   obscureText: true,
                   decoration: const InputDecoration(labelText: "Nueva contraseña", border: OutlineInputBorder()),
                 ),
+                RequisitosContrasena(controller: passwordCtrl, parecidosA: [usernameCtrl, nombreCtrl, emailCtrl]),
                 const SizedBox(height: 10),
                 TextField(
                   controller: emailCtrl,

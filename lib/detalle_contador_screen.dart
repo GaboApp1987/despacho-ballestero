@@ -7,6 +7,7 @@ import 'avatar_logo.dart';
 import 'negocio.dart';
 import 'resumen_fiscal_screen.dart';
 import 'socio.dart';
+import 'widgets/requisitos_contrasena.dart';
 
 /// Lo que ve el dueño del despacho al entrar a uno de sus contadores: sus
 /// datos, la cartera de clientes que le pertenecen (filtrada, no mezclada
@@ -101,6 +102,7 @@ class _DetalleContadorScreenState extends State<DetalleContadorScreen> {
                       obscureText: true,
                       decoration: const InputDecoration(labelText: "Nueva contraseña *", border: OutlineInputBorder()),
                     ),
+                    RequisitosContrasena(controller: passwordCtrl, parecidosA: [nombreCtrl, emailCtrl]),
                   ],
                 ],
               ),

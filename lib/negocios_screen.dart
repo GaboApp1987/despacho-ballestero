@@ -31,6 +31,7 @@ import 'widgets/asistente_flotante.dart';
 import 'recorridos.dart';
 import 'widgets/recorrido_guiado.dart';
 import 'widgets/calculadora.dart';
+import 'widgets/requisitos_contrasena.dart';
 
 /// Paleta "Blanco & Cobalto" -- solo para cuando esta pantalla la ve un
 /// CONTADOR viendo su propia cartera (widget.puedeCrear), a propósito
@@ -703,6 +704,7 @@ class _NegociosScreenState extends State<NegociosScreen> {
                     obscureText: true,
                     decoration: const InputDecoration(labelText: "Contraseña *", border: OutlineInputBorder()),
                   ),
+                  RequisitosContrasena(controller: passwordCtrl, parecidosA: [usernameCtrl, nombreCtrl, correoHaciendaCtrl]),
                 ],
               ),
             ),

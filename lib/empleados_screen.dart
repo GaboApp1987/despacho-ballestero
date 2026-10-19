@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'api_service.dart';
 import 'formato.dart';
-import 'negocio.dart';
+import 'negocio.dart';
+import 'widgets/requisitos_contrasena.dart';
 
 /// Colaboradores del negocio -- exclusivo del dueño real (ver
 /// SoloDuenoDelNegocioMixin y gestion/colaboradores.py en el backend):
@@ -760,13 +761,13 @@ class _FormularioColaboradorState extends State<_FormularioColaborador> {
                   decoration: _deco(
                     'Contraseña',
                     campo: 'password',
-                    ayuda: 'Que no se parezca al nombre ni al usuario, y que no sea muy común.',
                     sufijo: IconButton(
                       icon: Icon(_verClave ? Icons.visibility_off_outlined : Icons.visibility_outlined),
                       onPressed: () => setState(() => _verClave = !_verClave),
                     ),
                   ),
                 ),
+                RequisitosContrasena(controller: _clave, parecidosA: [_usuario, _nombre]),
               ],
               const SizedBox(height: 16),
               const Text('Qué puede hacer', style: TextStyle(fontWeight: FontWeight.w700)),

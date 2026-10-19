@@ -10,6 +10,7 @@ import 'theme/app_theme.dart';
 import 'widgets/tarjeta_plan_negocio.dart';
 import 'ubicacion_cr.dart';
 import 'widgets/campo_cedula_hacienda.dart';
+import 'widgets/requisitos_contrasena.dart';
 
 /// Alta pública desde el login (sin sesión previa): despacho contable,
 /// contador independiente, o negocio directo. La cuenta queda creada pero
@@ -24,6 +25,7 @@ class RegistroPublicoScreen extends StatefulWidget {
   /// ver main.dart). Null = comportamiento de siempre.
   final String? tipoInicial;
   final String? codigoPromocionalInicial;
+
   /// true = "Empezar con días de prueba gratis" ya marcado (link del
   /// landing con ?prueba=1).
   final bool pruebaGratisInicial;
@@ -42,6 +44,7 @@ class _PlanOption {
   final String nombre;
   final double? precioMensual;
   final String textoLimite;
+
   /// Solo en planes de negocio: el plan completo, para la tarjeta detallada.
   final Plan? planNegocio;
   _PlanOption({required this.id, required this.nombre, required this.precioMensual, required this.textoLimite, this.planNegocio});
@@ -130,7 +133,11 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
     if (promo.isNotEmpty) _codigoPromocionalCtrl.text = promo.toUpperCase();
     _cargarPlanes();
     UbicacionCR.cargar().then((u) {
-      if (mounted) setState(() { _ubicaciones = u; _cargandoUbicaciones = false; });
+      if (mounted)
+        setState(() {
+          _ubicaciones = u;
+          _cargandoUbicaciones = false;
+        });
     });
     _emailCtrl.addListener(() {
       final correo = _emailCtrl.text.trim();
@@ -194,22 +201,22 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
       case 'despacho':
         final p = PlanDespacho.fromJson(json);
         return _PlanOption(
-          id: p.id, nombre: p.nombre, precioMensual: p.precioMensual,
+          id: p.id,
+          nombre: p.nombre,
+          precioMensual: p.precioMensual,
           textoLimite: p.limiteContadores != null ? "${p.limiteContadores} contadores" : "Contadores ilimitados",
         );
       case 'contador':
         final p = PlanContador.fromJson(json);
         return _PlanOption(
-          id: p.id, nombre: p.nombre, precioMensual: p.precioMensual,
+          id: p.id,
+          nombre: p.nombre,
+          precioMensual: p.precioMensual,
           textoLimite: p.limiteNegocios != null ? "${p.limiteNegocios} negocios" : "Negocios ilimitados",
         );
       default:
         final p = Plan.fromJson(json);
-        return _PlanOption(
-          id: p.id, nombre: p.nombre, precioMensual: p.precioMensual,
-          textoLimite: p.resumenLimites,
-          planNegocio: p,
-        );
+        return _PlanOption(id: p.id, nombre: p.nombre, precioMensual: p.precioMensual, textoLimite: p.resumenLimites, planNegocio: p);
     }
   }
 
@@ -220,9 +227,7 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
       return;
     }
     if (!_aceptaTerminos) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Tenés que aceptar los Términos y la Política de Privacidad para continuar.")),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Tenés que aceptar los Términos y la Política de Privacidad para continuar.")));
       return;
     }
 
@@ -279,20 +284,11 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
           content: Text(
             datos['detail'] ?? "Te enviamos un correo para confirmar tu cuenta. Revisá tu bandeja de entrada (y spam) y hacé clic en el link para activarla.",
           ),
-          actions: [
-            ElevatedButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text("Entendido"),
-            ),
-          ],
+          actions: [ElevatedButton(onPressed: () => Navigator.pop(dialogContext), child: const Text("Entendido"))],
         ),
       );
       if (!mounted) return;
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (route) => false,
-      );
+      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${ApiService.textoError(e)}")));
@@ -315,10 +311,7 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
         actions: [
           if (!Navigator.canPop(context))
             TextButton(
-              onPressed: () => Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
-              ),
+              onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen())),
               child: const Text("Ya tengo cuenta"),
             ),
         ],
@@ -336,10 +329,7 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                   children: [
                     const Text("¿Cómo querés registrarte?", style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
-                    _SelectorTipo(
-                      tipo: _tipo,
-                      onChanged: _cambiarTipo,
-                    ),
+                    _SelectorTipo(tipo: _tipo, onChanged: _cambiarTipo),
                     const SizedBox(height: 14),
                     Container(
                       padding: const EdgeInsets.all(14),
@@ -359,7 +349,8 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                                 style: TextStyle(fontSize: 12.5, color: AppColors.textMuted, height: 1.4),
                                 children: [
                                   const TextSpan(
-                                    text: "Si ya tenés todos los datos que pide Hacienda (certificado, cédula, "
+                                    text:
+                                        "Si ya tenés todos los datos que pide Hacienda (certificado, cédula, "
                                         "actividad económica, etc.), completalos de una vez y quedás listo para "
                                         "facturar hoy mismo.\n\n",
                                   ),
@@ -368,7 +359,8 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                                     style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textStrong),
                                   ),
                                   const TextSpan(
-                                    text: ", no hay problema: registrate solo con usuario, cédula, contraseña y "
+                                    text:
+                                        ", no hay problema: registrate solo con usuario, cédula, contraseña y "
                                         "correo, y empezá a conocer la app ya mismo — para facturar de verdad vas "
                                         "a necesitar completar esos datos más adelante, cuando los tengas. Si no "
                                         "sabés cómo conseguirlos, preguntale a ",
@@ -451,8 +443,11 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                       controller: _passwordCtrl,
                       obscureText: true,
                       decoration: const InputDecoration(labelText: "Contraseña", border: OutlineInputBorder()),
-                      validator: (v) => (v == null || v.length < 8) ? "Mínimo 8 caracteres" : null,
+                      validator: (v) => RequisitosContrasena.esValida(v ?? '', parecidos: [_usernameCtrl.text, _nombreCtrl.text, _emailCtrl.text])
+                          ? null
+                          : "Revisá los requisitos de la contraseña",
                     ),
+                    RequisitosContrasena(controller: _passwordCtrl, parecidosA: [_usernameCtrl, _nombreCtrl, _emailCtrl]),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _confirmarPasswordCtrl,
@@ -474,8 +469,10 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                       const Text("Datos para facturar", style: TextStyle(fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
                       if (_actividadAlanube.isNotEmpty) ...[
-                        Text("Actividad económica de Hacienda: $_actividadAlanube (ya queda guardada para facturar)",
-                            style: const TextStyle(fontSize: 12, color: Colors.green)),
+                        Text(
+                          "Actividad económica de Hacienda: $_actividadAlanube (ya queda guardada para facturar)",
+                          style: const TextStyle(fontSize: 12, color: Colors.green),
+                        ),
                         const SizedBox(height: 10),
                       ],
                       TextFormField(
@@ -510,9 +507,7 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                           initialValue: _provinciaSel,
                           isExpanded: true,
                           decoration: const InputDecoration(labelText: "Provincia", border: OutlineInputBorder()),
-                          items: _ubicaciones
-                              .map((p) => DropdownMenuItem(value: p.codigo, child: Text("${p.codigo} - ${p.nombre}")))
-                              .toList(),
+                          items: _ubicaciones.map((p) => DropdownMenuItem(value: p.codigo, child: Text("${p.codigo} - ${p.nombre}"))).toList(),
                           onChanged: (v) => setState(() {
                             _provinciaSel = v;
                             _cantonSel = null;
@@ -524,24 +519,20 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                           initialValue: _cantonSel,
                           isExpanded: true,
                           decoration: const InputDecoration(labelText: "Cantón", border: OutlineInputBorder()),
-                          items: _cantonesDisponibles
-                              .map((c) => DropdownMenuItem(value: c.codigo, child: Text("${c.codigo} - ${c.nombre}")))
-                              .toList(),
+                          items: _cantonesDisponibles.map((c) => DropdownMenuItem(value: c.codigo, child: Text("${c.codigo} - ${c.nombre}"))).toList(),
                           onChanged: _provinciaSel == null
                               ? null
                               : (v) => setState(() {
-                                    _cantonSel = v;
-                                    _distritoSel = null;
-                                  }),
+                                  _cantonSel = v;
+                                  _distritoSel = null;
+                                }),
                         ),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<String>(
                           initialValue: _distritoSel,
                           isExpanded: true,
                           decoration: const InputDecoration(labelText: "Distrito", border: OutlineInputBorder()),
-                          items: _distritosDisponibles
-                              .map((d) => DropdownMenuItem(value: d.codigo, child: Text("${d.codigo} - ${d.nombre}")))
-                              .toList(),
+                          items: _distritosDisponibles.map((d) => DropdownMenuItem(value: d.codigo, child: Text("${d.codigo} - ${d.nombre}"))).toList(),
                           onChanged: _cantonSel == null ? null : (v) => setState(() => _distritoSel = v),
                         ),
                       ],
@@ -553,42 +544,39 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                       _cargandoPlanes
                           ? const Center(child: CircularProgressIndicator())
                           : _planes.isEmpty
-                              ? const Text("No hay planes disponibles en este momento.", style: TextStyle(color: Colors.red))
-                              : Column(
-                                  children: _planes.map((p) {
-                                    if (p.planNegocio != null) {
-                                      return Padding(
-                                        padding: const EdgeInsets.only(bottom: 10),
-                                        child: TarjetaPlanNegocio(
-                                          plan: p.planNegocio!,
-                                          compacta: true,
-                                          seleccionada: _planSeleccionadoId == p.id,
-                                          onTap: () => setState(() => _planSeleccionadoId = p.id),
-                                        ),
-                                      );
-                                    }
-                                    return Card(
-                                      margin: const EdgeInsets.only(bottom: 8),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                        side: BorderSide(
-                                          color: _planSeleccionadoId == p.id ? AppColors.primary : Colors.transparent,
-                                          width: 2,
-                                        ),
-                                      ),
-                                      child: RadioListTile<int>(
-                                        value: p.id,
-                                        groupValue: _planSeleccionadoId,
-                                        onChanged: (v) => setState(() => _planSeleccionadoId = v),
-                                        title: Text(p.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                        subtitle: Text(
-                                          "${p.textoLimite}"
-                                          "${p.precioMensual != null ? ' · ${formatearColones(p.precioMensual!)}/mes' : ''}",
-                                        ),
-                                      ),
-                                    );
-                                  }).toList(),
-                                ),
+                          ? const Text("No hay planes disponibles en este momento.", style: TextStyle(color: Colors.red))
+                          : Column(
+                              children: _planes.map((p) {
+                                if (p.planNegocio != null) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: TarjetaPlanNegocio(
+                                      plan: p.planNegocio!,
+                                      compacta: true,
+                                      seleccionada: _planSeleccionadoId == p.id,
+                                      onTap: () => setState(() => _planSeleccionadoId = p.id),
+                                    ),
+                                  );
+                                }
+                                return Card(
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                    side: BorderSide(color: _planSeleccionadoId == p.id ? AppColors.primary : Colors.transparent, width: 2),
+                                  ),
+                                  child: RadioListTile<int>(
+                                    value: p.id,
+                                    groupValue: _planSeleccionadoId,
+                                    onChanged: (v) => setState(() => _planSeleccionadoId = v),
+                                    title: Text(p.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    subtitle: Text(
+                                      "${p.textoLimite}"
+                                      "${p.precioMensual != null ? ' · ${formatearColones(p.precioMensual!)}/mes' : ''}",
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
                       const SizedBox(height: 12),
                       Card(
                         margin: EdgeInsets.zero,
@@ -607,9 +595,7 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        _pruebaGratis
-                            ? "No te vamos a cobrar nada todavía."
-                            : "Vas a poder pagar con tarjeta justo después de crear la cuenta.",
+                        _pruebaGratis ? "No te vamos a cobrar nada todavía." : "Vas a poder pagar con tarjeta justo después de crear la cuenta.",
                         style: TextStyle(fontSize: 12, color: AppColors.textMuted),
                       ),
                       const SizedBox(height: 12),
@@ -628,10 +614,7 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Checkbox(
-                          value: _aceptaTerminos,
-                          onChanged: (v) => setState(() => _aceptaTerminos = v ?? false),
-                        ),
+                        Checkbox(value: _aceptaTerminos, onChanged: (v) => setState(() => _aceptaTerminos = v ?? false)),
                         Expanded(
                           child: Wrap(
                             crossAxisAlignment: WrapCrossAlignment.center,
@@ -648,10 +631,7 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                     const SizedBox(height: 8),
                     ElevatedButton(
                       onPressed: _enviando ? null : _registrarse,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        minimumSize: const Size(double.infinity, 50),
-                      ),
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, minimumSize: const Size(double.infinity, 50)),
                       child: _enviando
                           ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                           : const Text("Crear cuenta"),

@@ -18,6 +18,7 @@ import 'widgets/soporte_chat.dart';
 import 'widgets/asistente_ia_bar.dart';
 import 'perfil_sesion.dart';
 import 'widgets/calculadora.dart';
+import 'widgets/requisitos_contrasena.dart';
 
 class ContadoresScreen extends StatefulWidget {
   const ContadoresScreen({super.key});
@@ -233,6 +234,7 @@ class _ContadoresScreenState extends State<ContadoresScreen> {
                     border: OutlineInputBorder(),
                   ),
                 ),
+                RequisitosContrasena(controller: passwordCtrl, parecidosA: [usernameCtrl, nombreCtrl, emailCtrl]),
               ],
             ),
           ),

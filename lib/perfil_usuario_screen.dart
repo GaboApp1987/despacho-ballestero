@@ -9,6 +9,7 @@ import 'avatar_logo.dart';
 import 'firmante_contador.dart';
 import 'login.dart';
 import 'logo_screen.dart';
+import 'widgets/requisitos_contrasena.dart';
 
 /// Pantalla de "Mi Perfil" reutilizable para el usuario que tiene la sesión
 /// abierta (despacho, contador o negocio): logo, cambio de contraseña y
@@ -779,6 +780,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                       ),
                     ),
                   ),
+                  RequisitosContrasena(controller: _nuevaCtrl, parecidosA: []),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _confirmarCtrl,
