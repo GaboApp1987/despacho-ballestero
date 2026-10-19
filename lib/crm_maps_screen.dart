@@ -75,7 +75,12 @@ class BuscarMapsScreen extends StatefulWidget {
 
 class _BuscarMapsScreenState extends State<BuscarMapsScreen> {
   final _textoCtrl = TextEditingController();
+  final _objetivoCtrl = TextEditingController();
   final List<Map<String, dynamic>> _lugares = [];
+  // Búsqueda con IA: arma las búsquedas y califica cada negocio.
+  bool _buscandoIA = false;
+  List<String> _busquedasIA = [];
+  String _criterioIA = '';
   final Set<String> _elegidos = {};
   String? _siguiente;
   String _busqueda = '';
@@ -94,7 +99,41 @@ class _BuscarMapsScreenState extends State<BuscarMapsScreen> {
   @override
   void dispose() {
     _textoCtrl.dispose();
+    _objetivoCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _buscarConIA() async {
+    final objetivo = _objetivoCtrl.text.trim();
+    if (objetivo.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Contale a la IA qué prospectos buscás.")));
+      return;
+    }
+    setState(() {
+      _buscandoIA = true;
+      _lugares.clear();
+      _elegidos.clear();
+      _siguiente = null;
+      _busqueda = objetivo;
+    });
+    try {
+      final r = await ApiService.post('/crm/prospectos/buscar_con_ia/', {'objetivo': objetivo});
+      final d = json.decode(utf8.decode(r.bodyBytes));
+      if (r.statusCode != 200) throw Exception(d['detail'] ?? ApiService.mensajeError(r));
+      final lugares = (d['lugares'] as List).cast<Map<String, dynamic>>();
+      setState(() {
+        _lugares.addAll(lugares);
+        _elegidos.addAll(lugares.where((l) => ((l['puntaje'] ?? 0) as num) >= 7 && l['celular'] == true).map((l) => l['place_id'] as String));
+        _busquedasIA = ((d['busquedas'] as List?) ?? []).cast<String>();
+        _criterioIA = (d['criterio'] ?? '').toString();
+        _orden = 'puntaje';
+        _ocultarEnCrm = true;
+      });
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
+    } finally {
+      if (mounted) setState(() => _buscandoIA = false);
+    }
   }
 
   String get _consulta {
@@ -112,7 +151,11 @@ class _BuscarMapsScreenState extends State<BuscarMapsScreen> {
       if (((l['resenas'] ?? 0) as num) < _minResenas) return false;
       return true;
     }).toList();
-    num valor(Map<String, dynamic> l) => _orden == 'calificacion' ? ((l['calificacion'] ?? 0) as num) : ((l['resenas'] ?? 0) as num);
+    num valor(Map<String, dynamic> l) => switch (_orden) {
+      'calificacion' => (l['calificacion'] ?? 0) as num,
+      'puntaje' => (l['puntaje'] ?? 0) as num,
+      _ => (l['resenas'] ?? 0) as num,
+    };
     if (_orden != 'google') lista.sort((a, b) => valor(b).compareTo(valor(a)));
     return lista;
   }
@@ -213,10 +256,55 @@ class _BuscarMapsScreenState extends State<BuscarMapsScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         children: [
-          Text(
-            "Rubro",
-            style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textStrong),
+          Card(
+            color: AppColors.surface,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.auto_awesome, color: AppColors.primary, size: 20),
+                      const SizedBox(width: 8),
+                      Text("Búsqueda con IA", style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.textStrong)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    "Decile qué buscás y la IA arma las búsquedas, junta los resultados y califica qué tan buen prospecto es cada negocio.",
+                    style: TextStyle(fontSize: 12.5, color: AppColors.textMuted),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _objetivoCtrl,
+                    minLines: 1,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      hintText: "Ej.: negocios en Cartago que necesiten facturación electrónica y controlar inventario",
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  FilledButton.icon(
+                    onPressed: _buscandoIA || _buscando ? null : _buscarConIA,
+                    icon: _buscandoIA
+                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.auto_awesome),
+                    label: Text(_buscandoIA ? "Buscando y calificando (puede tardar ~30 s)..." : "Buscar con IA"),
+                  ),
+                  if (_busquedasIA.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text("Buscó: ${_busquedasIA.join(' · ')}", style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                    if (_criterioIA.isNotEmpty) Text("Criterio: $_criterioIA", style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                  ],
+                ],
+              ),
+            ),
           ),
+          const SizedBox(height: 14),
+          Text("O buscá a mano: rubro", style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textStrong)),
           const SizedBox(height: 6),
           Wrap(
             spacing: 6,
@@ -290,6 +378,7 @@ class _BuscarMapsScreenState extends State<BuscarMapsScreen> {
                 DropdownButton<String>(
                   value: _orden,
                   items: const [
+                    DropdownMenuItem(value: 'puntaje', child: Text("Mejor prospecto (IA)")),
                     DropdownMenuItem(value: 'resenas', child: Text("Más reseñas primero")),
                     DropdownMenuItem(value: 'calificacion', child: Text("Mejor calificación")),
                     DropdownMenuItem(value: 'google', child: Text("Orden de Google")),
@@ -327,13 +416,25 @@ class _BuscarMapsScreenState extends State<BuscarMapsScreen> {
               contentPadding: EdgeInsets.zero,
               value: _elegidos.contains(l['place_id']),
               onChanged: l['ya_en_crm'] == true ? null : (v) => setState(() => v == true ? _elegidos.add(l['place_id']) : _elegidos.remove(l['place_id'])),
-              title: Text(
-                l['nombre'] ?? '',
-                style: TextStyle(color: AppColors.textStrong, fontWeight: FontWeight.w600),
+              title: Row(
+                children: [
+                  Expanded(child: Text(l['nombre'] ?? '', style: TextStyle(color: AppColors.textStrong, fontWeight: FontWeight.w600))),
+                  if (l['razon'] != null && (l['razon'] ?? '').toString().isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: (((l['puntaje'] ?? 0) as num) >= 7 ? Colors.green : Colors.orange).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text("${l['puntaje']}/10", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+                    ),
+                ],
               ),
               subtitle: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if ((l['razon'] ?? '').toString().isNotEmpty)
+                    Text("🤖 ${l['razon']}", style: TextStyle(fontSize: 12.5, color: AppColors.primary)),
                   Text(
                     [
                       l['categoria'],

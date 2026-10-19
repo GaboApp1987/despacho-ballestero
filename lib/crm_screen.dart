@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'api_service.dart';
 import 'crm_maps_screen.dart';
+import 'crm_chats_screen.dart';
 import 'theme/app_theme.dart';
 
 /// CRM de la plataforma (solo superusuario): las personas interesadas en
@@ -232,6 +233,8 @@ class _CrmScreenState extends State<CrmScreen> {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudo agregar: ${ApiService.textoError(e)}")));
     }
   }
+
+  void _abrirChats() => Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatsCrmScreen()));
 
   Future<void> _buscarEnMaps() async {
     final cambio = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const BuscarMapsScreen()));
@@ -685,9 +688,11 @@ class _CrmScreenState extends State<CrmScreen> {
           if (MediaQuery.sizeOf(context).width >= 700) ...[
             TextButton.icon(onPressed: _buscarEnMaps, icon: const Icon(Icons.travel_explore), label: const Text("Buscar en Google Maps")),
             TextButton.icon(onPressed: _whatsappAVarios, icon: const Icon(Icons.forum_outlined), label: const Text("WhatsApp a varios")),
+            TextButton.icon(onPressed: _abrirChats, icon: const Icon(Icons.question_answer_outlined), label: const Text("Chats")),
           ] else ...[
             IconButton(tooltip: "Buscar en Google Maps", icon: const Icon(Icons.travel_explore), onPressed: _buscarEnMaps),
             IconButton(tooltip: "WhatsApp a varios", icon: const Icon(Icons.forum_outlined), onPressed: _whatsappAVarios),
+            IconButton(tooltip: "Chats con la IA", icon: const Icon(Icons.question_answer_outlined), onPressed: _abrirChats),
           ],
           IconButton(tooltip: "Recargar", icon: const Icon(Icons.refresh), onPressed: _cargar),
         ],

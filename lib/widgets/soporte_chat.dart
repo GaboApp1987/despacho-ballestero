@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -324,6 +325,9 @@ class _SoporteChatSheet extends StatefulWidget {
 }
 
 class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerProviderStateMixin {
+  // Identifica esta conversación en el servidor (ChatSoporte): se guarda
+  // completa para el CRM y el soporte, aunque no deje contacto.
+  final String _sesion = 'app${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}${Random().nextInt(1 << 30).toRadixString(36)}';
   late final List<_ChatMensaje> _mensajes = [
     _ChatMensaje(
       'assistant',
@@ -489,6 +493,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
       await for (final evento in ApiService.postEnVivo('/soporte/chat/', {
         'mensajes': _mensajes.map((m) => m.toJson()).toList(),
         'contexto': widget.contexto,
+        'sesion': _sesion,
         if (widget.negocioId != null) 'negocio': widget.negocioId,
         if (widget.secciones != null) 'secciones': widget.secciones,
         if (adj.isNotEmpty) 'adjuntos': adj.map((a) => a.toJson()).toList(),
