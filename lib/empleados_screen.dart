@@ -71,13 +71,7 @@ class Empleado {
   }
 }
 
-const Map<String, String> nombresRol = {
-  'cajero': 'Cajero',
-  'completo': 'Acceso completo',
-  'medida': 'A la medida',
-  'dueno': 'Dueño',
-  'sin_dato': 'Sin dato',
-};
+const Map<String, String> nombresRol = {'cajero': 'Cajero', 'completo': 'Acceso completo', 'medida': 'A la medida', 'dueno': 'Dueño', 'sin_dato': 'Sin dato'};
 
 const Map<String, String> _descripcionRol = {
   'cajero': 'Solo factura, cotiza y crea clientes. No ve montos de caja ni reportes.',
@@ -325,21 +319,26 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(children: [
-                          Flexible(
-                            child: Text(
-                              f['nombre'],
-                              style: TextStyle(fontWeight: FontWeight.w700, color: activo ? null : AppColors.textMuted),
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                f['nombre'],
+                                style: TextStyle(fontWeight: FontWeight.w700, color: activo ? null : AppColors.textMuted),
+                              ),
                             ),
-                          ),
-                          if (trabajando)
-                            Container(
-                              margin: const EdgeInsets.only(left: 8),
-                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
-                              decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
-                              child: Text('Trabajando', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.green.shade800)),
-                            ),
-                        ]),
+                            if (trabajando)
+                              Container(
+                                margin: const EdgeInsets.only(left: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                                decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+                                child: Text(
+                                  'Trabajando',
+                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.green.shade800),
+                                ),
+                              ),
+                          ],
+                        ),
                         Text(
                           [nombresRol[rol] ?? rol, if (!activo) 'Inactivo', if (e != null) _haceCuanto(f['ultimo_acceso'])].join(' · '),
                           style: TextStyle(fontSize: 12, color: AppColors.textMuted),
@@ -372,10 +371,12 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                     if (asistencia != null && (asistencia['dias'] as int) > 0) ...[
                       _dato('Horas (${asistencia['dias']} ${asistencia['dias'] == 1 ? 'día' : 'días'})', _horasTexto(asistencia['horas'] as num)),
                       if ((asistencia['tardias'] as int) > 0)
-                        _dato('Llegadas tarde', '${asistencia['tardias']} · ${_horasTexto((asistencia['minutos_tarde'] as num) / 60)}',
-                            color: Colors.orange.shade800),
-                      if ((asistencia['sin_salida'] as int) > 0)
-                        _dato('Sin marcar salida', '${asistencia['sin_salida']}', color: Colors.red.shade700),
+                        _dato(
+                          'Llegadas tarde',
+                          '${asistencia['tardias']} · ${_horasTexto((asistencia['minutos_tarde'] as num) / 60)}',
+                          color: Colors.orange.shade800,
+                        ),
+                      if ((asistencia['sin_salida'] as int) > 0) _dato('Sin marcar salida', '${asistencia['sin_salida']}', color: Colors.red.shade700),
                     ],
                   ],
                 ),
@@ -395,11 +396,7 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       floatingActionButton: angosto && !_verPlanilla
-          ? FloatingActionButton.extended(
-              onPressed: () => _formulario(),
-              icon: const Icon(Icons.person_add_alt_1_outlined),
-              label: const Text('Nuevo'),
-            )
+          ? FloatingActionButton.extended(onPressed: () => _formulario(), icon: const Icon(Icons.person_add_alt_1_outlined), label: const Text('Nuevo'))
           : null,
       body: Column(
         children: [
@@ -417,15 +414,15 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
                   child: Text('Colaboradores', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 ),
                 if (!_verPlanilla)
-                DropdownButton<int>(
-                  value: _periodo,
-                  underline: const SizedBox(),
-                  items: [for (final (i, p) in _periodos().indexed) DropdownMenuItem(value: i, child: Text(p.$3))],
-                  onChanged: (v) {
-                    setState(() => _periodo = v ?? 2);
-                    _cargar();
-                  },
-                ),
+                  DropdownButton<int>(
+                    value: _periodo,
+                    underline: const SizedBox(),
+                    items: [for (final (i, p) in _periodos().indexed) DropdownMenuItem(value: i, child: Text(p.$3))],
+                    onChanged: (v) {
+                      setState(() => _periodo = v ?? 2);
+                      _cargar();
+                    },
+                  ),
                 if (!angosto && !_verPlanilla) ...[
                   const SizedBox(width: 12),
                   FilledButton.icon(
@@ -454,78 +451,80 @@ class _EmpleadosScreenState extends State<EmpleadosScreen> {
               ),
             ),
           ),
-          if (_verPlanilla) Expanded(child: PlanillaTab(negocio: widget.negocio)) else
-          Expanded(
-            child: _cargando && _resumen == null
-                ? const Center(child: CircularProgressIndicator())
-                : _error != null && _resumen == null
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _error!,
-                          style: const TextStyle(color: Colors.red),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 10),
-                        OutlinedButton(onPressed: _cargar, child: const Text('Reintentar')),
-                      ],
-                    ),
-                  )
-                : RefreshIndicator(
-                    onRefresh: _cargar,
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-                      children: [
-                        if (_cargando) const LinearProgressIndicator(minHeight: 2),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: [
-                            _tarjetaTotal(
-                              'Vendido por el equipo',
-                              formatearColones(_resumen?['total_ventas'] ?? 0, decimales: 0),
-                              Icons.point_of_sale_outlined,
-                            ),
-                            _tarjetaTotal(
-                              'Comisiones a pagar',
-                              formatearColones(_resumen?['total_comisiones'] ?? 0),
-                              Icons.payments_outlined,
-                              nota: 'Sobre lo vendido sin IVA',
-                            ),
-                            _tarjetaTotal(
-                              'Horas trabajadas',
-                              _horasTexto((_resumen?['total_horas'] as num?) ?? 0),
-                              Icons.schedule_outlined,
-                              nota: ((_resumen?['trabajando_ahora'] as num?) ?? 0) > 0
-                                  ? '${_resumen!['trabajando_ahora']} trabajando ahora'
-                                  : 'Según las marcas de entrada y salida',
-                            ),
-                            _tarjetaTotal(
-                              'Colaboradores activos',
-                              '$activos',
-                              Icons.groups_outlined,
-                              nota: _empleados.length > activos ? '${_empleados.length - activos} inactivos' : null,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 18),
-                        if (_empleados.isEmpty)
-                          Container(
-                            padding: const EdgeInsets.all(18),
-                            margin: const EdgeInsets.only(bottom: 12),
-                            decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(12)),
-                            child: const Text(
-                              'Todavía no tenés colaboradores. Creales un usuario para que facturen desde su celular o la caja: '
-                              'cada factura queda a su nombre, ves cuánto vendió cada uno y calculás su comisión.',
-                            ),
+          if (_verPlanilla)
+            Expanded(child: PlanillaTab(negocio: widget.negocio))
+          else
+            Expanded(
+              child: _cargando && _resumen == null
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null && _resumen == null
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _error!,
+                            style: const TextStyle(color: Colors.red),
+                            textAlign: TextAlign.center,
                           ),
-                        ...filas.map(_tarjetaPersona),
-                      ],
+                          const SizedBox(height: 10),
+                          OutlinedButton(onPressed: _cargar, child: const Text('Reintentar')),
+                        ],
+                      ),
+                    )
+                  : RefreshIndicator(
+                      onRefresh: _cargar,
+                      child: ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+                        children: [
+                          if (_cargando) const LinearProgressIndicator(minHeight: 2),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: [
+                              _tarjetaTotal(
+                                'Vendido por el equipo',
+                                formatearColones(_resumen?['total_ventas'] ?? 0, decimales: 0),
+                                Icons.point_of_sale_outlined,
+                              ),
+                              _tarjetaTotal(
+                                'Comisiones a pagar',
+                                formatearColones(_resumen?['total_comisiones'] ?? 0),
+                                Icons.payments_outlined,
+                                nota: 'Sobre lo vendido sin IVA',
+                              ),
+                              _tarjetaTotal(
+                                'Horas trabajadas',
+                                _horasTexto((_resumen?['total_horas'] as num?) ?? 0),
+                                Icons.schedule_outlined,
+                                nota: ((_resumen?['trabajando_ahora'] as num?) ?? 0) > 0
+                                    ? '${_resumen!['trabajando_ahora']} trabajando ahora'
+                                    : 'Según las marcas de entrada y salida',
+                              ),
+                              _tarjetaTotal(
+                                'Colaboradores activos',
+                                '$activos',
+                                Icons.groups_outlined,
+                                nota: _empleados.length > activos ? '${_empleados.length - activos} inactivos' : null,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 18),
+                          if (_empleados.isEmpty)
+                            Container(
+                              padding: const EdgeInsets.all(18),
+                              margin: const EdgeInsets.only(bottom: 12),
+                              decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(12)),
+                              child: const Text(
+                                'Todavía no tenés colaboradores. Creales un usuario para que facturen desde su celular o la caja: '
+                                'cada factura queda a su nombre, ves cuánto vendió cada uno y calculás su comisión.',
+                              ),
+                            ),
+                          ...filas.map(_tarjetaPersona),
+                        ],
+                      ),
                     ),
-                  ),
-          ),
+            ),
         ],
       ),
     );
@@ -549,9 +548,7 @@ class _FormularioColaboradorState extends State<_FormularioColaborador> {
   late final _telefono = TextEditingController(text: widget.empleado?.telefono ?? '');
   final _usuario = TextEditingController();
   final _clave = TextEditingController();
-  late final _salario = TextEditingController(
-    text: (widget.empleado?.salario ?? 0) == 0 ? '' : formatearNumero(widget.empleado!.salario, decimales: 0),
-  );
+  late final _salario = TextEditingController(text: (widget.empleado?.salario ?? 0) == 0 ? '' : formatearNumero(widget.empleado!.salario, decimales: 0));
   late final _cedula = TextEditingController(text: widget.empleado?.cedula ?? '');
   late int _hijos = widget.empleado?.hijos ?? 0;
   late bool _conyuge = widget.empleado?.conyuge ?? false;
@@ -559,39 +556,83 @@ class _FormularioColaboradorState extends State<_FormularioColaborador> {
   late int _diasVacaciones = widget.empleado?.diasVacaciones ?? 12;
   late DateTime? _fechaIngreso = widget.empleado?.fechaIngreso;
   late final _comision = TextEditingController(
-    text: (widget.empleado?.comision ?? 0) == 0
-        ? ''
-        : formatearNumero(widget.empleado!.comision, decimales: widget.empleado!.comision % 1 == 0 ? 0 : 2),
+    text: (widget.empleado?.comision ?? 0) == 0 ? '' : formatearNumero(widget.empleado!.comision, decimales: widget.empleado!.comision % 1 == 0 ? 0 : 2),
   );
   late String _rol = widget.empleado?.rol ?? 'cajero';
   late TimeOfDay? _horaEntrada = widget.empleado?.horaEntrada == null
       ? null
-      : TimeOfDay(
-          hour: int.parse(widget.empleado!.horaEntrada!.substring(0, 2)),
-          minute: int.parse(widget.empleado!.horaEntrada!.substring(3, 5)),
-        );
+      : TimeOfDay(hour: int.parse(widget.empleado!.horaEntrada!.substring(0, 2)), minute: int.parse(widget.empleado!.horaEntrada!.substring(3, 5)));
   late final Set<String> _elegidos = {
     ...(widget.empleado?.permisos ?? const ['facturar']),
   };
   bool _guardando = false;
   bool _verClave = false;
 
+  // Errores al lado de cada campo (los del servidor vienen con el nombre del
+  // campo: password, username, cedula...) y uno general arriba del
+  // formulario: el aviso de abajo quedaba detrás del diálogo.
+  static const _ordenCampos = ['nombre', 'telefono', 'username', 'password', 'comision', 'salario', 'cedula'];
+  final Map<String, FocusNode> _focos = {for (final c in _ordenCampos) c: FocusNode()};
+  final Map<String, GlobalKey> _llaves = {
+    for (final c in [..._ordenCampos, 'general']) c: GlobalKey(),
+  };
+  Map<String, String> _errores = {};
+  String? _errorGeneral;
+
   @override
   void dispose() {
     for (final c in [_nombre, _telefono, _usuario, _clave, _comision, _salario, _cedula]) {
       c.dispose();
     }
+    for (final f in _focos.values) {
+      f.dispose();
+    }
     super.dispose();
+  }
+
+  /// Muestra los errores y lleva a la persona al primero para corregirlo.
+  void _mostrarErrores(Map<String, String> errores, {String? general}) {
+    final enCampos = {
+      for (final e in errores.entries)
+        if (_focos.containsKey(e.key)) e.key: e.value,
+    };
+    final otros = errores.entries.where((e) => !_focos.containsKey(e.key)).map((e) => e.value).toList();
+    setState(() {
+      _errores = enCampos;
+      _errorGeneral = [
+        if (general != null) general,
+        ...otros,
+        if (enCampos.isNotEmpty && general == null && otros.isEmpty)
+          enCampos.length == 1 ? 'Revisá el campo marcado en rojo.' : 'Revisá los campos marcados en rojo.',
+      ].join('\n');
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final primero = _ordenCampos.firstWhere((c) => enCampos.containsKey(c), orElse: () => 'general');
+      final contexto = _llaves[primero]?.currentContext;
+      if (contexto != null) {
+        Scrollable.ensureVisible(contexto, duration: const Duration(milliseconds: 300), alignment: 0.2);
+      }
+      _focos[primero]?.requestFocus();
+    });
+  }
+
+  void _limpiarError(String campo) {
+    if (_errores.containsKey(campo)) setState(() => _errores = {..._errores}..remove(campo));
   }
 
   Future<void> _guardar() async {
     final nuevo = widget.empleado == null;
-    if (_nombre.text.trim().isEmpty || (nuevo && (_usuario.text.trim().isEmpty || _clave.text.isEmpty))) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Completá nombre, usuario y contraseña.')));
+    final faltan = <String, String>{
+      if (_nombre.text.trim().isEmpty) 'nombre': 'Escribí el nombre.',
+      if (nuevo && _usuario.text.trim().isEmpty) 'username': 'Escribí el usuario con el que va a entrar.',
+      if (nuevo && _clave.text.isEmpty) 'password': 'Escribí una contraseña.',
+    };
+    if (faltan.isNotEmpty) {
+      _mostrarErrores(faltan);
       return;
     }
     if (_rol == 'medida' && _elegidos.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Elegí al menos una sección.')));
+      _mostrarErrores({}, general: 'Elegí al menos una sección que pueda usar.');
       return;
     }
     final comision = double.tryParse(_comision.text.trim().replaceAll(',', '.').replaceAll('%', '')) ?? 0;
@@ -607,8 +648,7 @@ class _FormularioColaboradorState extends State<_FormularioColaborador> {
             ]
           : <String>[],
       'comision': comision.toStringAsFixed(2),
-      'salario': (double.tryParse(_salario.text.trim().replaceAll('.', '').replaceAll(',', '.').replaceAll('₡', '')) ?? 0)
-          .toStringAsFixed(2),
+      'salario': (double.tryParse(_salario.text.trim().replaceAll('.', '').replaceAll(',', '.').replaceAll('₡', '')) ?? 0).toStringAsFixed(2),
       'cedula': _cedula.text.trim(),
       'hijos': _hijos,
       'conyuge': _conyuge,
@@ -618,20 +658,38 @@ class _FormularioColaboradorState extends State<_FormularioColaborador> {
       'hora_entrada': _horaEntrada == null ? null : '${_dosDigitos(_horaEntrada!.hour)}:${_dosDigitos(_horaEntrada!.minute)}',
       if (nuevo) ...{'username': _usuario.text.trim(), 'password': _clave.text},
     };
-    setState(() => _guardando = true);
+    setState(() {
+      _guardando = true;
+      _errores = {};
+      _errorGeneral = null;
+    });
     try {
-      ApiService.verificar(nuevo ? await ApiService.post('/empleados/', datos) : await ApiService.patch('/empleados/${widget.empleado!.id}/', datos));
-      if (mounted) Navigator.pop(context, true);
+      final r = nuevo ? await ApiService.post('/empleados/', datos) : await ApiService.patch('/empleados/${widget.empleado!.id}/', datos);
+      if (r.statusCode >= 200 && r.statusCode < 300) {
+        if (mounted) Navigator.pop(context, true);
+        return;
+      }
+      if (!mounted) return;
+      setState(() => _guardando = false);
+      final porCampo = ApiService.erroresDeCampos(r);
+      _mostrarErrores(porCampo, general: porCampo.isEmpty ? ApiService.mensajeError(r) : null);
     } catch (e) {
       if (mounted) {
         setState(() => _guardando = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e)), backgroundColor: Colors.red));
+        _mostrarErrores({}, general: ApiService.textoError(e));
       }
     }
   }
 
-  InputDecoration _deco(String etiqueta, {String? ayuda, Widget? sufijo}) =>
-      InputDecoration(labelText: etiqueta, helperText: ayuda, isDense: true, border: const OutlineInputBorder(), suffixIcon: sufijo);
+  InputDecoration _deco(String etiqueta, {String? ayuda, Widget? sufijo, String? campo}) => InputDecoration(
+    labelText: etiqueta,
+    helperText: ayuda,
+    errorText: campo == null ? null : _errores[campo],
+    errorMaxLines: 3,
+    isDense: true,
+    border: const OutlineInputBorder(),
+    suffixIcon: sufijo,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -645,21 +703,64 @@ class _FormularioColaboradorState extends State<_FormularioColaborador> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextField(controller: _nombre, decoration: _deco('Nombre completo')),
+              if (_errorGeneral != null && _errorGeneral!.isNotEmpty)
+                Container(
+                  key: _llaves['general'],
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.red.shade300),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.error_outline, color: Colors.red.shade400, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(_errorGeneral!, style: TextStyle(color: Colors.red.shade300, fontSize: 13.5)),
+                      ),
+                    ],
+                  ),
+                ),
+              TextField(
+                key: _llaves['nombre'],
+                focusNode: _focos['nombre'],
+                controller: _nombre,
+                onChanged: (_) => _limpiarError('nombre'),
+                decoration: _deco('Nombre completo', campo: 'nombre'),
+              ),
               const SizedBox(height: 12),
-              TextField(controller: _telefono, keyboardType: TextInputType.phone, decoration: _deco('Teléfono (opcional)')),
+              TextField(
+                key: _llaves['telefono'],
+                focusNode: _focos['telefono'],
+                controller: _telefono,
+                keyboardType: TextInputType.phone,
+                onChanged: (_) => _limpiarError('telefono'),
+                decoration: _deco('Teléfono (opcional)', campo: 'telefono'),
+              ),
               if (nuevo) ...[
                 const SizedBox(height: 12),
                 TextField(
+                  key: _llaves['username'],
+                  focusNode: _focos['username'],
                   controller: _usuario,
-                  decoration: _deco('Usuario para entrar', ayuda: 'Ej. ana.tienda (sin espacios)'),
+                  onChanged: (_) => _limpiarError('username'),
+                  decoration: _deco('Usuario para entrar', ayuda: 'Ej. ana.tienda (sin espacios)', campo: 'username'),
                 ),
                 const SizedBox(height: 12),
                 TextField(
+                  key: _llaves['password'],
+                  focusNode: _focos['password'],
                   controller: _clave,
                   obscureText: !_verClave,
+                  onChanged: (_) => _limpiarError('password'),
                   decoration: _deco(
                     'Contraseña',
+                    campo: 'password',
+                    ayuda: 'Que no se parezca al nombre ni al usuario, y que no sea muy común.',
                     sufijo: IconButton(
                       icon: Icon(_verClave ? Icons.visibility_off_outlined : Icons.visibility_outlined),
                       onPressed: () => setState(() => _verClave = !_verClave),
@@ -673,16 +774,18 @@ class _FormularioColaboradorState extends State<_FormularioColaborador> {
               RadioGroup<String>(
                 groupValue: _rol,
                 onChanged: (v) => setState(() => _rol = v!),
-                child: Column(children: [
-                  for (final rol in ['cajero', 'completo', 'medida'])
-                    RadioListTile<String>(
-                      value: rol,
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(nombresRol[rol]!),
-                      subtitle: Text(_descripcionRol[rol]!, style: const TextStyle(fontSize: 12)),
-                    ),
-                ]),
+                child: Column(
+                  children: [
+                    for (final rol in ['cajero', 'completo', 'medida'])
+                      RadioListTile<String>(
+                        value: rol,
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(nombresRol[rol]!),
+                        subtitle: Text(_descripcionRol[rol]!, style: const TextStyle(fontSize: 12)),
+                      ),
+                  ],
+                ),
               ),
               if (_rol == 'medida')
                 Container(
@@ -706,34 +809,53 @@ class _FormularioColaboradorState extends State<_FormularioColaborador> {
                 ),
               const SizedBox(height: 16),
               TextField(
+                key: _llaves['comision'],
+                focusNode: _focos['comision'],
                 controller: _comision,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: _deco('Comisión sobre sus ventas (%)', ayuda: 'Opcional. Se calcula sobre lo vendido sin IVA, menos notas de crédito.'),
+                onChanged: (_) => _limpiarError('comision'),
+                decoration: _deco(
+                  'Comisión sobre sus ventas (%)',
+                  ayuda: 'Opcional. Se calcula sobre lo vendido sin IVA, menos notas de crédito.',
+                  campo: 'comision',
+                ),
               ),
               const SizedBox(height: 18),
               const Text('Planilla', style: TextStyle(fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
-              Row(children: [
-                Expanded(
-                  child: TextField(
-                    controller: _salario,
-                    keyboardType: TextInputType.number,
-                    decoration: _deco('Salario mensual bruto (₡)', ayuda: 'Vacío = no va en la planilla'),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      key: _llaves['salario'],
+                      focusNode: _focos['salario'],
+                      controller: _salario,
+                      keyboardType: TextInputType.number,
+                      onChanged: (_) => _limpiarError('salario'),
+                      decoration: _deco('Salario mensual bruto (₡)', ayuda: 'Vacío = no va en la planilla', campo: 'salario'),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(child: TextField(controller: _cedula, decoration: _deco('Cédula'))),
-              ]),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      key: _llaves['cedula'],
+                      focusNode: _focos['cedula'],
+                      controller: _cedula,
+                      onChanged: (_) => _limpiarError('cedula'),
+                      decoration: _deco('Cédula', campo: 'cedula'),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 4),
-              Row(children: [
-                const Expanded(child: Text('Hijos (crédito del impuesto)', style: TextStyle(fontSize: 13.5))),
-                IconButton(
-                  icon: const Icon(Icons.remove_circle_outline),
-                  onPressed: _hijos == 0 ? null : () => setState(() => _hijos--),
-                ),
-                Text('$_hijos', style: const TextStyle(fontWeight: FontWeight.w700)),
-                IconButton(icon: const Icon(Icons.add_circle_outline), onPressed: () => setState(() => _hijos++)),
-              ]),
+              Row(
+                children: [
+                  const Expanded(child: Text('Hijos (crédito del impuesto)', style: TextStyle(fontSize: 13.5))),
+                  IconButton(icon: const Icon(Icons.remove_circle_outline), onPressed: _hijos == 0 ? null : () => setState(() => _hijos--)),
+                  Text('$_hijos', style: const TextStyle(fontWeight: FontWeight.w700)),
+                  IconButton(icon: const Icon(Icons.add_circle_outline), onPressed: () => setState(() => _hijos++)),
+                ],
+              ),
               SwitchListTile(
                 dense: true,
                 contentPadding: EdgeInsets.zero,
@@ -759,37 +881,37 @@ class _FormularioColaboradorState extends State<_FormularioColaborador> {
                   style: TextStyle(fontSize: 12, color: AppColors.textMuted),
                 ),
               ),
-              Row(children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: () async {
-                      final d = await showDatePicker(
-                        context: context,
-                        initialDate: _fechaIngreso ?? DateTime.now(),
-                        firstDate: DateTime(1980),
-                        lastDate: DateTime.now(),
-                      );
-                      if (d != null) setState(() => _fechaIngreso = d);
-                    },
-                    child: InputDecorator(
-                      decoration: _deco('Fecha de ingreso', ayuda: 'Para vacaciones'),
-                      child: Text(_fechaIngreso == null
-                          ? 'Sin fecha'
-                          : '${_fechaIngreso!.day}/${_fechaIngreso!.month}/${_fechaIngreso!.year}'),
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: () async {
+                        final d = await showDatePicker(
+                          context: context,
+                          initialDate: _fechaIngreso ?? DateTime.now(),
+                          firstDate: DateTime(1980),
+                          lastDate: DateTime.now(),
+                        );
+                        if (d != null) setState(() => _fechaIngreso = d);
+                      },
+                      child: InputDecorator(
+                        decoration: _deco('Fecha de ingreso', ayuda: 'Para vacaciones'),
+                        child: Text(_fechaIngreso == null ? 'Sin fecha' : '${_fechaIngreso!.day}/${_fechaIngreso!.month}/${_fechaIngreso!.year}'),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                SizedBox(
-                  width: 140,
-                  child: TextFormField(
-                    initialValue: '$_diasVacaciones',
-                    keyboardType: TextInputType.number,
-                    decoration: _deco('Vacaciones/año', ayuda: 'Días'),
-                    onChanged: (t) => _diasVacaciones = int.tryParse(t.trim()) ?? _diasVacaciones,
+                  const SizedBox(width: 10),
+                  SizedBox(
+                    width: 140,
+                    child: TextFormField(
+                      initialValue: '$_diasVacaciones',
+                      keyboardType: TextInputType.number,
+                      decoration: _deco('Vacaciones/año', ayuda: 'Días'),
+                      onChanged: (t) => _diasVacaciones = int.tryParse(t.trim()) ?? _diasVacaciones,
+                    ),
                   ),
-                ),
-              ]),
+                ],
+              ),
               const SizedBox(height: 8),
               InputDecorator(
                 decoration: _deco(
@@ -797,25 +919,20 @@ class _FormularioColaboradorState extends State<_FormularioColaborador> {
                   ayuda: 'Opcional. Si marca la entrada más de 10 min después, cuenta como llegada tarde.',
                   sufijo: _horaEntrada == null
                       ? null
-                      : IconButton(
-                          tooltip: 'Sin hora fija',
-                          icon: const Icon(Icons.close, size: 18),
-                          onPressed: () => setState(() => _horaEntrada = null),
-                        ),
+                      : IconButton(tooltip: 'Sin hora fija', icon: const Icon(Icons.close, size: 18), onPressed: () => setState(() => _horaEntrada = null)),
                 ),
                 child: InkWell(
                   onTap: () async {
-                    final hora = await showTimePicker(
-                      context: context,
-                      initialTime: _horaEntrada ?? const TimeOfDay(hour: 8, minute: 0),
-                    );
+                    final hora = await showTimePicker(context: context, initialTime: _horaEntrada ?? const TimeOfDay(hour: 8, minute: 0));
                     if (hora != null) setState(() => _horaEntrada = hora);
                   },
-                  child: Row(children: [
-                    Icon(Icons.schedule_outlined, size: 18, color: AppColors.textMuted),
-                    const SizedBox(width: 8),
-                    Text(_horaEntrada == null ? 'Sin hora fija' : _horaEntrada!.format(context)),
-                  ]),
+                  child: Row(
+                    children: [
+                      Icon(Icons.schedule_outlined, size: 18, color: AppColors.textMuted),
+                      const SizedBox(width: 8),
+                      Text(_horaEntrada == null ? 'Sin hora fija' : _horaEntrada!.format(context)),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -826,9 +943,7 @@ class _FormularioColaboradorState extends State<_FormularioColaborador> {
         TextButton(onPressed: _guardando ? null : () => Navigator.pop(context), child: const Text('Cancelar')),
         FilledButton(
           onPressed: _guardando ? null : _guardar,
-          child: _guardando
-              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-              : Text(nuevo ? 'Crear' : 'Guardar'),
+          child: _guardando ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : Text(nuevo ? 'Crear' : 'Guardar'),
         ),
       ],
     );
@@ -974,11 +1089,7 @@ class _FichaColaboradorState extends State<FichaColaborador> {
       if (resultado['borrar'] == true) {
         ApiService.verificar(await ApiService.delete('/asistencia/marcas/${marca!['id']}/'));
       } else if (marca == null) {
-        ApiService.verificar(await ApiService.post('/asistencia/marcas/', {
-          'negocio': widget.negocio.id,
-          'usuario': widget.fila['usuario_id'],
-          ...resultado,
-        }));
+        ApiService.verificar(await ApiService.post('/asistencia/marcas/', {'negocio': widget.negocio.id, 'usuario': widget.fila['usuario_id'], ...resultado}));
       } else {
         ApiService.verificar(await ApiService.patch('/asistencia/marcas/${marca['id']}/', resultado));
       }
@@ -993,29 +1104,36 @@ class _FichaColaboradorState extends State<FichaColaborador> {
     final salida = m['salida'] == null ? null : DateTime.parse(m['salida']).toLocal();
     final tarde = (m['minutos_tarde'] as num?) ?? 0;
     final estado = m['abierta'] == true
-        ? Text('Trabajando', style: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.w600))
+        ? Text(
+            'Trabajando',
+            style: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.w600),
+          )
         : m['sin_salida'] == true
-            ? Text('No marcó salida', style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w600))
-            : Text(_horasTexto(m['horas'] as num), style: const TextStyle(fontWeight: FontWeight.w600));
+        ? Text(
+            'No marcó salida',
+            style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w600),
+          )
+        : Text(_horasTexto(m['horas'] as num), style: const TextStyle(fontWeight: FontWeight.w600));
     return ListTile(
       dense: true,
       contentPadding: EdgeInsets.zero,
       onTap: () => _editarMarca(marca: m),
-      title: Text('${_diasSemana[entrada.weekday - 1]} ${entrada.day}/${entrada.month} · '
-          '${_horaDe(entrada)} – ${salida == null ? '…' : _horaDe(salida)}'),
+      title: Text(
+        '${_diasSemana[entrada.weekday - 1]} ${entrada.day}/${entrada.month} · '
+        '${_horaDe(entrada)} – ${salida == null ? '…' : _horaDe(salida)}',
+      ),
       subtitle: Text(
-        [
-          if (tarde > 0) '$tarde min tarde',
-          if (m['corregida'] == true) 'Corregida',
-          if ((m['nota'] ?? '').toString().isNotEmpty) m['nota'],
-        ].join(' · '),
+        [if (tarde > 0) '$tarde min tarde', if (m['corregida'] == true) 'Corregida', if ((m['nota'] ?? '').toString().isNotEmpty) m['nota']].join(' · '),
         style: TextStyle(color: tarde > 0 ? Colors.orange.shade800 : AppColors.textMuted, fontSize: 12),
       ),
-      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-        estado,
-        const SizedBox(width: 4),
-        Icon(Icons.edit_outlined, size: 16, color: AppColors.textMuted),
-      ]),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          estado,
+          const SizedBox(width: 4),
+          Icon(Icons.edit_outlined, size: 16, color: AppColors.textMuted),
+        ],
+      ),
     );
   }
 
@@ -1179,9 +1297,7 @@ class _FichaColaboradorState extends State<FichaColaborador> {
                           _cifra('Días', '${d['resumen_asistencia']?['dias'] ?? 0}'),
                           _cifra(
                             'Llegadas tarde',
-                            d['hora_entrada'] == null
-                                ? 'Sin hora fija'
-                                : '${d['resumen_asistencia']?['tardias'] ?? 0} (entra ${d['hora_entrada']})',
+                            d['hora_entrada'] == null ? 'Sin hora fija' : '${d['resumen_asistencia']?['tardias'] ?? 0} (entra ${d['hora_entrada']})',
                           ),
                         ],
                       ),
@@ -1191,16 +1307,12 @@ class _FichaColaboradorState extends State<FichaColaborador> {
                           e == null
                               ? 'No hay marcas en este período.'
                               : 'No hay marcas en este período. ${e.nombre} marca su entrada y salida con el botón '
-                                  '"Marcar entrada" de arriba en la app.',
+                                    '"Marcar entrada" de arriba en la app.',
                           style: TextStyle(color: AppColors.textMuted, fontSize: 13),
                         ),
                       Align(
                         alignment: Alignment.centerLeft,
-                        child: TextButton.icon(
-                          onPressed: () => _editarMarca(),
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Agregar marca'),
-                        ),
+                        child: TextButton.icon(onPressed: () => _editarMarca(), icon: const Icon(Icons.add, size: 18), label: const Text('Agregar marca')),
                       ),
                     ]),
                     _seccion('Sus facturas', [
@@ -1282,14 +1394,10 @@ class _DialogoMarcaState extends State<_DialogoMarca> {
     super.dispose();
   }
 
-  DateTime _en(TimeOfDay t, {bool diaSiguiente = false}) =>
-      DateTime(_dia.year, _dia.month, _dia.day + (diaSiguiente ? 1 : 0), t.hour, t.minute);
+  DateTime _en(TimeOfDay t, {bool diaSiguiente = false}) => DateTime(_dia.year, _dia.month, _dia.day + (diaSiguiente ? 1 : 0), t.hour, t.minute);
 
   Future<void> _elegirHora({required bool entrada}) async {
-    final hora = await showTimePicker(
-      context: context,
-      initialTime: entrada ? _entrada : (_salida ?? const TimeOfDay(hour: 17, minute: 0)),
-    );
+    final hora = await showTimePicker(context: context, initialTime: entrada ? _entrada : (_salida ?? const TimeOfDay(hour: 17, minute: 0)));
     if (hora != null) setState(() => entrada ? _entrada = hora : _salida = hora);
   }
 
@@ -1328,20 +1436,20 @@ class _DialogoMarcaState extends State<_DialogoMarca> {
               );
               if (dia != null) setState(() => _dia = dia);
             }),
-            Row(children: [
-              Expanded(child: _campo('Entrada', _entrada.format(context), () => _elegirHora(entrada: true))),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _campo(
-                  'Salida',
-                  _salida == null ? 'Sin salida' : _salida!.format(context),
-                  () => _elegirHora(entrada: false),
-                  sufijo: _salida == null
-                      ? null
-                      : IconButton(icon: const Icon(Icons.close, size: 16), onPressed: () => setState(() => _salida = null)),
+            Row(
+              children: [
+                Expanded(child: _campo('Entrada', _entrada.format(context), () => _elegirHora(entrada: true))),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _campo(
+                    'Salida',
+                    _salida == null ? 'Sin salida' : _salida!.format(context),
+                    () => _elegirHora(entrada: false),
+                    sufijo: _salida == null ? null : IconButton(icon: const Icon(Icons.close, size: 16), onPressed: () => setState(() => _salida = null)),
+                  ),
                 ),
-              ),
-            ]),
+              ],
+            ),
             if (salida != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),
@@ -1354,7 +1462,11 @@ class _DialogoMarcaState extends State<_DialogoMarca> {
               controller: _nota,
               maxLength: 200,
               decoration: const InputDecoration(
-                labelText: 'Motivo (opcional)', hintText: 'Ej: se le olvidó marcar', isDense: true, border: OutlineInputBorder()),
+                labelText: 'Motivo (opcional)',
+                hintText: 'Ej: se le olvidó marcar',
+                isDense: true,
+                border: OutlineInputBorder(),
+              ),
             ),
           ],
         ),
@@ -1368,11 +1480,8 @@ class _DialogoMarcaState extends State<_DialogoMarca> {
           ),
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
         FilledButton(
-          onPressed: () => Navigator.pop(context, {
-            'entrada': entrada.toUtc().toIso8601String(),
-            'salida': salida?.toUtc().toIso8601String(),
-            'nota': _nota.text.trim(),
-          }),
+          onPressed: () =>
+              Navigator.pop(context, {'entrada': entrada.toUtc().toIso8601String(), 'salida': salida?.toUtc().toIso8601String(), 'nota': _nota.text.trim()}),
           child: const Text('Guardar'),
         ),
       ],

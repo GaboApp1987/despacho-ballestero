@@ -25,10 +25,7 @@ class ApiService {
   // aunque los archivos estáticos sigan cargando bien. Pasó real en
   // producción el 2026-09-11: cuatro builds seguidos con la URL de railway
   // dejaron el login roto sin que el build avisara nada.
-  static const String baseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://127.0.0.1:8000/api',
-  );
+  static const String baseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://127.0.0.1:8000/api');
 
   /// Obtiene el token guardado en el dispositivo
   static Future<String?> getToken() async {
@@ -55,11 +52,7 @@ class ApiService {
   /// Construye las cabeceras predeterminadas con el token Bearer JWT
   static Future<Map<String, String>> _getHeaders() async {
     final token = await getToken();
-    return {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
-    };
+    return {'Content-Type': 'application/json', 'Accept': 'application/json', if (token != null) 'Authorization': 'Bearer $token'};
   }
 
   /// Intenta renovar el access token usando el refresh token guardado.
@@ -95,9 +88,7 @@ class ApiService {
 
   /// Ejecuta la petición con el token actual; si el servidor responde 401
   /// (token vencido), intenta renovarlo una vez y reintenta la petición.
-  static Future<http.Response> _conRenovacion(
-    Future<http.Response> Function(Map<String, String> headers) hacerPeticion,
-  ) async {
+  static Future<http.Response> _conRenovacion(Future<http.Response> Function(Map<String, String> headers) hacerPeticion) async {
     final headers = await _getHeaders();
     final response = await hacerPeticion(headers);
     if (response.statusCode == 401 && await _renovarToken()) {
@@ -260,9 +251,20 @@ class ApiService {
     final conocido = _nombresCampo[campo];
     if (conocido != null) return conocido;
     const acentos = {
-      'numero': 'número', 'codigo': 'código', 'cedula': 'cédula', 'telefono': 'teléfono', 'direccion': 'dirección',
-      'descripcion': 'descripción', 'razon': 'razón', 'credito': 'crédito', 'debito': 'débito', 'categoria': 'categoría',
-      'electronico': 'electrónico', 'actividad': 'actividad', 'contrasena': 'contraseña', 'periodo': 'período',
+      'numero': 'número',
+      'codigo': 'código',
+      'cedula': 'cédula',
+      'telefono': 'teléfono',
+      'direccion': 'dirección',
+      'descripcion': 'descripción',
+      'razon': 'razón',
+      'credito': 'crédito',
+      'debito': 'débito',
+      'categoria': 'categoría',
+      'electronico': 'electrónico',
+      'actividad': 'actividad',
+      'contrasena': 'contraseña',
+      'periodo': 'período',
     };
     final palabras = campo.split('_').where((p) => p.isNotEmpty).map((p) => acentos[p] ?? p).toList();
     if (palabras.isEmpty) return campo;
@@ -276,12 +278,22 @@ class ApiService {
   static String textoError(Object? e) {
     final t = (e ?? '').toString();
     if (t.contains('TimeoutException')) return "El servidor tardó demasiado en responder. Revisá tu conexión e intentá de nuevo.";
-    if (t.contains('SocketException') || t.contains('ClientException') || t.contains('Failed to fetch') ||
-        t.contains('XMLHttpRequest') || t.contains('Connection refused') || t.contains('HandshakeException')) {
+    if (t.contains('SocketException') ||
+        t.contains('ClientException') ||
+        t.contains('Failed to fetch') ||
+        t.contains('XMLHttpRequest') ||
+        t.contains('Connection refused') ||
+        t.contains('HandshakeException')) {
       return "No hay conexión con el servidor. Revisá tu internet e intentá de nuevo.";
     }
-    if (e is Error || t.startsWith('Instance of ') || t.contains('is not a subtype of') || t.contains('NoSuchMethodError') || t.contains('Null check operator') ||
-        t.contains('RangeError') || t.contains('FormatException') || t.contains("type 'Null'")) {
+    if (e is Error ||
+        t.startsWith('Instance of ') ||
+        t.contains('is not a subtype of') ||
+        t.contains('NoSuchMethodError') ||
+        t.contains('Null check operator') ||
+        t.contains('RangeError') ||
+        t.contains('FormatException') ||
+        t.contains("type 'Null'")) {
       return "Algo salió mal al procesar la respuesta. Intentá de nuevo; si sigue pasando, escribinos a soporte.";
     }
     var limpio = t.replaceFirst(RegExp(r'^(Exception|Bad state|StateError)\s*:\s*'), '').trim();
@@ -302,6 +314,27 @@ class ApiService {
   static http.Response verificar(http.Response r) {
     if (r.statusCode < 200 || r.statusCode >= 300) throw Exception(mensajeError(r));
     return r;
+  }
+
+  /// Errores por campo de una respuesta 400 de Django REST Framework
+  /// ({"password": ["..."], "cedula": ["..."]}) para marcarlos en el
+  /// formulario, junto al campo, en vez de un aviso general. Vacío si la
+  /// respuesta no trae errores de campos.
+  static Map<String, String> erroresDeCampos(http.Response r) {
+    try {
+      final data = json.decode(utf8.decode(r.bodyBytes, allowMalformed: true));
+      if (data is! Map) return {};
+      final errores = <String, String>{};
+      for (final entrada in data.entries) {
+        final clave = entrada.key.toString();
+        if (const {'detail', 'error', 'mensaje', 'message', 'non_field_errors', 'code'}.contains(clave)) continue;
+        final texto = _mensajeDe(entrada.value);
+        if (texto != null && texto.trim().isNotEmpty) errores[clave] = texto.trim();
+      }
+      return errores;
+    } catch (_) {
+      return {};
+    }
   }
 
   /// Método DELETE genérico
@@ -341,12 +374,7 @@ class ApiService {
 
   /// POST multipart/form-data con un archivo y campos adicionales (ej. subir
   /// un XML a analizar junto con el id del negocio).
-  static Future<http.Response> postMultipart(
-    String endpoint,
-    Map<String, String> campos,
-    String fieldName,
-    String filePath,
-  ) async {
+  static Future<http.Response> postMultipart(String endpoint, Map<String, String> campos, String fieldName, String filePath) async {
     final url = Uri.parse('$baseUrl$endpoint');
     return _conRenovacion((headers) async {
       final request = http.MultipartRequest('POST', url);
@@ -381,12 +409,9 @@ class ApiService {
       // Anthropic (que exige el media_type real de la imagen/PDF) reciban
       // un tipo incorrecto. Pasarlo acá es necesario para cualquier subida
       // que dependa de content_type en el backend (ej. certificaciones).
-      request.files.add(http.MultipartFile.fromBytes(
-        fieldName,
-        bytes,
-        filename: filename,
-        contentType: contentType != null ? MediaType.parse(contentType) : null,
-      ));
+      request.files.add(
+        http.MultipartFile.fromBytes(fieldName, bytes, filename: filename, contentType: contentType != null ? MediaType.parse(contentType) : null),
+      );
       final streamed = await request.send();
       return http.Response.fromStream(streamed);
     });
@@ -408,12 +433,9 @@ class ApiService {
       request.headers.addAll(headersSinContentType);
       request.fields.addAll(campos);
       for (final a in archivos) {
-        request.files.add(http.MultipartFile.fromBytes(
-          fieldName,
-          a.bytes,
-          filename: a.filename,
-          contentType: a.contentType != null ? MediaType.parse(a.contentType!) : null,
-        ));
+        request.files.add(
+          http.MultipartFile.fromBytes(fieldName, a.bytes, filename: a.filename, contentType: a.contentType != null ? MediaType.parse(a.contentType!) : null),
+        );
       }
       final streamed = await request.send();
       return http.Response.fromStream(streamed);
