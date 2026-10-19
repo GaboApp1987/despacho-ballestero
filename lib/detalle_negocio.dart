@@ -2459,7 +2459,7 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(vertical: 12),
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: AppColors.surface,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
               ),
             ),

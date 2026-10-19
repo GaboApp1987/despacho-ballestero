@@ -507,11 +507,11 @@ class _ContadoresScreenState extends State<ContadoresScreen> {
                                 ),
                           isDense: true,
                           filled: true,
-                          fillColor: Colors.white,
+                          fillColor: AppColors.surface,
                           contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(color: Colors.grey.shade300),
+                            borderSide: BorderSide(color: AppColors.border),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),

@@ -441,7 +441,7 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
                     hintText: "Buscar producto por nombre...",
                     prefixIcon: Icon(Icons.search, color: AppColors.primary),
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: AppColors.surface,
                     isDense: true,
                     contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
                     border: OutlineInputBorder(

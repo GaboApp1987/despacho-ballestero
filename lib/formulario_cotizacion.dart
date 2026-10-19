@@ -645,7 +645,7 @@ class _FormularioCotizacionState extends State<FormularioCotizacion> {
                               ? null
                               : IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _busquedaCtrl.clear()),
                           filled: true,
-                          fillColor: Colors.white,
+                          fillColor: AppColors.surface,
                           isDense: true,
                           contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
