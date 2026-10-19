@@ -1284,7 +1284,10 @@ class _DetalleNegocioState extends State<DetalleNegocio> {
         // "+" visible llevaba a hacer una factura en vez de agregar un
         // colaborador (y en los otros dos quedaban los dos FAB
         // superpuestos en la misma esquina).
-        if ([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 18].contains(_seccionActiva)) return null;
+        // Bancos (20), Cuentas por pagar (13), Préstamos (23), Vehículos (24) y
+        // Mensajes a clientes (25) también traen su propio botón: el de
+        // factura se les encimaba ("Nueva cuenta" de Bancos, 2026-10-18).
+        if ([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 18, 20, 23, 24, 25].contains(_seccionActiva)) return null;
         if (_seccionActiva == 2) {
           return FloatingActionButton(
             key: GuiaClientes.nuevo,
