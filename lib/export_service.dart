@@ -2105,26 +2105,26 @@ class ExportService {
           // montos, y esos números terminaban partiéndose en dos líneas
           // (se veía "descuadrado" -- cada fila con distinta altura).
           columnWidths: const {
-            0: pw.FlexColumnWidth(3),
-            1: pw.FlexColumnWidth(1),
+            0: pw.FlexColumnWidth(1),
+            1: pw.FlexColumnWidth(3),
             2: pw.FlexColumnWidth(1.8),
             3: pw.FlexColumnWidth(1.5),
             4: pw.FlexColumnWidth(1.8),
           },
           cellAlignments: const {
-            1: pw.Alignment.center,
+            0: pw.Alignment.center,
             2: pw.Alignment.centerRight,
             3: pw.Alignment.centerRight,
             4: pw.Alignment.centerRight,
           },
-          headers: const ['Producto', 'Cant', 'Precio Unit.', 'IVA', 'Total'],
+          headers: const ['Cant', 'Producto', 'Precio Unit.', 'IVA', 'Total'],
           data: factura.detalles.isEmpty
               ? [
-                  ['Sin detalle de líneas registrado.', '', '', '', ''],
+                  ['', 'Sin detalle de líneas registrado.', '', '', ''],
                 ]
               : factura.detalles.map((d) => [
-                    d.codigoCabys.isNotEmpty ? '${d.nombreProducto}\nCABYS: ${d.codigoCabys}' : d.nombreProducto,
                     d.cantidad.toString(),
+                    d.codigoCabys.isNotEmpty ? '${d.nombreProducto}\nCABYS: ${d.codigoCabys}' : d.nombreProducto,
                     fmt(d.precioUnitario),
                     '${fmt(d.montoIva)}\n${_textoTarifa(d.tarifaIva)}',
                     fmt(d.total),
@@ -2153,7 +2153,7 @@ class ExportService {
               pw.SizedBox(width: 180, child: pw.Divider()),
               pw.Text(
                 notasCredito.isEmpty ? 'TOTAL: ${fmt(factura.totalFactura)}' : 'Total Factura Original: ${fmt(factura.totalFactura)}',
-                style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16, color: PdfColors.indigo),
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12, color: PdfColors.indigo),
               ),
             ],
           ),
@@ -2187,22 +2187,22 @@ class ExportService {
                         cellStyle: const pw.TextStyle(fontSize: 9),
                         cellAlignment: pw.Alignment.centerLeft,
                         columnWidths: const {
-                          0: pw.FlexColumnWidth(3),
-                          1: pw.FlexColumnWidth(1),
+                          0: pw.FlexColumnWidth(1),
+                          1: pw.FlexColumnWidth(3),
                           2: pw.FlexColumnWidth(1.8),
                           3: pw.FlexColumnWidth(1.5),
                           4: pw.FlexColumnWidth(1.8),
                         },
                         cellAlignments: const {
-                          1: pw.Alignment.center,
+                          0: pw.Alignment.center,
                           2: pw.Alignment.centerRight,
                           3: pw.Alignment.centerRight,
                           4: pw.Alignment.centerRight,
                         },
-                        headers: const ['Producto', 'Cant', 'Precio Unit.', 'IVA', 'Total'],
+                        headers: const ['Cant', 'Producto', 'Precio Unit.', 'IVA', 'Total'],
                         data: n.detalles.map((d) => [
-                              d.nombreProducto,
                               d.cantidad.toString(),
+                              d.nombreProducto,
                               fmt(d.precioUnitario),
                               fmt(d.montoIva),
                               fmt(d.total),
@@ -2239,7 +2239,7 @@ class ExportService {
                 pw.SizedBox(width: 180, child: pw.Divider()),
                 pw.Text(
                   'TOTAL NETO: ${fmt(factura.totalFactura - totalAcreditado)}',
-                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16, color: PdfColors.indigo),
+                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12, color: PdfColors.indigo),
                 ),
               ],
             ),
@@ -3934,26 +3934,26 @@ class ExportService {
           // Mismos anchos que la factura: sin esto las columnas se
           // repartían en partes iguales y los montos se partían en dos líneas.
           columnWidths: const {
-            0: pw.FlexColumnWidth(3),
-            1: pw.FlexColumnWidth(1),
+            0: pw.FlexColumnWidth(1),
+            1: pw.FlexColumnWidth(3),
             2: pw.FlexColumnWidth(1.8),
             3: pw.FlexColumnWidth(1.5),
             4: pw.FlexColumnWidth(1.8),
           },
           cellAlignments: const {
-            1: pw.Alignment.center,
+            0: pw.Alignment.center,
             2: pw.Alignment.centerRight,
             3: pw.Alignment.centerRight,
             4: pw.Alignment.centerRight,
           },
-          headers: const ['Producto', 'Cant', 'Precio Unit.', 'IVA', 'Total'],
+          headers: const ['Cant', 'Producto', 'Precio Unit.', 'IVA', 'Total'],
           data: nota.detalles.isEmpty
               ? [
-                  ['Sin detalle de líneas registrado.', '', '', '', ''],
+                  ['', 'Sin detalle de líneas registrado.', '', '', ''],
                 ]
               : nota.detalles.map((d) => [
-                    d.nombreProducto,
                     d.cantidad.toString(),
+                    d.nombreProducto,
                     fmt(d.precioUnitario),
                     fmt(d.montoIva),
                     fmt(d.total),
@@ -3970,7 +3970,7 @@ class ExportService {
               pw.SizedBox(width: 180, child: pw.Divider()),
               pw.Text(
                 'TOTAL ACREDITADO: ${fmt(nota.total)}',
-                style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16, color: PdfColors.orange900),
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12, color: PdfColors.orange900),
               ),
             ],
           ),
