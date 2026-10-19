@@ -548,15 +548,22 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
                           ? "Tocá para buscar en el catálogo de Hacienda"
                           : null,
                     ),
-                    child: Text(
-                      _cabysCtrl.text.trim().isEmpty
-                          ? "Buscar código CABYS..."
-                          : (_cabysDescripcion.isNotEmpty ? _cabysDescripcion : _cabysCtrl.text),
-                      style: _cabysCtrl.text.trim().isEmpty
-                          ? TextStyle(color: Theme.of(context).hintColor)
-                          : null,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    // El código siempre a la vista (antes solo salía la
+                    // descripción y no se sabía qué número quedó).
+                    child: _cabysCtrl.text.trim().isEmpty
+                        ? Text("Buscar código CABYS...", style: TextStyle(color: Theme.of(context).hintColor))
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(_cabysCtrl.text.trim(), style: const TextStyle(fontWeight: FontWeight.w600)),
+                              if (_cabysDescripcion.isNotEmpty)
+                                Text(_cabysDescripcion,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontSize: 12.5, color: Theme.of(context).hintColor)),
+                            ],
+                          ),
                   ),
                 ),
               ),
