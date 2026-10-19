@@ -2048,6 +2048,13 @@ class ExportService {
   }
 
   static Future<void> exportFacturaDetalleToPdf(Factura factura, {bool share = false, List<NotaCredito> notasCredito = const []}) async {
+    // El mismo PDF que llega por correo y WhatsApp (lo arma el servidor, ver
+    // pdf_comprobante.py): un solo diseño. Con notas de crédito se sigue
+    // armando acá, porque este muestra además la factura neta.
+    if (notasCredito.isEmpty &&
+        await _pdfDelServidor('/facturas/${factura.id}/pdf/', share, 'Le comparto la factura ${factura.consecutivo}.')) {
+      return;
+    }
     final pdf = pw.Document(theme: await _cargarTema());
     final subtotal = factura.totalFactura - factura.totalIva;
     // AUDITORIA.md hallazgo A3 -- suma de los descuentos por línea, en
@@ -2262,6 +2269,27 @@ class ExportService {
       );
     } else {
       await Printing.layoutPdf(onLayout: (format) async => pdfBytes, name: fileName);
+    }
+  }
+
+  /// Baja el PDF que arma el servidor ({"pdf": base64, "nombre"}) y lo
+  /// imprime o comparte. false si no se pudo (sin conexión, servidor viejo):
+  /// entonces se arma el de la app como antes.
+  static Future<bool> _pdfDelServidor(String ruta, bool share, String texto) async {
+    try {
+      final respuesta = await ApiService.get(ruta);
+      if (respuesta.statusCode != 200) return false;
+      final datos = json.decode(utf8.decode(respuesta.bodyBytes)) as Map<String, dynamic>;
+      final pdfBytes = base64Decode(datos['pdf'] as String);
+      final fileName = (datos['nombre'] ?? 'documento.pdf').toString();
+      if (share) {
+        await Share.shareXFiles([XFile.fromData(pdfBytes, name: fileName, mimeType: 'application/pdf')], text: texto);
+      } else {
+        await Printing.layoutPdf(onLayout: (format) async => pdfBytes, name: fileName);
+      }
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -3885,6 +3913,9 @@ class ExportService {
 
   /// Exporta (o comparte) una Nota de Crédito con el detalle de lo que anula.
   static Future<void> exportNotaCreditoToPdf(NotaCredito nota, {bool share = false}) async {
+    if (await _pdfDelServidor('/notas-credito/${nota.id}/pdf/', share, 'Le comparto la nota de crédito ${nota.consecutivo}.')) {
+      return;
+    }
     final pdf = pw.Document(theme: await _cargarTema());
     final logo = await _cargarLogo(nota.logoNegocioUrl);
     // DetalleNotaCredito/totales siempre están en colones (la nota no tiene
