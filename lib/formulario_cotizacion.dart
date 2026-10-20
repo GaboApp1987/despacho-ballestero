@@ -17,7 +17,7 @@ import 'widgets/calculadora.dart';
 
 class LineaCotizacion {
   final Producto producto;
-  int cantidad;
+  double cantidad;
   double precioUnitario;
   Impuesto? impuesto;
 
@@ -260,7 +260,7 @@ class _FormularioCotizacionState extends State<FormularioCotizacion> {
           }
         }
         if (producto == null) continue;
-        final cantidad = (item['cantidad'] as num?)?.toInt() ?? 1;
+        final cantidad = (item['cantidad'] as num?)?.toDouble() ?? 1;
         final idx = _carrito.indexWhere((l) => l.producto.id == producto!.id);
         if (idx != -1) {
           _carrito[idx].cantidad += cantidad;
@@ -388,7 +388,7 @@ class _FormularioCotizacionState extends State<FormularioCotizacion> {
         continue;
       }
 
-      final cantidadTotal = (equivalencia * cantidadPedida).round();
+      final cantidadTotal = double.parse((equivalencia * cantidadPedida).toStringAsFixed(3));
       final idx = _carrito.indexWhere((l) => l.producto.id == producto!.id);
       if (idx != -1) {
         _carrito[idx].cantidad += cantidadTotal;
@@ -419,7 +419,7 @@ class _FormularioCotizacionState extends State<FormularioCotizacion> {
   /// producto en el catálogo.
   void _editarLineaCarrito(int index) {
     final item = _carrito[index];
-    final cantidadCtrl = TextEditingController(text: item.cantidad.toString());
+    final cantidadCtrl = TextEditingController(text: formatearCantidad(item.cantidad));
     final precioCtrl = TextEditingController(text: item.precioUnitario.toStringAsFixed(2));
 
     // No se debe cotizar por debajo del costo + 10% de margen mínimo. Si el
@@ -468,7 +468,7 @@ class _FormularioCotizacionState extends State<FormularioCotizacion> {
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
           ElevatedButton(
             onPressed: () {
-              final nuevaCantidad = int.tryParse(cantidadCtrl.text);
+              final nuevaCantidad = leerCantidad(cantidadCtrl.text);
               final nuevoPrecio = double.tryParse(precioCtrl.text.replaceAll(',', '.'));
               if (nuevaCantidad == null || nuevaCantidad <= 0 || nuevoPrecio == null || nuevoPrecio < 0) {
                 ScaffoldMessenger.of(ctx).showSnackBar(
@@ -928,7 +928,7 @@ class _FormularioCotizacionState extends State<FormularioCotizacion> {
                   _botonCantidad(Icons.remove, () => _decrementar(i)),
                   SizedBox(
                     width: 32,
-                    child: Text("${item.cantidad}", textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    child: Text(formatearCantidad(item.cantidad), textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
                   ),
                   _botonCantidad(Icons.add, () => _incrementar(i)),
                   const Spacer(),

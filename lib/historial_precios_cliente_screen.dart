@@ -92,7 +92,7 @@ class _HistorialPreciosClienteScreenState extends State<HistorialPreciosClienteS
                         color: r.facturaAnulada ? Colors.blueGrey : AppColors.primary,
                         size: 20,
                       ),
-                      title: Text("${formatearColones(r.precioUnitario)} × ${r.cantidad}"),
+                      title: Text("${formatearColones(r.precioUnitario)} × ${formatearCantidad(r.cantidad)}"),
                       subtitle: Text("F-${r.facturaConsecutivo} · ${_formatearFecha(r.fechaEmision)}"),
                       trailing: r.facturaAnulada
                           ? const Text("ANULADA", style: TextStyle(fontSize: 10, color: Colors.blueGrey, fontWeight: FontWeight.bold))

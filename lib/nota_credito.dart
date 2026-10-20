@@ -3,7 +3,7 @@ import 'negocio.dart';
 class DetalleNotaCreditoItem {
   final int productoId;
   final String nombreProducto;
-  final int cantidad;
+  final double cantidad;
   final double precioUnitario;
   final double montoIva;
   final double subtotal;
@@ -23,7 +23,7 @@ class DetalleNotaCreditoItem {
     return DetalleNotaCreditoItem(
       productoId: json['producto'] is int ? json['producto'] : int.tryParse(json['producto'].toString()) ?? 0,
       nombreProducto: json['nombre_producto'] ?? 'Producto',
-      cantidad: json['cantidad'] is int ? json['cantidad'] : int.tryParse(json['cantidad'].toString()) ?? 0,
+      cantidad: double.tryParse(json['cantidad'].toString()) ?? 0,
       precioUnitario: double.tryParse(json['precio_unitario'].toString()) ?? 0.0,
       montoIva: double.tryParse(json['monto_iva'].toString()) ?? 0.0,
       subtotal: double.tryParse(json['subtotal'].toString()) ?? 0.0,

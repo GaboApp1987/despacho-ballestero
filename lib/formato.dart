@@ -23,6 +23,15 @@ String formatearNumero(num valor, {int decimales = 2}) {
   return esNegativo ? '-$resultado' : resultado;
 }
 
+/// Cantidad de una línea o existencia: "2" o "2,5" (sin ceros de más).
+String formatearCantidad(num valor) {
+  if (valor % 1 == 0) return formatearNumero(valor, decimales: 0);
+  return formatearNumero(valor, decimales: 3).replaceFirst(RegExp(r'0+$'), '');
+}
+
+/// Lee una cantidad escrita con punto o coma ("2.5" o "2,5"); null si no es número.
+double? leerCantidad(String texto) => double.tryParse(texto.trim().replaceAll(',', '.'));
+
 /// Da formato "₡1.234.567,89" a un monto en colones.
 String formatearColones(num valor, {int decimales = 2}) {
   return '₡${formatearNumero(valor, decimales: decimales)}';

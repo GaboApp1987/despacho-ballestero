@@ -9,7 +9,7 @@ class DetalleFacturaItem {
   // Tarifa nominal de IVA de la línea (13, 4, 2, 1, 0...), ver
   // DetalleFacturaSerializer.tarifa_iva.
   final double? tarifaIvaServidor;
-  final int cantidad;
+  final double cantidad;
   final double precioUnitario;
   final double montoIva;
   final double subtotal;
@@ -64,7 +64,7 @@ class DetalleFacturaItem {
       nombreProducto: json['nombre_producto'] ?? 'Producto',
       codigoCabys: json['codigo_cabys'] ?? productoDetalle?['codigo_cabys'] ?? '',
       tarifaIvaServidor: json['tarifa_iva'] == null ? null : double.tryParse(json['tarifa_iva'].toString()),
-      cantidad: json['cantidad'] is int ? json['cantidad'] : int.tryParse(json['cantidad'].toString()) ?? 0,
+      cantidad: double.tryParse(json['cantidad'].toString()) ?? 0,
       precioUnitario: double.tryParse(json['precio_unitario'].toString()) ?? 0.0,
       montoIva: double.tryParse(json['monto_iva'].toString()) ?? 0.0,
       subtotal: double.tryParse(json['subtotal'].toString()) ?? 0.0,

@@ -6,7 +6,7 @@ class PrecioHistoricoCliente {
   final int productoId;
   final String productoNombre;
   final double precioUnitario;
-  final int cantidad;
+  final double cantidad;
   final int facturaId;
   final String facturaConsecutivo;
   final bool facturaAnulada;
@@ -28,7 +28,7 @@ class PrecioHistoricoCliente {
       productoId: json['producto_id'],
       productoNombre: json['producto_nombre'] ?? '',
       precioUnitario: double.tryParse(json['precio_unitario'].toString()) ?? 0,
-      cantidad: json['cantidad'] ?? 0,
+      cantidad: double.tryParse('${json['cantidad']}') ?? 0,
       facturaId: json['factura_id'],
       facturaConsecutivo: json['factura_consecutivo'] ?? '',
       facturaAnulada: json['factura_anulada'] ?? false,

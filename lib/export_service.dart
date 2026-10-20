@@ -2130,7 +2130,7 @@ class ExportService {
                   ['', 'Sin detalle de líneas registrado.', '', '', ''],
                 ]
               : factura.detalles.map((d) => [
-                    d.cantidad.toString(),
+                    formatearCantidad(d.cantidad),
                     d.codigoCabys.isNotEmpty ? '${d.nombreProducto}\nCABYS: ${d.codigoCabys}' : d.nombreProducto,
                     fmt(d.precioUnitario),
                     '${fmt(d.montoIva)}\n${_textoTarifa(d.tarifaIva)}',
@@ -2208,7 +2208,7 @@ class ExportService {
                         },
                         headers: const ['Cant', 'Producto', 'Precio Unit.', 'IVA', 'Total'],
                         data: n.detalles.map((d) => [
-                              d.cantidad.toString(),
+                              formatearCantidad(d.cantidad),
                               d.nombreProducto,
                               fmt(d.precioUnitario),
                               fmt(d.montoIva),
@@ -3983,7 +3983,7 @@ class ExportService {
                   ['', 'Sin detalle de líneas registrado.', '', '', ''],
                 ]
               : nota.detalles.map((d) => [
-                    d.cantidad.toString(),
+                    formatearCantidad(d.cantidad),
                     d.nombreProducto,
                     fmt(d.precioUnitario),
                     fmt(d.montoIva),

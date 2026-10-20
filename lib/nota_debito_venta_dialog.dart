@@ -87,10 +87,10 @@ Future<bool> mostrarDialogoNotaDebitoVenta(BuildContext context, int negocioId, 
                           SizedBox(
                             width: 56,
                             child: TextFormField(
-                              initialValue: '${l.cantidad}',
-                              keyboardType: TextInputType.number,
+                              initialValue: formatearCantidad(l.cantidad),
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
                               decoration: const InputDecoration(labelText: "Cant.", border: OutlineInputBorder(), isDense: true),
-                              onChanged: (v) => setStateDialog(() => l.cantidad = int.tryParse(v) ?? 0),
+                              onChanged: (v) => setStateDialog(() => l.cantidad = leerCantidad(v) ?? 0),
                             ),
                           ),
                           const SizedBox(width: 6),
@@ -181,6 +181,6 @@ Future<bool> mostrarDialogoNotaDebitoVenta(BuildContext context, int negocioId, 
 
 class _LineaNd {
   Producto? producto;
-  int cantidad = 1;
+  double cantidad = 1;
   final precioCtrl = TextEditingController();
 }

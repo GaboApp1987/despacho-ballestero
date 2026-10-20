@@ -226,7 +226,7 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
                         contentPadding: EdgeInsets.zero,
                         value: seleccionados[d.id] ?? false,
                         title: Text(d.nombreProducto, style: const TextStyle(fontSize: 14)),
-                        subtitle: Text("${d.cantidad} x ${_fmt(d.precioUnitario)} = ${_fmt(d.total)}"),
+                        subtitle: Text("${formatearCantidad(d.cantidad)} x ${_fmt(d.precioUnitario)} = ${_fmt(d.total)}"),
                         onChanged: (v) => setDialogState(() => seleccionados[d.id!] = v ?? false),
                       )),
                   const SizedBox(height: 8),
@@ -450,7 +450,7 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
                                               style: TextStyle(fontSize: 11, color: Colors.grey[500]),
                                             ),
                                           Text(
-                                            "${linea.cantidad} x ${_fmt(linea.precioUnitario)} = ${_fmt(linea.montoBruto)}"
+                                            "${formatearCantidad(linea.cantidad)} x ${_fmt(linea.precioUnitario)} = ${_fmt(linea.montoBruto)}"
                                             "${linea.montoIva > 0 ? '  ·  IVA ${_fmt(linea.montoIva)}' : ''}",
                                             style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                                           ),
@@ -762,7 +762,7 @@ class _DetalleFacturaScreenState extends State<DetalleFacturaScreen> {
                               children: [
                                 Text(d.nombreProducto, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                                 Text(
-                                  "${d.cantidad} x ${_fmt(d.precioUnitario)}"
+                                  "${formatearCantidad(d.cantidad)} x ${_fmt(d.precioUnitario)}"
                                   "${d.montoIva > 0 ? '  ·  IVA ${_fmt(d.montoIva)}' : ''}",
                                   style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                                 ),

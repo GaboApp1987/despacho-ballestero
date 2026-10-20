@@ -21,7 +21,8 @@ import 'widgets/calculadora.dart';
 // Modelo temporal para los items del carrito
 class LineaFactura {
   final Producto producto;
-  int cantidad;
+  // Con decimales: 2.5 kg (Hacienda acepta hasta 3).
+  double cantidad;
   // Precio en la moneda en que se definió (la del producto, o la de la
   // factura si se editó a mano): un alquiler cobrado en dólares queda en
   // US$ exactos aunque cambie el tipo de cambio. precioUnitario (abajo)
@@ -240,7 +241,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
         final producto = _listaProductos.where((x) => x.id == l.productoId).firstOrNull;
         if (producto == null) continue;
         final linea = LineaFactura(
-          producto: producto, cantidad: l.cantidad, impuesto: producto.impuesto, tipoCambio: _tipoCambioConversion,
+          producto: producto, cantidad: l.cantidad.toDouble(), impuesto: producto.impuesto, tipoCambio: _tipoCambioConversion,
           descripcion: l.descripcion,
         );
         // Precio negativo = el del catálogo, en la moneda del producto (los
@@ -663,7 +664,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
 
   void _editarLineaCarrito(int index) {
     final item = _carrito[index];
-    final cantidadCtrl = TextEditingController(text: item.cantidad.toString());
+    final cantidadCtrl = TextEditingController(text: formatearCantidad(item.cantidad));
     final detalleCtrl = TextEditingController(text: item.descripcion.isNotEmpty ? item.descripcion : item.producto.nombre);
     final precioCtrl = TextEditingController(
       text: (item.monedaPrecio == _moneda ? item.precioBase : _enMonedaFactura(item.precioUnitario)).toStringAsFixed(2),
@@ -713,9 +714,9 @@ class _FormularioFacturaState extends State<FormularioFactura> {
               const SizedBox(height: 4),
               TextField(
                 controller: cantidadCtrl,
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 autofocus: true,
-                decoration: const InputDecoration(labelText: "Cantidad", border: OutlineInputBorder()),
+                decoration: const InputDecoration(labelText: "Cantidad (puede ser 2,5)", border: OutlineInputBorder()),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -855,7 +856,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
           ElevatedButton(
             onPressed: () {
-              final nuevaCantidad = int.tryParse(cantidadCtrl.text);
+              final nuevaCantidad = leerCantidad(cantidadCtrl.text);
               // Se escriben en la moneda de la factura; las validaciones de
               // abajo (costo, mínimo) trabajan en colones.
               final precioEscrito = double.tryParse(precioCtrl.text.replaceAll(',', '.'));
@@ -1774,7 +1775,7 @@ class _FormularioFacturaState extends State<FormularioFactura> {
                   _botonCantidad(Icons.remove, () => _decrementar(i)),
                   SizedBox(
                     width: 32,
-                    child: Text("${item.cantidad}", textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    child: Text(formatearCantidad(item.cantidad), textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
                   ),
                   _botonCantidad(Icons.add, () => _incrementar(i)),
                   const Spacer(),
