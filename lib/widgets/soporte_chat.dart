@@ -125,6 +125,8 @@ class _ChatMensaje {
   // de voz): nunca se muestra, pero viaja en el historial para que la IA
   // lo recuerde en los turnos siguientes.
   String? notaOculta;
+  // 👍/👎 de la persona (ver _calificar): null = sin calificar.
+  bool? calificacion;
   _ChatMensaje(this.role, this.content,
       {this.propuesta, this.propuestaProducto, this.navegar, this.propuestaAccion, this.propuestaDocumento, this.adjuntos = const []});
 
@@ -1255,6 +1257,76 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
 
   bool get _sinConversacion => !_mensajes.any((m) => m.role == 'user') && !_enviando;
 
+  /// 👍/👎 de una respuesta: se guarda para mejorar la IA (CalificacionIA en
+  /// el backend, se revisa en el admin). Con 👎 pregunta qué faltó.
+  Future<void> _calificar(int index, bool util) async {
+    final m = _mensajes[index];
+    if (m.calificacion != null) return;
+    setState(() => m.calificacion = util);
+    final pregunta = _mensajes.take(index).lastWhere((x) => x.role == 'user', orElse: () => _ChatMensaje('user', '')).content;
+    try {
+      final r = await ApiService.post('/soporte/calificar/', {
+        'canal': widget.contexto == 'usuario' ? 'app' : widget.contexto,
+        'util': util,
+        'pregunta': pregunta,
+        'respuesta': m.content,
+        if (widget.negocioId != null) 'negocio': widget.negocioId,
+      });
+      if (util || r.statusCode != 201 || !mounted) return;
+      final id = json.decode(utf8.decode(r.bodyBytes))['id'];
+      final ctrl = TextEditingController();
+      final comentario = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("¿Qué faltó?"),
+          content: TextField(
+            controller: ctrl,
+            autofocus: true,
+            maxLines: 3,
+            decoration: const InputDecoration(hintText: "Opcional: contanos qué esperabas para mejorar la respuesta"),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Omitir")),
+            ElevatedButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text("Enviar")),
+          ],
+        ),
+      );
+      if (comentario != null && comentario.isNotEmpty) {
+        await ApiService.patch('/soporte/calificar/', {'id': id, 'comentario': comentario});
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("¡Gracias! Con esto la vamos mejorando.")));
+      }
+    } catch (_) {
+      // Calificar nunca debe estorbar la conversación.
+    }
+  }
+
+  Widget _buildCalificacion(int index, {required bool estiloPantalla}) {
+    final m = _mensajes[index];
+    final color = estiloPantalla ? Colors.white.withOpacity(0.45) : AppColors.textMuted;
+    Widget boton(bool util, IconData icono, IconData iconoLleno, String ayuda) {
+      final marcado = m.calificacion == util;
+      return IconButton(
+        tooltip: ayuda,
+        visualDensity: VisualDensity.compact,
+        iconSize: 16,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(minWidth: 30, minHeight: 28),
+        onPressed: m.calificacion == null ? () => _calificar(index, util) : null,
+        icon: Icon(marcado ? iconoLleno : icono, color: marcado ? (util ? Colors.green : Colors.redAccent) : color),
+      );
+    }
+
+    return Padding(
+      padding: EdgeInsets.only(left: estiloPantalla ? 38 : 0, bottom: 6),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        boton(true, Icons.thumb_up_alt_outlined, Icons.thumb_up_alt, "Buena respuesta"),
+        boton(false, Icons.thumb_down_alt_outlined, Icons.thumb_down_alt, "Mala respuesta"),
+      ]),
+    );
+  }
+
   Widget _buildListaMensajes({required bool estiloPantalla}) {
     final anchoBurbuja = MediaQuery.of(context).size.width * 0.75;
     return ListView.builder(
@@ -1349,6 +1421,9 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
           crossAxisAlignment: esUsuario ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             burbuja,
+            // Solo respuestas reales de la IA (no el saludo de bienvenida).
+            if (!esUsuario && m.content.isNotEmpty && _mensajes.take(index).any((x) => x.role == 'user'))
+              _buildCalificacion(index, estiloPantalla: estiloPantalla),
             if (m.propuesta != null) Padding(padding: EdgeInsets.only(left: estiloPantalla ? 42 : 0), child: _buildTarjetaPropuesta(m)),
             if (m.propuestaProducto != null)
               Padding(padding: EdgeInsets.only(left: estiloPantalla ? 42 : 0), child: _buildTarjetaPropuestaProducto(m)),
