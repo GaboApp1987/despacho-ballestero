@@ -36,6 +36,8 @@ class _BancosScreenState extends State<BancosScreen> {
   bool _cargando = true;
   List<Map<String, dynamic>> _cuentas = [];
   List<CuentaContable> _catalogo = [];
+  // Otros medios de pago (PayPal, tarjeta...): salen en las facturas.
+  List<Map<String, dynamic>> _medios = [];
 
   @override
   void initState() {
@@ -49,9 +51,13 @@ class _BancosScreenState extends State<BancosScreen> {
       final r = await Future.wait([
         ApiService.get('/cuentas-bancarias/?negocio=${widget.negocioId}'),
         ApiService.get('/cuentas-contables/?negocio=${widget.negocioId}'),
+        ApiService.get('/medios-pago/?negocio=${widget.negocioId}'),
       ]);
       ApiService.verificar(r[0]);
       _cuentas = (json.decode(utf8.decode(r[0].bodyBytes)) as List).cast<Map<String, dynamic>>();
+      if (r[2].statusCode == 200) {
+        _medios = (json.decode(utf8.decode(r[2].bodyBytes)) as List).cast<Map<String, dynamic>>();
+      }
       if (r[1].statusCode == 200) {
         _catalogo = (json.decode(utf8.decode(r[1].bodyBytes)) as List).map((j) => CuentaContable.fromJson(j)).toList();
       }
@@ -62,25 +68,43 @@ class _BancosScreenState extends State<BancosScreen> {
     if (mounted) setState(() => _cargando = false);
   }
 
-  Future<void> _nuevaCuenta() async {
-    final banco = TextEditingController();
-    final nombre = TextEditingController();
-    final numero = TextEditingController();
+  /// Nueva cuenta o, con [existente], editar sus datos (banco, nombre,
+  /// número, IBAN y si sale en las facturas; moneda y saldo inicial no se
+  /// cambian porque ya tienen movimientos y asientos).
+  Future<void> _formularioCuenta({Map<String, dynamic>? existente}) async {
+    final banco = TextEditingController(text: existente?['banco'] ?? '');
+    final nombre = TextEditingController(text: existente?['nombre'] ?? '');
+    final numero = TextEditingController(text: existente?['numero'] ?? '');
+    final iban = TextEditingController(text: existente?['iban'] ?? '');
     final saldo = TextEditingController(text: '0');
     String moneda = 'CRC';
     DateTime fecha = DateTime.now();
+    bool mostrar = existente?['mostrar_en_facturas'] ?? true;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, set) => AlertDialog(
-          title: const Text("Nueva cuenta bancaria"),
+          title: Text(existente == null ? "Nueva cuenta bancaria" : "Editar cuenta"),
           content: SizedBox(
             width: 420,
             child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 TextField(controller: banco, decoration: const InputDecoration(labelText: "Banco *", hintText: "BCR, BN, BAC... o Caja")),
                 TextField(controller: nombre, decoration: const InputDecoration(labelText: "Nombre *", hintText: "Ej. Operativa colones")),
-                TextField(controller: numero, decoration: const InputDecoration(labelText: "Número o IBAN")),
+                TextField(controller: numero, decoration: const InputDecoration(labelText: "Número de cuenta", hintText: "Ej. 100-01-000-123456")),
+                TextField(
+                  controller: iban,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: const InputDecoration(labelText: "Cuenta IBAN", hintText: "CR + 20 dígitos"),
+                ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: mostrar,
+                  onChanged: (v) => set(() => mostrar = v ?? true),
+                  title: const Text("Mostrar en facturas y cotizaciones"),
+                  subtitle: const Text("Para que el cliente sepa a dónde transferir", style: TextStyle(fontSize: 12)),
+                ),
+                if (existente == null) ...[
                 DropdownButtonFormField<String>(
                   initialValue: moneda,
                   decoration: const InputDecoration(labelText: "Moneda"),
@@ -109,23 +133,45 @@ class _BancosScreenState extends State<BancosScreen> {
                   "Se le crea su propia cuenta contable dentro de Activo Circulante, para que el mayor de cada banco salga por separado.",
                   style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
+                ],
               ]),
             ),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
-            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Crear")),
+            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: Text(existente == null ? "Crear" : "Guardar")),
           ],
         ),
       ),
     );
     if (ok != true) return;
+    final ibanLimpio = iban.text.replaceAll(RegExp(r'[\s-]'), '').toUpperCase();
+    if (ibanLimpio.isNotEmpty && !RegExp(r'^CR\d{20}$').hasMatch(ibanLimpio)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("El IBAN de Costa Rica es CR seguido de 20 dígitos. Revisalo e intentá de nuevo.")));
+      }
+      return;
+    }
     try {
+      if (existente != null) {
+        ApiService.verificar(await ApiService.patch('/cuentas-bancarias/${existente['id']}/', {
+          'banco': banco.text.trim(),
+          'nombre': nombre.text.trim(),
+          'numero': numero.text.trim(),
+          'iban': ibanLimpio,
+          'mostrar_en_facturas': mostrar,
+        }));
+        await _cargar();
+        return;
+      }
       ApiService.verificar(await ApiService.post('/cuentas-bancarias/', {
         'negocio': widget.negocioId,
         'banco': banco.text.trim(),
         'nombre': nombre.text.trim(),
         'numero': numero.text.trim(),
+        'iban': ibanLimpio,
+        'mostrar_en_facturas': mostrar,
         'moneda': moneda,
         'saldo_inicial': saldo.text.trim().replaceAll(',', '.').isEmpty ? '0' : saldo.text.trim().replaceAll(',', '.'),
         'fecha_saldo_inicial': fecha.toIso8601String().substring(0, 10),
@@ -134,6 +180,88 @@ class _BancosScreenState extends State<BancosScreen> {
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
     }
+  }
+
+  /// Otro medio de pago (PayPal, tarjeta en el local...) nuevo o editado.
+  Future<void> _formularioMedio({Map<String, dynamic>? existente}) async {
+    final nombre = TextEditingController(text: existente?['nombre'] ?? '');
+    final detalle = TextEditingController(text: existente?['detalle'] ?? '');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(existente == null ? "Otro medio de pago" : "Editar medio de pago"),
+        content: SizedBox(
+          width: 420,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: nombre, decoration: const InputDecoration(labelText: "Nombre *", hintText: "Ej. PayPal, Tarjeta, SINPE de la tienda")),
+            TextField(
+              controller: detalle,
+              maxLines: 2,
+              decoration: const InputDecoration(labelText: "Datos para pagar", hintText: "Ej. pagos@minegocio.com o 'Visa y Mastercard en el local'"),
+            ),
+            const SizedBox(height: 8),
+            const Text("Sale en las formas de pago de las facturas, las cotizaciones y la página para pagar en línea.",
+                style: TextStyle(fontSize: 12, color: Colors.grey)),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Guardar")),
+        ],
+      ),
+    );
+    if (ok != true || nombre.text.trim().isEmpty) return;
+    try {
+      final datos = {'negocio': widget.negocioId, 'nombre': nombre.text.trim(), 'detalle': detalle.text.trim()};
+      ApiService.verificar(existente == null
+          ? await ApiService.post('/medios-pago/', datos)
+          : await ApiService.patch('/medios-pago/${existente['id']}/', datos));
+      await _cargar();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
+    }
+  }
+
+  Future<void> _eliminarMedio(Map<String, dynamic> medio) async {
+    try {
+      ApiService.verificar(await ApiService.delete('/medios-pago/${medio['id']}/'));
+      await _cargar();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiService.textoError(e))));
+    }
+  }
+
+  Widget _seccionMedios() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          const Expanded(child: Text("Otros medios de pago", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))),
+          TextButton.icon(onPressed: () => _formularioMedio(), icon: const Icon(Icons.add), label: const Text("Agregar")),
+        ]),
+        const Text(
+          "Además de SINPE y las cuentas marcadas, salen en las facturas: PayPal, tarjeta en el local, otro SINPE...",
+          style: TextStyle(fontSize: 12, color: Colors.grey),
+        ),
+        const SizedBox(height: 6),
+        for (final m in _medios)
+          Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: ListTile(
+              leading: const Icon(Icons.payments_outlined),
+              title: Text(m['nombre'] ?? ''),
+              subtitle: (m['detalle'] ?? '').toString().isEmpty ? null : Text(m['detalle']),
+              trailing: PopupMenuButton<String>(
+                onSelected: (v) => v == 'editar' ? _formularioMedio(existente: m) : _eliminarMedio(m),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'editar', child: Text("Editar")),
+                  PopupMenuItem(value: 'eliminar', child: Text("Eliminar")),
+                ],
+              ),
+            ),
+          ),
+      ]),
+    );
   }
 
   Future<void> _traslado() async {
@@ -245,24 +373,13 @@ class _BancosScreenState extends State<BancosScreen> {
           : AppBar(title: Text("Bancos · ${widget.negocioNombre}"), actions: [const BotonCalculadora(), ...acciones]),
       floatingActionButton: FloatingActionButton.extended(
         key: GuiaBancos.nueva,
-        onPressed: _nuevaCuenta,
+        onPressed: () => _formularioCuenta(),
         icon: const Icon(Icons.add),
         label: const Text("Nueva cuenta"),
       ),
       body: _cargando
           ? const Center(child: CircularProgressIndicator())
-          : _cuentas.isEmpty
-              ? const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Text(
-                      "Todavía no hay cuentas bancarias.\nAgregá las cuentas del negocio (y la caja, si se maneja efectivo) con su saldo inicial.",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ),
-                )
-              : ListView(
+          : ListView(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
                   children: [
                     if (widget.embebido)
@@ -270,6 +387,15 @@ class _BancosScreenState extends State<BancosScreen> {
                         const Expanded(child: Text("Cuentas bancarias", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
                         ...acciones,
                       ]),
+                    if (_cuentas.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text(
+                          "Todavía no hay cuentas bancarias.\nAgregá las cuentas del negocio (y la caja, si se maneja efectivo) con su saldo inicial.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ),
                     ..._cuentas
                       .map((c) => Card(
                             key: identical(c, _cuentas.first) ? GuiaBancos.cuenta : null,
@@ -281,10 +407,18 @@ class _BancosScreenState extends State<BancosScreen> {
                               ),
                               title: Text("${c['banco']} · ${c['nombre']}", style: const TextStyle(fontWeight: FontWeight.bold)),
                               subtitle: Text(
-                                "${(c['numero'] ?? '').toString().isNotEmpty ? '${c['numero']} · ' : ''}"
+                                "${(c['numero'] ?? '').toString().isNotEmpty ? 'Cuenta ${c['numero']} · ' : ''}"
+                                "${(c['iban'] ?? '').toString().isNotEmpty ? 'IBAN ${c['iban']} · ' : ''}"
                                 "Cuenta contable ${c['cuenta_contable_codigo'] ?? '-'} · ${c['cantidad_movimientos']} movimiento(s)",
                               ),
-                              trailing: Text(_monto(c['saldo'], c['moneda']), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                                Text(_monto(c['saldo'], c['moneda']), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                                IconButton(
+                                  tooltip: "Editar cuenta",
+                                  icon: const Icon(Icons.edit_outlined, size: 20),
+                                  onPressed: () => _formularioCuenta(existente: c),
+                                ),
+                              ]),
                               onTap: () async {
                                 await Navigator.push(
                                   context,
@@ -296,6 +430,7 @@ class _BancosScreenState extends State<BancosScreen> {
                               },
                             ),
                           )),
+                    _seccionMedios(),
                   ],
                 ),
     );
