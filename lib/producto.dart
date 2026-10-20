@@ -1,3 +1,4 @@
+import 'formato.dart';
 import 'impuesto.dart'; // <--- Esto trae la definición única de Impuesto
 
 class Categoria {
@@ -57,7 +58,8 @@ class Producto {
   final double margenGanancia;
   final int? categoriaId;
   final String? nombreCategoria;
-  final int stock;
+  // Con decimales: se compra por kilo o litro (12.5 kg).
+  final double stock;
   // Avisar y sugerir pedirlo cuando quede esto o menos (0 = no avisar).
   final int stockMinimo;
   // false = oculto: está en facturas/compras (no se puede borrar) pero no
@@ -104,7 +106,7 @@ class Producto {
       margenGanancia: double.tryParse(json['margen_ganancia']?.toString() ?? '') ?? 30.0,
       categoriaId: json['categoria'],
       nombreCategoria: json['nombre_categoria'],
-      stock: json['stock'] ?? 0,
+      stock: double.tryParse(json['stock']?.toString() ?? '') ?? 0,
       stockMinimo: json['stock_minimo'] ?? 0,
       activo: json['activo'] ?? true,
       // Mapeamos usando los datos que vienen de Django
@@ -119,6 +121,9 @@ class Producto {
       monedaPrecio: json['moneda_precio'] ?? 'CRC',
     );
   }
+
+  /// Existencias para mostrar: 12 o 12,5 (sin decimales de más).
+  String get stockTexto => formatearNumero(stock, decimales: stock % 1 == 0 ? 0 : 3);
 
   // 🛠️ MÉTODO TOJSON AGREGADO PARA SERIALIZAR EN PUT/POST
   Map<String, dynamic> toJson() {

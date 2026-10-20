@@ -779,7 +779,7 @@ class _FormularioCotizacionState extends State<FormularioCotizacion> {
                     style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 14)),
                 const SizedBox(height: 2),
                 Text(
-                  "Stock: ${p.stock}",
+                  "Stock: ${p.stockTexto}",
                   style: TextStyle(fontSize: 11, color: p.stock > 0 ? Colors.grey[500] : Colors.red),
                 ),
               ],

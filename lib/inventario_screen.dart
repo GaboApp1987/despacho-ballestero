@@ -151,7 +151,7 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
   void _mostrarDialogoEditarStock(Producto producto) {
     Future.microtask(() async {
       if (!mounted) return;
-      final controller = TextEditingController(text: producto.stock.toString());
+      final controller = TextEditingController(text: producto.stock % 1 == 0 ? producto.stock.toInt().toString() : producto.stock.toString());
 
       final bool? actualizado = await showDialog<bool>(
         context: context,
@@ -160,7 +160,7 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
             title: Text("Editar stock: ${producto.nombre}"),
             content: TextField(
               controller: controller,
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
                 labelText: "Unidades disponibles",
                 border: OutlineInputBorder(),
@@ -175,7 +175,7 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
                 onPressed: () async {
-                  final nuevoStock = int.tryParse(controller.text);
+                  final nuevoStock = double.tryParse(controller.text.trim().replaceAll(',', '.'));
                   if (nuevoStock == null) return;
 
                   Map<String, dynamic> datosActualizados = {
@@ -542,7 +542,7 @@ class _InventarioScreenState extends State<InventarioScreen> with SingleTickerPr
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        "${formatearNumero(p.stock, decimales: 0)} ${p.unidadMedida}",
+                        "${p.stockTexto} ${p.unidadMedida}",
                         style: TextStyle(
                           color: p.stock > 0 ? AppColors.primary : Colors.red.shade400,
                           fontWeight: FontWeight.bold,

@@ -232,7 +232,7 @@ Excel armarExcelProductos(List<Producto> productos) {
       TextCellValue(p.monedaPrecio),
       DoubleCellValue(p.precioUnitario),
       DoubleCellValue(p.costo),
-      IntCellValue(p.stock),
+      p.stock % 1 == 0 ? IntCellValue(p.stock.toInt()) : DoubleCellValue(p.stock),
       p.impuesto == null ? null : DoubleCellValue(p.impuesto!.porcentaje),
     ]);
   }
@@ -620,7 +620,7 @@ class _PantallaRevisionCargaState extends State<PantallaRevisionCarga> {
     if (campo == 'precio' || campo == 'costo') return _monto(v, moneda);
     if (campo == 'iva') return (v as num) == 0 ? 'Exento' : '${formatearNumero(v, decimales: 0)}%';
     if (campo == 'tipo') return tiposProducto[v] ?? v.toString();
-    if (campo == 'stock') return formatearNumero(v as num, decimales: 0);
+    if (campo == 'stock') return formatearNumero(v as num, decimales: v % 1 == 0 ? 0 : 3);
     return v.toString();
   }
 

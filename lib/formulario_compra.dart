@@ -261,17 +261,36 @@ class _FormularioCompraState extends State<FormularioCompra> {
       // por eso también se busca por CABYS en la lista actual.
       final List lineas = datos['lineas'] ?? [];
       for (final linea in lineas) {
+        // El backend ya buscó el producto o insumo por nombre y CABYS
+        // (vincular_lineas en compras_inventario.py).
         final productoId = linea['producto_id'];
-        final cabysLinea = (linea['codigo_cabys'] as String? ?? '').trim();
+        final insumoId = linea['insumo_id'];
         Producto? producto;
         for (final p in _listaProductos) {
-          if ((productoId != null && p.id == productoId) ||
-              (cabysLinea.isNotEmpty && p.codigoCabys.trim() == cabysLinea)) {
+          if (productoId != null && p.id == productoId) {
             producto = p;
             break;
           }
         }
-        if (producto != null && (linea['cantidad'] as num) % 1 == 0) {
+        InsumoCompra? insumo;
+        for (final i in _listaInsumos) {
+          if (producto == null && insumoId != null && i.id == insumoId) {
+            insumo = i;
+            break;
+          }
+        }
+        if (insumo != null) {
+          final insumoLinea = insumo;
+          setState(() {
+            _carritoCompra.add(LineaCompra(
+              insumo: insumoLinea,
+              cantidad: (linea['cantidad'] as num).toDouble(),
+              precioCosto: redondear2((linea['precio_unitario'] as num) * tipoCambioAplicar),
+              tarifa: (linea['tarifa'] as num?)?.toDouble(),
+              descripcion: (linea['detalle'] ?? '').toString(),
+            ));
+          });
+        } else if (producto != null) {
           final productoLinea = producto;
           setState(() {
             _carritoCompra.add(LineaCompra(
@@ -547,7 +566,7 @@ class _FormularioCompraState extends State<FormularioCompra> {
                       setState(() {
                         _carritoCompra.add(LineaCompra(
                           producto: productoFinal!,
-                          cantidad: cantidad.roundToDouble(),
+                          cantidad: cantidad,
                           precioCosto: redondear2(double.tryParse(precioCtrl.text.trim()) ?? precio),
                           tarifa: tarifaLinea ?? productoFinal.impuesto?.porcentaje,
                           descripcion: detalle,
@@ -769,8 +788,8 @@ class _FormularioCompraState extends State<FormularioCompra> {
           children: [
             TextField(
               controller: cantCtrl,
-              decoration: const InputDecoration(labelText: "Cantidad comprada"),
-              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: "Cantidad comprada (puede ser 12.5)"),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
             ),
             TextField(
               controller: costoCtrl,
@@ -790,13 +809,13 @@ class _FormularioCompraState extends State<FormularioCompra> {
           ),
           ElevatedButton(
             onPressed: () {
-              final cantidad = int.tryParse(cantCtrl.text) ?? 1;
+              final cantidad = double.tryParse(cantCtrl.text.trim().replaceAll(',', '.')) ?? 1;
               final costo = double.tryParse(costoCtrl.text.replaceAll(',', '.')) ?? prod.precioUnitario;
 
               setState(() {
                 _carritoCompra.add(LineaCompra(
                   producto: prod,
-                  cantidad: cantidad.toDouble(),
+                  cantidad: cantidad,
                   precioCosto: costo,
                   tarifa: tarifa,
                 ));

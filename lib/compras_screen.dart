@@ -168,23 +168,8 @@ Future<int> aceptarCorreosEnLote(
       .map<int>((c) => c['id'] as int)
       .toList();
   if (ids.isEmpty) return 0;
-  // Líneas que no están en el inventario (mismo criterio que el backend:
-  // producto_id vigente o mismo CABYS que un producto del negocio).
-  final idsProductos = <int>{};
-  final cabysProductos = <String>{};
-  try {
-    final r = ApiService.verificar(await ApiService.get('/productos/?negocio=$negocioId'));
-    for (final p in json.decode(utf8.decode(r.bodyBytes)) as List) {
-      idsProductos.add(p['id'] as int);
-      final cabys = (p['codigo_cabys'] ?? '').toString().trim();
-      if (cabys.isNotEmpty) cabysProductos.add(cabys);
-    }
-  } catch (e) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No se pudieron cargar los productos: ${ApiService.textoError(e)}")));
-    }
-    return 0;
-  }
+  // Líneas que no están en el inventario: el backend ya las vinculó por
+  // nombre o CABYS (producto_id / insumo_id) al mandar los correos.
   final nuevas = <({int correoId, int indice, String proveedor, String detalle, num cantidad, bool entera})>[];
   for (final c in correos.where((c) => ids.contains(c['id']))) {
     final datos = c['datos_parseados'] as Map? ?? {};
@@ -192,7 +177,7 @@ Future<int> aceptarCorreosEnLote(
     for (var i = 0; i < lineas.length; i++) {
       final l = lineas[i] as Map;
       final cabys = (l['codigo_cabys'] ?? '').toString().trim();
-      if (idsProductos.contains(l['producto_id']) || cabysProductos.contains(cabys)) continue;
+      if (l['producto_id'] != null || l['insumo_id'] != null) continue;
       final cantidad = (l['cantidad'] as num?) ?? 0;
       nuevas.add((
         correoId: c['id'] as int,
@@ -237,13 +222,10 @@ Future<int> aceptarCorreosEnLote(
                       dense: true,
                       contentPadding: EdgeInsets.zero,
                       value: marcadas.contains(e.key),
-                      onChanged: n.entera
-                          ? (v) => setStateDialog(() => v == true ? marcadas.add(e.key) : marcadas.remove(e.key))
-                          : null,
+                      onChanged: (v) => setStateDialog(() => v == true ? marcadas.add(e.key) : marcadas.remove(e.key)),
                       title: Text(n.detalle),
-                      subtitle: Text(n.entera
-                          ? "${n.proveedor} · ${formatearNumero(n.cantidad, decimales: 0)} unid."
-                          : "${n.proveedor} · cantidad con decimales: entra como gasto (para insumos, usá Revisar)"),
+                      subtitle: Text(
+                          "${n.proveedor} · ${formatearNumero(n.cantidad, decimales: n.entera ? 0 : 3)} unid."),
                     );
                   }),
                 ],
@@ -679,6 +661,11 @@ class _ComprasScreenState extends State<ComprasScreen> {
       int? productoId = linea['producto_id'];
       final cantidad = ((linea['cantidad'] as num?) ?? 1);
       final precio = redondear2(((linea['precio_unitario'] as num?) ?? 0) * tipoCambio);
+      if (productoId == null && linea['insumo_id'] != null) {
+        detallesCompra.add({'insumo': linea['insumo_id'], 'cantidad': cantidad, 'precio_costo': precio});
+        total += precio * cantidad;
+        continue;
+      }
       if (productoId == null) {
         // Busca el impuesto por el % que trae la línea (XML: <Impuesto><Tarifa>,
         // o el que Claude haya podido leer en un PDF/foto) para no dejar el
@@ -705,7 +692,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
         }
         productoId = json.decode(utf8.decode(resProd.bodyBytes))['id'];
       }
-      detallesCompra.add({'producto': productoId, 'cantidad': cantidad.toInt(), 'precio_costo': precio});
+      detallesCompra.add({'producto': productoId, 'cantidad': cantidad, 'precio_costo': precio});
       total += precio * cantidad;
     }
 

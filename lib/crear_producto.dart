@@ -67,7 +67,7 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
     _costoCtrl = TextEditingController(text: p != null ? p.costo.toStringAsFixed(2) : '');
     _margenCtrl = TextEditingController(text: (p?.margenGanancia ?? 30).toStringAsFixed(0));
     _precioCtrl = TextEditingController(text: p != null ? p.precioUnitario.toString() : '');
-    _stockCtrl = TextEditingController(text: p != null ? p.stock.toString() : '0');
+    _stockCtrl = TextEditingController(text: p == null ? '0' : p.stock % 1 == 0 ? p.stock.toInt().toString() : p.stock.toString());
     _minimoCtrl = TextEditingController(text: p != null && p.stockMinimo > 0 ? p.stockMinimo.toString() : '');
     _categoriaSeleccionada = p?.categoriaId;
     // Una unidad válida que no está en la lista corta se respeta (antes se
@@ -349,7 +349,7 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
       'precio_unitario': double.parse(_precioCtrl.text.trim()),
       'costo': double.tryParse(_costoCtrl.text.replaceAll(',', '.').trim()) ?? 0,
       'margen_ganancia': double.tryParse(_margenCtrl.text.replaceAll(',', '.').trim()) ?? 30,
-      'stock': int.tryParse(_stockCtrl.text.trim()) ?? 0,
+      'stock': double.tryParse(_stockCtrl.text.trim().replaceAll(',', '.')) ?? 0,
       'stock_minimo': int.tryParse(_minimoCtrl.text.trim()) ?? 0,
       'categoria': _categoriaSeleccionada,
       'impuesto': _impuestoSeleccionado?.id,
@@ -684,7 +684,7 @@ class _CrearProductoScreenState extends State<CrearProductoScreen> {
                   Expanded(
                     child: TextFormField(
                       controller: _stockCtrl,
-                      keyboardType: TextInputType.number,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       decoration: const InputDecoration(
                         labelText: "Stock Inicial",
                         border: OutlineInputBorder(),
