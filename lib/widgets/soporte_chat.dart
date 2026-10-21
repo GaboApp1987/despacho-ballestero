@@ -897,7 +897,8 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
       r'|^/facturas/\d+/(reenviar-hacienda|consultar-hacienda|enviar-correo)/$'
       r'|^/clientes/(\d+/enviar-cobro|enviar-cobros)/$'
       r'|^/productos/ajustar-stock/$'
-      r'|^/compras/registrar-desde-asistente/$');
+      r'|^/compras/registrar-desde-asistente/$'
+      r'|^/negocios/$');
   static final _rutasPatch = RegExp(r'^/productos/\d+/$|^/cobro-automatico/$');
   static const _estadosHacienda = {
     '1': 'Sin enviar', '2': 'Enviando', '3': 'Aceptada', '4': 'Rechazada', '5': 'Error técnico', '6': 'No aplica (interno)',
@@ -907,7 +908,13 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
     final accion = mensaje.propuestaAccion!;
     final endpoint = accion['endpoint'] as String? ?? '';
     final esPatch = (accion['metodo'] as String?)?.toUpperCase() == 'PATCH';
-    if (!(esPatch ? _rutasPatch : _rutasPost).hasMatch(endpoint)) return;
+    if (!(esPatch ? _rutasPatch : _rutasPost).hasMatch(endpoint)) {
+      // Antes no hacía nada y parecía que el botón estaba roto.
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Esta acción no se puede hacer desde el chat todavía; hacela desde su pantalla.'),
+          backgroundColor: Colors.red));
+      return;
+    }
     setState(() => mensaje.estadoAccion = 'creando');
     try {
       final datos = Map<String, dynamic>.from(accion['datos'] as Map? ?? {});
