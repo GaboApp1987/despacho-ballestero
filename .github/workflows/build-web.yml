@@ -1,0 +1,92 @@
+# Build de la app web y deploy al backend, sin depender de ninguna computadora.
+#
+# Cada push a master que toque la app hace el build de Flutter Web con los
+# dos flags obligatorios (sin --dart-define la app no hace login; sin
+# --base-href=/app/ carga en blanco: pasó varias veces), verifica que el
+# build los tenga, lo copia a webapp/app/ del backend
+# (Gaboballestero/equilibra-backend), le pone la marca de versión
+# (scripts/versionar_webapp.py, para que Cloudflare no sirva .js viejos) y
+# lo sube. Railway despliega el backend como con cualquier otro push.
+#
+# Necesita el secreto BACKEND_DEPLOY_KEY: llave SSH privada cuya llave
+# pública está en el backend como Deploy key con permiso de escritura.
+name: Build web y deploy al backend
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'lib/**'
+      - 'web/**'
+      - 'assets/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/build-web.yml'
+  workflow_dispatch:
+
+# Si llegan dos pushes seguidos, gana el último (no tiene sentido subir el
+# build intermedio).
+concurrency:
+  group: build-web
+  cancel-in-progress: true
+
+jobs:
+  build-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Código de la app
+        uses: actions/checkout@v4
+
+      - name: Flutter (misma versión que en la computadora)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.41.1
+          cache: true
+
+      - name: Dependencias
+        run: flutter pub get
+
+      - name: Build web
+        run: flutter build web --release --dart-define=API_BASE_URL=https://equilibracr.com/api --base-href=/app/
+
+      - name: Verificar el build (si falla, no se sube nada)
+        run: |
+          grep -q 'equilibracr.com/api' build/web/main.dart.js || { echo "::error::El build no apunta a equilibracr.com/api (falta --dart-define)"; exit 1; }
+          grep -q '<base href="/app/">' build/web/index.html || { echo "::error::El build no tiene <base href=\"/app/\"> (falta --base-href)"; exit 1; }
+
+      - name: Código del backend
+        uses: actions/checkout@v4
+        with:
+          repository: Gaboballestero/equilibra-backend
+          ssh-key: ${{ secrets.BACKEND_DEPLOY_KEY }}
+          path: backend
+
+      - name: Copiar el build a webapp/app y versionarlo
+        run: |
+          rm -rf backend/webapp/app
+          cp -r build/web backend/webapp/app
+          python3 backend/scripts/versionar_webapp.py
+
+      - name: Subir al backend
+        working-directory: backend
+        env:
+          MENSAJE: ${{ github.event.head_commit.message }}
+        run: |
+          git add -A webapp/app
+          if git diff --cached --quiet; then
+            echo "El build es igual al que ya está en el backend: no hay nada que subir."
+            exit 0
+          fi
+          git config user.name "Build web (GitHub Actions)"
+          git config user.email "ballesterog1218@gmail.com"
+          TITULO=$(printf '%s' "$MENSAJE" | head -n 1)
+          git commit -q -m "App web: build de ${GITHUB_SHA::7} — ${TITULO:-build manual}" \
+            -m "Build automático de https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
+          # Si mientras tanto alguien subió algo al backend, se pone encima.
+          for intento in 1 2 3; do
+            git push && exit 0
+            git pull --rebase
+          done
+          exit 1
