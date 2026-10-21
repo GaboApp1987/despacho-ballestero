@@ -1030,8 +1030,10 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
 
                       TextFormField(
                         controller: _pinController,
-                        maxLength: 4,
-                        keyboardType: TextInputType.number,
+                        // Letras y números, del largo que sea: es la contraseña del .p12.
+                        keyboardType: TextInputType.visiblePassword,
+                        autocorrect: false,
+                        enableSuggestions: false,
                         obscureText: true,
                         decoration: const InputDecoration(
                           labelText: "PIN de la Llave Criptográfica (pin_llave)",
