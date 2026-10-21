@@ -99,6 +99,7 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
   // va a pagar despues), pero se salta el pago inmediato -- ver
   // RegistroPublicoView.DIAS_PRUEBA_GRATIS en el backend.
   bool _pruebaGratis = false;
+  static final bool _octubreRosa = DateTime.now().toUtc().isBefore(DateTime.utc(2026, 11, 1, 6));
   bool _aceptaTerminos = false;
 
   // Para que no se le olvide el usuario, se precarga con el correo mientras
@@ -589,8 +590,9 @@ class _RegistroPublicoScreenState extends State<RegistroPublicoScreen> {
                           value: _pruebaGratis,
                           onChanged: (v) => setState(() => _pruebaGratis = v ?? false),
                           controlAffinity: ListTileControlAffinity.leading,
-                          title: const Text("Empezar con 10 días de prueba gratis", style: TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: const Text("Usás Equilibra ya mismo y pagás la tarjeta más adelante, antes de que se acaben los 10 días."),
+                          // Octubre Rosa: 1 mes hasta el 31/10/2026 (mismo corte que gestion/prueba_gratis.py).
+                          title: Text(_octubreRosa ? "🎀 Octubre Rosa: empezar con 1 mes de prueba gratis" : "Empezar con 10 días de prueba gratis", style: const TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Text("Usás Equilibra ya mismo y pagás la tarjeta más adelante, antes de que se acabe ${_octubreRosa ? 'el mes' : 'los 10 días'}."),
                         ),
                       ),
                       const SizedBox(height: 4),
