@@ -1631,6 +1631,19 @@ class _FormularioFacturaState extends State<FormularioFactura> {
             ],
           ),
         ),
+        // Cuántos productos lleva la factura (líneas distintas).
+        if (_carrito.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Row(children: [
+              Icon(Icons.shopping_cart_outlined, size: 18, color: AppColors.primary),
+              const SizedBox(width: 6),
+              Text(
+                "${_carrito.length} producto${_carrito.length == 1 ? '' : 's'} en la factura",
+                style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.primary),
+              ),
+            ]),
+          ),
         dentroDeScrollExterno
             ? listaCarrito
             : Expanded(child: listaCarrito),
