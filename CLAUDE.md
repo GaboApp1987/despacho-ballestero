@@ -14,6 +14,7 @@ El dueño habla español de Costa Rica y no es programador: explicá en español
   - La URL es siempre `equilibracr.com`, nunca `*.up.railway.app`: esa da "Bad Request (400)".
   - En Git Bash, anteponé `MSYS_NO_PATHCONV=1`.
 - Para ver el resultado: pestaña Actions del repo, o `gh run list`.
+- Para correr la app a mano: la configuración **"Equilibra (producción)"** (`.run/` en Android Studio, `.vscode/launch.json` en VS Code) ya trae el `--dart-define`. Usa datos reales.
 
 ## Reglas de código
 

@@ -1,0 +1,10 @@
+<!-- Botón ▶ de Android Studio ya apuntando a equilibracr.com (sin el
+     dart-define la app busca el servidor en 127.0.0.1 y no hace login).
+     OJO: usa datos reales; lo que se confirme va a Hacienda de verdad. -->
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Equilibra (producción)" type="FlutterRunConfigurationType" factoryName="Flutter">
+    <option name="additionalArgs" value="--dart-define=API_BASE_URL=https://equilibracr.com/api" />
+    <option name="filePath" value="$PROJECT_DIR$/lib/main.dart" />
+    <method v="2" />
+  </configuration>
+</component>

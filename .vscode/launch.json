@@ -1,0 +1,14 @@
+{
+  // Igual que .run/ para Android Studio: la app apuntando a equilibracr.com
+  // (datos reales -- lo que se confirme va a Hacienda de verdad).
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Equilibra (producción)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": ["--dart-define=API_BASE_URL=https://equilibracr.com/api"]
+    }
+  ]
+}
