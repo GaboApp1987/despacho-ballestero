@@ -203,6 +203,7 @@ class _PropuestaFactura {
   final String clienteCedula;
   final List<Map<String, dynamic>> items;
   final String tipoDocumento; // '01' factura | '04' tiquete
+  final bool esInterno; // Tiquete Interno: no fiscal, no va a Hacienda, sin IVA
   final String condicionVenta; // '01' contado | '02' crédito
   final int plazoCredito;
   final String medioPago; // '01' efectivo | '02' tarjeta | '03' cheque | '04' transferencia
@@ -223,6 +224,7 @@ class _PropuestaFactura {
     required this.clienteCedula,
     required this.items,
     this.tipoDocumento = '01',
+    this.esInterno = false,
     this.condicionVenta = '01',
     this.plazoCredito = 0,
     this.medioPago = '01',
@@ -235,6 +237,7 @@ class _PropuestaFactura {
       clienteCedula: json['cliente_cedula'] ?? '',
       items: (json['items'] as List).cast<Map<String, dynamic>>(),
       tipoDocumento: json['tipo_documento'] ?? '01',
+      esInterno: json['es_interno'] == true,
       condicionVenta: json['condicion_venta'] ?? '01',
       plazoCredito: (json['plazo_credito'] as num? ?? 0).toInt(),
       medioPago: json['medio_pago'] ?? '01',
@@ -580,6 +583,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
         'cliente': propuesta.clienteId,
         'consecutivo': '',
         'tipo_documento': propuesta.tipoDocumento,
+        'es_interno': propuesta.esInterno,
         'receptor_nombre': propuesta.clienteNombre,
         'receptor_cedula': propuesta.clienteCedula,
         'total_iva': redondear2(propuesta.montoIva),
@@ -605,7 +609,11 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
       if (response.statusCode == 201 || response.statusCode == 200) {
         setState(() => mensaje.estadoPropuesta = 'creada');
         cambiosDesdeChat.value++;
-        _mensajes.add(_ChatMensaje('assistant', propuesta.esTiquete ? '¡Listo! Tiquete emitido y enviado a Hacienda.' : '¡Listo! Factura creada y enviada a Hacienda.'));
+        _mensajes.add(_ChatMensaje(
+            'assistant',
+            propuesta.esInterno
+                ? '¡Listo! Tiquete interno creado (no va a Hacienda).'
+                : propuesta.esTiquete ? '¡Listo! Tiquete emitido y enviado a Hacienda.' : '¡Listo! Factura creada y enviada a Hacienda.'));
         setState(() {});
       } else {
         throw Exception(ApiService.mensajeError(response));
@@ -755,7 +763,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
             children: [
               Icon(Icons.receipt_long, size: 16, color: AppColors.primary),
               const SizedBox(width: 6),
-              Text(propuesta.esTiquete ? 'Borrador de tiquete' : 'Borrador de factura', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              Text(propuesta.esInterno ? 'Borrador de tiquete interno' : propuesta.esTiquete ? 'Borrador de tiquete' : 'Borrador de factura', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
             ],
           ),
           const SizedBox(height: 8),
@@ -764,7 +772,12 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
               padding: const EdgeInsets.only(bottom: 4),
               child: Text('Emite: ${propuesta.negocioNombre}', style: TextStyle(fontSize: 12.5, color: AppColors.textMuted)),
             ),
-          Text(propuesta.esTiquete ? 'Consumidor final (sin cliente)' : 'Cliente: ${propuesta.clienteNombre}', style: const TextStyle(fontSize: 13)),
+          Text(propuesta.clienteNombre.isEmpty ? 'Consumidor final (sin cliente)' : 'Cliente: ${propuesta.clienteNombre}', style: const TextStyle(fontSize: 13)),
+          if (propuesta.esInterno)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text('No fiscal: no se envía a Hacienda y va sin IVA', style: TextStyle(fontSize: 11.5, color: AppColors.textMuted)),
+            ),
           const SizedBox(height: 6),
           ...propuesta.items.map((it) => Padding(
                 padding: const EdgeInsets.only(bottom: 2),
@@ -809,7 +822,7 @@ class _SoporteChatSheetState extends State<_SoporteChatSheet> with SingleTickerP
                 style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.black),
                 child: mensaje.estadoPropuesta == 'creando'
                     ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                    : Text(propuesta.esTiquete ? 'Confirmar y emitir tiquete' : 'Confirmar y crear factura',
+                    : Text(propuesta.esInterno ? 'Confirmar tiquete interno' : propuesta.esTiquete ? 'Confirmar y emitir tiquete' : 'Confirmar y crear factura',
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
               ),
             ),
