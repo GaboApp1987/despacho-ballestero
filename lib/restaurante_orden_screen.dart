@@ -280,19 +280,69 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
     }
   }
 
-  Future<void> _anularItem(Map<String, dynamic> item) async {
+  /// Quitar un plato de la cuenta. Si ya se preparó y se desperdició (se
+  /// cayó, lo devolvieron...) es merma: no se cobra pero sí se descuentan
+  /// los insumos y el inventario. Si no se llegó a hacer, solo se anula.
+  Future<void> _anularItem(Map<String, dynamic> item, {bool soloMerma = false}) async {
+    const motivos = ["Se cayó", "Lo devolvió el cliente", "Salió mal", "Se quemó"];
+    var merma = true;
+    var motivo = motivos.first;
+    final otro = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Anular plato"),
-        content: Text("¿Anular ${item['cantidad']} × ${item['nombre']}? La cocina va a ver que se anuló."),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("No")),
-          FilledButton(style: FilledButton.styleFrom(backgroundColor: Colors.red), onPressed: () => Navigator.pop(ctx, true), child: const Text("Anular")),
-        ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: Text("Quitar ${item['cantidad']} × ${item['nombre']}"),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text("Se quita de la cuenta del cliente y la cocina ve que se anuló."),
+              const SizedBox(height: 10),
+              if (!soloMerma) ...[
+                RadioListTile<bool>(
+                  contentPadding: EdgeInsets.zero,
+                  value: true,
+                  groupValue: merma,
+                  onChanged: (v) => setD(() => merma = v!),
+                  title: const Text("Se preparó y se desperdició"),
+                  subtitle: const Text("Descuenta los insumos y el inventario"),
+                ),
+                RadioListTile<bool>(
+                  contentPadding: EdgeInsets.zero,
+                  value: false,
+                  groupValue: merma,
+                  onChanged: (v) => setD(() => merma = v!),
+                  title: const Text("No se llegó a preparar"),
+                  subtitle: const Text("No toca el inventario"),
+                ),
+              ],
+              if (merma) ...[
+                const SizedBox(height: 6),
+                const Text("¿Qué pasó?", style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                Wrap(spacing: 6, runSpacing: 6, children: [
+                  for (final m in [...motivos, "Otro"])
+                    ChoiceChip(label: Text(m), selected: motivo == m, onSelected: (_) => setD(() => motivo = m)),
+                ]),
+                if (motivo == "Otro")
+                  TextField(controller: otro, maxLength: 120, decoration: const InputDecoration(labelText: "Motivo", isDense: true)),
+              ],
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(merma ? "Quitar y descontar" : "Anular"),
+            ),
+          ],
+        ),
       ),
     );
-    if (ok == true) _accionItem(item, {'estado': 'anulado'});
+    final texto = motivo == "Otro" ? (otro.text.trim().isEmpty ? "Otro" : otro.text.trim()) : motivo;
+    otro.dispose();
+    if (ok != true) return;
+    _accionItem(item, merma ? {'estado': 'anulado', 'merma': true, 'motivo': texto} : {'estado': 'anulado'});
   }
 
   Future<void> _patchOrden(Map<String, dynamic> datos) async {
@@ -809,6 +859,9 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
               Text("${i['variaciones_texto']}", style: TextStyle(color: AppColors.textStrong, fontSize: 12.5, fontWeight: FontWeight.w600)),
             if ((i['nota'] ?? '').toString().isNotEmpty)
               Text("→ ${i['nota']}", style: const TextStyle(color: Color(0xFFB45309), fontSize: 12.5)),
+            if (anulado && i['merma'] == true)
+              Text("Merma: ${i['motivo_anulacion'] ?? ''} · descontado del inventario",
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
             const SizedBox(height: 3),
             Wrap(spacing: 6, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
               Container(
@@ -827,16 +880,23 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
         ),
         Text(formatearColones(anulado ? 0 : precio * (1 + iva / 100) * (i['cantidad'] as int), decimales: 0),
             style: TextStyle(color: AppColors.textStrong, fontWeight: FontWeight.w600)),
-        if (!anulado && i['estado'] != 'entregado' && i['factura'] == null)
+        if (!anulado && i['factura'] == null)
           SizedBox(
             width: 32,
             child: PopupMenuButton<String>(
               padding: EdgeInsets.zero,
               icon: Icon(Icons.more_vert, size: 18, color: AppColors.textMuted),
-              onSelected: (v) => v == 'anular' ? _anularItem(i) : _accionItem(i, {'estado': 'entregado'}),
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'entregado', child: Text("Marcar entregado")),
-                PopupMenuItem(value: 'anular', child: Text("Anular")),
+              onSelected: (v) => v == 'quitar'
+                  ? _accionItem(i, {'quitar': true})
+                  : (v == 'entregado' ? _accionItem(i, {'estado': 'entregado'}) : _anularItem(i, soloMerma: v == 'devuelto')),
+              itemBuilder: (_) => [
+                // Sin enviar (ej. lo que pidió el cliente por QR): se quita sin más.
+                if (i['estado'] == 'pendiente') const PopupMenuItem(value: 'quitar', child: Text("Quitar (no se envió)")),
+                if (i['estado'] == 'en_cocina' || i['estado'] == 'listo') ...const [
+                  PopupMenuItem(value: 'entregado', child: Text("Marcar entregado")),
+                  PopupMenuItem(value: 'anular', child: Text("Anular / se desperdició")),
+                ],
+                if (i['estado'] == 'entregado') const PopupMenuItem(value: 'devuelto', child: Text("Lo devolvieron / se desperdició")),
               ],
             ),
           )

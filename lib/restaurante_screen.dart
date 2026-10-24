@@ -752,6 +752,8 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
   // Comandas en las que se pidió ver los platos que ya salieron.
   final Set<String> _conListosVisibles = {};
   List<Map<String, dynamic>> _estaciones = [];
+  // Insumos y productos en su mínimo (o agotados), para que la cocina avise.
+  List<Map<String, dynamic>> _stockBajo = [];
   int? _estacion; // null = todas
   bool _sonido = true;
   Set<String>? _vistas; // comandas ya vistas (para sonar solo con las nuevas)
@@ -815,6 +817,7 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
         setState(() {
           _comandas = comandas;
           _recientes = ((datos['recientes'] as List?) ?? []).cast<Map<String, dynamic>>();
+          _stockBajo = ((datos['stock_bajo'] as List?) ?? []).cast<Map<String, dynamic>>();
           _estaciones = estaciones;
           if (_estacion != null && !estaciones.any((e) => e['id'] == _estacion)) _estacion = null;
         });
@@ -1077,6 +1080,42 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
     );
   }
 
+  Widget _avisoStockBajo() {
+    if (_stockBajo.isEmpty) return const SizedBox.shrink();
+    const ambar = Color(0xFFB45309);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+      decoration: BoxDecoration(
+        color: ambar.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: ambar.withValues(alpha: 0.35)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Row(children: [
+          Icon(Icons.warning_amber_rounded, color: ambar, size: 18),
+          SizedBox(width: 6),
+          Text("Stock bajo", style: TextStyle(color: ambar, fontWeight: FontWeight.w800)),
+        ]),
+        const SizedBox(height: 6),
+        Wrap(spacing: 6, runSpacing: 6, children: [
+          for (final f in _stockBajo)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: (f['agotado'] == true ? Colors.red : ambar).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                f['agotado'] == true ? "${f['nombre']}: agotado" : "${f['nombre']}: quedan ${f['stock']} ${f['unidad'] ?? ''}".trim(),
+                style: TextStyle(color: f['agotado'] == true ? Colors.red.shade700 : ambar, fontSize: 12.5, fontWeight: FontWeight.w600),
+              ),
+            ),
+        ]),
+      ]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -1120,7 +1159,7 @@ class _CocinaState extends State<_Cocina> with AutomaticKeepAliveClientMixin {
         ]),
       );
     }
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [_barra(), Expanded(child: cuerpo)]);
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [_barra(), _avisoStockBajo(), Expanded(child: cuerpo)]);
   }
 }
 
