@@ -1158,6 +1158,10 @@ class _ConfigMesasState extends State<_ConfigMesas> {
   bool _menuQr = false;
   bool _pedidosQr = false;
   Set<int> _categoriasMenu = {};
+  // Lo que ve el cliente en "WiFi e info" del menú QR.
+  final _wifiNombre = TextEditingController();
+  final _wifiClave = TextEditingController();
+  final _horario = TextEditingController();
   Map<String, dynamic>? _propinas;
   int _diasPropinas = 1;
   List<Map<String, dynamic>> _estaciones = [];
@@ -1168,6 +1172,14 @@ class _ConfigMesasState extends State<_ConfigMesas> {
     super.initState();
     _cargar();
     _cargarPropinas();
+  }
+
+  @override
+  void dispose() {
+    _wifiNombre.dispose();
+    _wifiClave.dispose();
+    _horario.dispose();
+    super.dispose();
   }
 
   void _aviso(String texto) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(texto)));
@@ -1193,18 +1205,22 @@ class _ConfigMesasState extends State<_ConfigMesas> {
             _menuQr = config['menu_qr'] == true;
             _pedidosQr = config['pedidos_qr'] == true;
             _categoriasMenu = {...((config['categorias_menu'] as List?) ?? []).cast<int>()};
+            _wifiNombre.text = config['wifi_nombre'] ?? '';
+            _wifiClave.text = config['wifi_clave'] ?? '';
+            _horario.text = config['horario'] ?? '';
           }
         });
       }
     } catch (_) {}
   }
 
-  Future<void> _guardarConfig(Map<String, dynamic> datos) async {
+  Future<bool> _guardarConfig(Map<String, dynamic> datos) async {
     final r = await ApiService.patch('/restaurante/config/?negocio=${widget.negocio.id}', datos);
     if (r.statusCode != 200 && mounted) {
       _aviso("No se pudo guardar: ${ApiService.mensajeError(r)}");
       _cargar();
     }
+    return r.statusCode == 200;
   }
 
   Future<void> _imprimirQrMesas() async {
@@ -1254,7 +1270,7 @@ class _ConfigMesasState extends State<_ConfigMesas> {
           _guardarConfig({'menu_qr': v});
         },
         title: Text("Activar el menú QR", style: TextStyle(color: AppColors.textStrong)),
-        subtitle: Text("Cada mesa tiene su QR: el cliente ve el menú, llama al mesero o pide la cuenta.",
+        subtitle: Text("Cada mesa tiene su QR: el cliente ve el menú, juega mientras espera, ve el WiFi, llama al mesero o pide la cuenta.",
             style: TextStyle(color: AppColors.textMuted, fontSize: 12.5)),
       ),
       if (_menuQr) ...[
@@ -1286,6 +1302,29 @@ class _ConfigMesasState extends State<_ConfigMesas> {
           ]),
           const SizedBox(height: 10),
         ],
+        Text("WiFi e info para el cliente", style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+        const SizedBox(height: 4),
+        Text("Sale en el menú QR junto con la dirección y el teléfono del negocio. Lo que dejés vacío no se muestra.",
+            style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+        const SizedBox(height: 8),
+        TextField(controller: _wifiNombre, decoration: const InputDecoration(labelText: "Nombre de la red WiFi", isDense: true)),
+        const SizedBox(height: 8),
+        TextField(controller: _wifiClave, decoration: const InputDecoration(labelText: "Clave del WiFi", isDense: true)),
+        const SizedBox(height: 8),
+        TextField(controller: _horario, decoration: const InputDecoration(labelText: "Horario (ej: lunes a sábado, 11 a. m. a 10 p. m.)", isDense: true)),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: () async {
+              final ok = await _guardarConfig({'wifi_nombre': _wifiNombre.text, 'wifi_clave': _wifiClave.text, 'horario': _horario.text});
+              if (ok && mounted) _aviso("Info del menú guardada");
+            },
+            icon: const Icon(Icons.save_outlined, size: 18),
+            label: const Text("Guardar info"),
+          ),
+        ),
+        const SizedBox(height: 6),
         OutlinedButton.icon(
           onPressed: (_mesas ?? []).isEmpty ? null : _imprimirQrMesas,
           icon: const Icon(Icons.qr_code_2),
