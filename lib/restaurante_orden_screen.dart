@@ -857,7 +857,11 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
     final servicio = (_cobraServicio ? _porCobrar.fold(0.0, (s, i) => s + _precio(i) * (i['cantidad'] as int)) * 0.10 : 0.0) + servicioNuevos;
     final total = ((o['total'] as num?)?.toDouble() ?? 0) + _totalNuevos + servicio;
     final pagado = (o['pagado'] as num?)?.toDouble() ?? 0;
-    final porEnviar = _nuevos.fold(0, (s, b) => s + b.cantidad);
+    // Lo que pidió el cliente desde el QR de la mesa también queda por
+    // enviar (estado 'pendiente' en el servidor): el mesero lo confirma aquí.
+    final pendientesServidor = _items.where((i) => i['estado'] == 'pendiente');
+    final desdeQr = pendientesServidor.any((i) => i['desde_qr'] == true);
+    final porEnviar = _nuevos.fold(0, (s, b) => s + b.cantidad) + pendientesServidor.fold(0, (s, i) => s + (i['cantidad'] as int));
     return Column(children: [
       Expanded(
         child: ListView(
@@ -904,7 +908,7 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
             for (final r in rondas) ...[
               const SizedBox(height: 12),
               Row(children: [
-                Text(r == 0 ? "SIN ENVIAR" : "RONDA $r",
+                Text(r == 0 ? (desdeQr ? "PEDIDO DESDE EL QR · REVISALO Y ENVIALO" : "SIN ENVIAR") : "RONDA $r",
                     style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: .6, color: AppColors.textMuted)),
                 const Spacer(),
                 if (r > 0) _cronometroRonda(porRonda[r]!),
@@ -951,7 +955,7 @@ class _RestauranteOrdenScreenState extends State<RestauranteOrdenScreen> {
                   icon: _enviando
                       ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                       : const Icon(Icons.send, size: 18),
-                  label: Text(porEnviar == 0 ? "Enviar a cocina" : "Enviar ($porEnviar)"),
+                  label: Text(porEnviar == 0 ? "Enviar a cocina" : (desdeQr ? "Confirmar y enviar ($porEnviar)" : "Enviar ($porEnviar)")),
                 ),
               ),
               const SizedBox(width: 8),
